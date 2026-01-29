@@ -24,3 +24,50 @@ export type {
   EvalContext,
   EvalValue,
 } from "./runtime/index.js";
+
+// Wallet
+export {
+  createWallet,
+  createWalletFromMnemonic,
+  createWalletFromConfig,
+  getAddressFromConfig,
+  loadPrivateKey,
+  KeyLoadError,
+  Provider,
+  createProvider,
+  formatWei,
+  formatGasCostUsd,
+  TransactionBuilder,
+  createTransactionBuilder,
+  Executor,
+  createExecutor,
+  CHAIN_CONFIGS,
+  isTestnet,
+  getChainName,
+} from "./wallet/index.js";
+export type {
+  KeySourceType,
+  KeyConfig,
+  Wallet,
+  TransactionRequest,
+  TransactionReceipt,
+  TransactionLog,
+  ProviderConfig,
+  GasEstimate,
+  BuiltTransaction,
+  ExecutionMode,
+  ExecutorOptions,
+  TransactionResult,
+  ExecutionResult,
+} from "./wallet/index.js";
+
+// Venues
+export { createVenueRegistry } from "./venues/index.js";
+export type {
+  VenueAdapter,
+  VenueAdapterContext,
+  VenueAdapterMeta,
+  VenueRegistry,
+  OffchainExecutionResult,
+  VenueBuildResult,
+} from "./venues/types.js";

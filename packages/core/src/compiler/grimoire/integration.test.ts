@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import type { WaitStep } from "../../types/steps.js";
 import { compile } from "../index.js";
 import { parse } from "./parser.js";
 import { transform } from "./transformer.js";
@@ -102,8 +103,8 @@ describe("Integration", () => {
       const ast = parse(source);
       const spellSource = transform(ast);
 
-      expect(spellSource.assets).toBeDefined();
-      expect(Object.keys(spellSource.assets!)).toEqual(["USDC", "USDT"]);
+      const assets = spellSource.assets ?? {};
+      expect(Object.keys(assets)).toEqual(["USDC", "USDT"]);
     });
 
     test("transforms spell with params", () => {
@@ -268,9 +269,9 @@ describe("Integration", () => {
       const result = compile(source);
 
       expect(result.success).toBe(true);
-      const waitStep = result.ir?.steps.find((s) => s.kind === "wait");
+      const waitStep = result.ir?.steps.find((s) => s.kind === "wait") as WaitStep | undefined;
       expect(waitStep).toBeDefined();
-      expect((waitStep as any).duration).toBe(60);
+      expect(waitStep?.duration).toBe(60);
     });
 
     test("compiles spell with halt", () => {

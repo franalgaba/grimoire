@@ -1,0 +1,29 @@
+{
+  "name": "@grimoire/venues",
+  "version": "0.1.0",
+  "description": "Official Grimoire venue adapters",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "grimoire-aave": "./src/cli/aave.ts",
+    "grimoire-uniswap": "./src/cli/uniswap.ts",
+    "grimoire-morpho-blue": "./src/cli/morpho-blue.ts",
+    "grimoire-hyperliquid": "./src/cli/hyperliquid.ts"
+  },
+  "dependencies": {
+    "@aave/client": "^0.7.0",
+    "@across-protocol/app-sdk": "^0.4.4",
+    "@grimoire/core": "workspace:*",
+    "@morpho-org/blue-sdk": "^2.0.0",
+    "@morpho-org/blue-sdk-viem": "^2.0.0",
+    "@nktkas/hyperliquid": "^0.30.3",
+    "@uniswap/sdk-core": "^4.0.10",
+    "@uniswap/v3-sdk": "^3.11.2",
+    "polymarket-us": "^0.1.1",
+    "viem": "^2.21.55"
+  }
+}

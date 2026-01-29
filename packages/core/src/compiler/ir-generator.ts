@@ -555,6 +555,25 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
         assets: raw.assets as string[] | undefined,
       } as Action;
 
+    case "bridge": {
+      const toChainValue = raw.to_chain ?? raw.toChain;
+      if (toChainValue === undefined) {
+        errors.push({
+          code: "MISSING_BRIDGE_CHAIN",
+          message: "Bridge action requires to_chain",
+        });
+        return null;
+      }
+
+      return {
+        type: "bridge",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseExpressionSafe(raw.amount as string, errors),
+        toChain: parseExpressionSafe(toChainValue as string | number, errors),
+      } as Action;
+    }
+
     case "transfer":
       return {
         type: "transfer",
@@ -619,9 +638,13 @@ function transformLoopStep(
       return null;
     }
     const [, variable, sourceStr] = match;
+    if (!variable || !sourceStr) {
+      errors.push({ code: "INVALID_FOR_CLAUSE", message: `Invalid for clause: ${forClause}` });
+      return null;
+    }
     try {
-      const source = parseExpression(sourceStr!);
-      loopType = { type: "for", variable: variable!, source };
+      const source = parseExpression(sourceStr);
+      loopType = { type: "for", variable, source };
     } catch (e) {
       errors.push({
         code: "EXPRESSION_PARSE_ERROR",

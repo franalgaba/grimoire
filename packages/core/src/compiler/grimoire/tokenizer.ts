@@ -214,7 +214,7 @@ export class Tokenizer {
       }
 
       // Compare with current indent level
-      const currentIndent = this.indentStack[this.indentStack.length - 1]!;
+      const currentIndent = this.indentStack[this.indentStack.length - 1] ?? 0;
 
       if (spaces > currentIndent) {
         // Deeper indent
@@ -222,18 +222,18 @@ export class Tokenizer {
         this.emit("INDENT", "", startLocation);
       } else if (spaces < currentIndent) {
         // Dedent - may be multiple levels
-        while (
-          this.indentStack.length > 1 &&
-          spaces < this.indentStack[this.indentStack.length - 1]!
-        ) {
+        while (this.indentStack.length > 1) {
+          const lastIndent = this.indentStack[this.indentStack.length - 1] ?? 0;
+          if (spaces >= lastIndent) break;
           this.indentStack.pop();
           this.emit("DEDENT", "", startLocation);
         }
 
+        const finalIndent = this.indentStack[this.indentStack.length - 1] ?? 0;
         // Check for mismatched indent
-        if (spaces !== this.indentStack[this.indentStack.length - 1]) {
+        if (spaces !== finalIndent) {
           throw new IndentationError(
-            `Indentation does not match any outer level (got ${spaces}, expected ${this.indentStack[this.indentStack.length - 1]})`,
+            `Indentation does not match any outer level (got ${spaces}, expected ${finalIndent})`,
             { location: startLocation, source: this.source }
           );
         }

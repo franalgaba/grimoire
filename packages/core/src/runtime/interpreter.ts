@@ -7,6 +7,10 @@ import type { ExecutionContext, ExecutionResult, StepResult } from "../types/exe
 import type { Guard, GuardDef, SpellIR } from "../types/ir.js";
 import type { Address, ChainId } from "../types/primitives.js";
 import type { Step } from "../types/steps.js";
+import type { VenueAdapter } from "../venues/types.js";
+import { type ExecutionMode, createExecutor } from "../wallet/executor.js";
+import { type Provider, createProvider } from "../wallet/provider.js";
+import type { Wallet } from "../wallet/types.js";
 import {
   InMemoryLedger,
   createContext,
@@ -16,6 +20,7 @@ import {
 import { type EvalContext, createEvalContext, evaluateAsync } from "./expression-evaluator.js";
 
 // Step executors
+import { type ActionExecutionOptions, executeActionStep } from "./steps/action.js";
 import { executeComputeStep } from "./steps/compute.js";
 import { executeConditionalStep } from "./steps/conditional.js";
 import { executeEmitStep } from "./steps/emit.js";
@@ -39,6 +44,24 @@ export interface ExecuteOptions {
   persistentState?: Record<string, unknown>;
   /** Simulation mode (no actual transactions) */
   simulate?: boolean;
+  /** Execution mode override */
+  executionMode?: ExecutionMode;
+  /** Wallet for signing and sending transactions */
+  wallet?: Wallet;
+  /** Provider override (optional) */
+  provider?: Provider;
+  /** RPC URL override */
+  rpcUrl?: string;
+  /** Gas multiplier */
+  gasMultiplier?: number;
+  /** Skip confirmation for testnets */
+  skipTestnetConfirmation?: boolean;
+  /** Confirmation prompt callback */
+  confirmCallback?: (message: string) => Promise<boolean>;
+  /** Progress updates callback */
+  progressCallback?: (message: string) => void;
+  /** Venue adapters */
+  adapters?: VenueAdapter[];
 }
 
 /**
@@ -46,6 +69,9 @@ export interface ExecuteOptions {
  */
 export async function execute(options: ExecuteOptions): Promise<ExecutionResult> {
   const { spell, vault, chain, params = {}, persistentState = {}, simulate = false } = options;
+
+  const actionMode = resolveExecutionMode(options, simulate);
+  const actionExecution = createActionExecutionOptions(options, actionMode, chain);
 
   // Create execution context
   const ctx = createContext({
@@ -87,7 +113,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
       }
 
       // Execute step
-      const result = await executeStep(step, ctx, ledger, stepMap, simulate);
+      const result = await executeStep(step, ctx, ledger, stepMap, actionExecution);
 
       // Handle halt
       if (result.halted) {
@@ -182,6 +208,50 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
   }
 }
 
+function resolveExecutionMode(options: ExecuteOptions, simulate: boolean): ExecutionMode {
+  if (options.executionMode) {
+    return options.executionMode;
+  }
+
+  if (simulate) {
+    return "simulate";
+  }
+
+  if (options.wallet) {
+    return "execute";
+  }
+
+  return "simulate";
+}
+
+function createActionExecutionOptions(
+  options: ExecuteOptions,
+  mode: ExecutionMode,
+  chainId: ChainId
+): ActionExecutionOptions {
+  if (mode === "simulate") {
+    return { mode };
+  }
+
+  if (!options.wallet) {
+    throw new Error("Wallet is required for non-simulated execution");
+  }
+
+  const provider = options.provider ?? createProvider(chainId, options.rpcUrl);
+  const executor = createExecutor({
+    wallet: options.wallet,
+    provider,
+    mode,
+    gasMultiplier: options.gasMultiplier,
+    confirmCallback: options.confirmCallback,
+    progressCallback: options.progressCallback,
+    skipTestnetConfirmation: options.skipTestnetConfirmation,
+    adapters: options.adapters,
+  });
+
+  return { mode, executor };
+}
+
 /**
  * Execute a single step
  */
@@ -190,7 +260,7 @@ async function executeStep(
   ctx: ExecutionContext,
   ledger: InMemoryLedger,
   stepMap: Map<string, Step>,
-  _simulate: boolean,
+  actionExecution: ActionExecutionOptions,
   evalCtx?: EvalContext
 ): Promise<StepResult> {
   // Helper to execute steps by ID (for loops, conditionals, etc.)
@@ -203,7 +273,7 @@ async function executeStep(
     if (!innerStep) {
       return { success: false, stepId, error: `Unknown step: ${stepId}` };
     }
-    return executeStep(innerStep, ctx, ledger, stepMap, _simulate, innerEvalCtx);
+    return executeStep(innerStep, ctx, ledger, stepMap, actionExecution, innerEvalCtx);
   };
 
   switch (step.kind) {
@@ -242,27 +312,8 @@ async function executeStep(
     case "halt":
       return executeHaltStep(step, ctx, ledger);
 
-    case "action": {
-      // For now, log that we would execute the action (simulation mode)
-      ledger.emit({ type: "step_started", stepId: step.id, kind: "action" });
-
-      // TODO: Implement actual action execution with calldata builders
-      ledger.emit({
-        type: "step_completed",
-        stepId: step.id,
-        result: {
-          simulated: true,
-          action: step.action.type,
-          venue: "venue" in step.action ? step.action.venue : undefined,
-        },
-      });
-
-      return {
-        success: true,
-        stepId: step.id,
-        output: { simulated: true, action: step.action },
-      };
-    }
+    case "action":
+      return executeActionStep(step, ctx, ledger, actionExecution);
 
     case "parallel":
     case "pipeline":

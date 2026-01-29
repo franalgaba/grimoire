@@ -5,8 +5,27 @@
 import type { Expression } from "./expressions.js";
 import type { Address, AssetId, BasisPoints, ChainId } from "./primitives.js";
 
-/** All action types */
-export type Action =
+/** Constraints for actions */
+export interface ActionConstraints {
+  maxSlippageBps?: BasisPoints;
+  deadline?: number; // seconds from now
+  minOutput?: Expression;
+  maxInput?: Expression;
+  maxGas?: bigint;
+}
+
+export interface ActionConstraintsResolved {
+  maxSlippageBps?: BasisPoints;
+  deadline?: number;
+  minOutput?: bigint;
+  maxInput?: bigint;
+  maxGas?: bigint;
+}
+
+export type ActionAmount = Expression | bigint;
+export type ActionChainId = Expression | ChainId;
+
+type ActionBase =
   | SwapAction
   | LendAction
   | WithdrawAction
@@ -16,7 +35,11 @@ export type Action =
   | UnstakeAction
   | BridgeAction
   | ClaimAction
-  | TransferAction;
+  | TransferAction
+  | ApproveAction;
+
+/** All action types */
+export type Action = ActionBase & { constraints?: ActionConstraintsResolved };
 
 /** Action type discriminator */
 export type ActionType = Action["type"];
@@ -27,7 +50,7 @@ export interface SwapAction {
   venue: string;
   assetIn: AssetId;
   assetOut: AssetId;
-  amount: Expression;
+  amount: ActionAmount;
   mode: "exact_in" | "exact_out";
 }
 
@@ -36,7 +59,7 @@ export interface LendAction {
   type: "lend";
   venue: string;
   asset: AssetId;
-  amount: Expression | "max";
+  amount: ActionAmount | "max";
 }
 
 /** Withdraw from protocol */
@@ -44,7 +67,7 @@ export interface WithdrawAction {
   type: "withdraw";
   venue: string;
   asset: AssetId;
-  amount: Expression | "max";
+  amount: ActionAmount | "max";
 }
 
 /** Borrow from protocol */
@@ -52,7 +75,7 @@ export interface BorrowAction {
   type: "borrow";
   venue: string;
   asset: AssetId;
-  amount: Expression;
+  amount: ActionAmount;
   collateral?: AssetId;
 }
 
@@ -61,7 +84,7 @@ export interface RepayAction {
   type: "repay";
   venue: string;
   asset: AssetId;
-  amount: Expression | "max";
+  amount: ActionAmount | "max";
 }
 
 /** Stake tokens */
@@ -69,7 +92,7 @@ export interface StakeAction {
   type: "stake";
   venue: string;
   asset: AssetId;
-  amount: Expression;
+  amount: ActionAmount;
 }
 
 /** Unstake tokens */
@@ -77,7 +100,7 @@ export interface UnstakeAction {
   type: "unstake";
   venue: string;
   asset: AssetId;
-  amount: Expression | "max";
+  amount: ActionAmount | "max";
 }
 
 /** Bridge to another chain */
@@ -85,8 +108,8 @@ export interface BridgeAction {
   type: "bridge";
   venue: string;
   asset: AssetId;
-  amount: Expression;
-  toChain: ChainId;
+  amount: ActionAmount;
+  toChain: ActionChainId;
 }
 
 /** Claim rewards */
@@ -100,17 +123,16 @@ export interface ClaimAction {
 export interface TransferAction {
   type: "transfer";
   asset: AssetId;
-  amount: Expression;
+  amount: ActionAmount;
   to: Address;
 }
 
-/** Constraints for actions */
-export interface ActionConstraints {
-  maxSlippageBps?: BasisPoints;
-  deadline?: number; // seconds from now
-  minOutput?: Expression;
-  maxInput?: Expression;
-  maxGas?: bigint;
+/** Approve token spending */
+export interface ApproveAction {
+  type: "approve";
+  asset: AssetId;
+  amount: ActionAmount;
+  spender: Address;
 }
 
 /** Result of building calldata */

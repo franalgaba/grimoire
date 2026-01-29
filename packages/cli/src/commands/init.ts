@@ -3,7 +3,7 @@
  * Scaffolds a new .grimoire directory
  */
 
-import { exists, mkdir } from "node:fs/promises";
+import { access, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import chalk from "chalk";
 import ora from "ora";
@@ -137,8 +137,17 @@ export async function initCommand(options: InitOptions): Promise<void> {
   const baseDir = ".grimoire";
 
   try {
+    const pathExists = async (path: string): Promise<boolean> => {
+      try {
+        await access(path);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     // Check if already exists
-    if (await exists(baseDir)) {
+    if (await pathExists(baseDir)) {
       if (!options.force) {
         spinner.fail(chalk.red(`Directory ${baseDir} already exists. Use --force to overwrite.`));
         process.exit(1);

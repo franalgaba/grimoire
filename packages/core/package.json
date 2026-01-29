@@ -10,13 +10,15 @@
     "./types": "./src/types/index.ts",
     "./compiler": "./src/compiler/index.ts",
     "./runtime": "./src/runtime/index.ts",
-    "./builders": "./src/builders/index.ts"
+    "./builders": "./src/builders/index.ts",
+    "./venues": "./src/venues/index.ts"
   },
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "ethers": "^6.12.1",
     "viem": "^2.21.0",
     "yaml": "^2.6.0",
     "zod": "^3.23.0"

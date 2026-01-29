@@ -1,0 +1,18 @@
+# Supply USDC to Morpho Blue
+
+spell MorphoBlueLend
+
+  version: "1.0.0"
+  description: "Deposit USDC into Morpho Blue"
+
+  assets: [USDC]
+
+  params:
+    amount: 250000000
+
+  venues:
+    morpho_blue: @morpho_blue
+
+  on manual:
+    morpho_blue.deposit(USDC, params.amount)
+    emit deposit_submitted(asset=USDC, amount=params.amount)

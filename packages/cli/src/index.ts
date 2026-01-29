@@ -7,10 +7,12 @@
 import chalk from "chalk";
 import { Command } from "commander";
 import { castCommand } from "./commands/cast.js";
+import { compileAllCommand } from "./commands/compile-all.js";
 import { compileCommand } from "./commands/compile.js";
 import { initCommand } from "./commands/init.js";
 import { simulateCommand } from "./commands/simulate.js";
 import { validateCommand } from "./commands/validate.js";
+import { venuesCommand } from "./commands/venues.js";
 
 const program = new Command();
 
@@ -33,6 +35,14 @@ program
   .option("-o, --output <file>", "Output file for IR JSON")
   .option("--pretty", "Pretty print JSON output")
   .action(compileCommand);
+
+// Compile all command
+program
+  .command("compile-all [dir]")
+  .description("Compile all .spell files in a directory (default: spells)")
+  .option("--fail-fast", "Stop after the first failure")
+  .option("--json", "Output results as JSON")
+  .action(compileAllCommand);
 
 // Validate command
 program
@@ -58,7 +68,21 @@ program
   .option("--vault <address>", "Vault address")
   .option("--chain <id>", "Chain ID", "1")
   .option("--dry-run", "Simulate without executing")
+  .option("--private-key <key>", "Private key (hex) - NOT RECOMMENDED, use --key-env")
+  .option("--key-env <name>", "Environment variable containing private key", "PRIVATE_KEY")
+  .option("--rpc-url <url>", "RPC URL (or set RPC_URL env var)")
+  .option("--gas-multiplier <n>", "Gas price multiplier (default: 1.1)")
+  .option("--skip-confirm", "Skip confirmation prompt (use with caution)")
+  .option("-v, --verbose", "Show verbose output")
+  .option("--json", "Output results as JSON")
   .action(castCommand);
+
+// Venues command
+program
+  .command("venues")
+  .description("List available venue adapters")
+  .option("--json", "Output results as JSON")
+  .action(venuesCommand);
 
 // History command (placeholder)
 program

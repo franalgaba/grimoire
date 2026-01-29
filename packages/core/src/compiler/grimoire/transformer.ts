@@ -49,9 +49,11 @@ export class Transformer {
 
     // Process triggers and their handlers
     if (ast.triggers.length > 0) {
-      const trigger = ast.triggers[0]!;
-      source.trigger = this.transformTriggerType(trigger.trigger);
-      source.steps = this.transformStatements(trigger.body);
+      const trigger = ast.triggers[0];
+      if (trigger) {
+        source.trigger = this.transformTriggerType(trigger.trigger);
+        source.steps = this.transformStatements(trigger.body);
+      }
     }
 
     // Multiple triggers → any trigger
@@ -116,18 +118,20 @@ export class Transformer {
         }
         break;
 
-      case "state":
-        source.state = {
-          persistent: {},
-          ephemeral: {},
+      case "state": {
+        const state: Required<NonNullable<SpellSource["state"]>> = {
+          persistent: source.state?.persistent ?? {},
+          ephemeral: source.state?.ephemeral ?? {},
         };
+        source.state = state;
         for (const item of section.persistent) {
-          source.state.persistent![item.name] = this.exprToValue(item.initialValue);
+          state.persistent[item.name] = this.exprToValue(item.initialValue);
         }
         for (const item of section.ephemeral) {
-          source.state.ephemeral![item.name] = this.exprToValue(item.initialValue);
+          state.ephemeral[item.name] = this.exprToValue(item.initialValue);
         }
         break;
+      }
     }
   }
 
@@ -312,6 +316,7 @@ export class Transformer {
       unstake: "unstake",
       claim: "claim",
       swap: "swap",
+      bridge: "bridge",
       transfer: "transfer",
       get_supply_rates: "query", // Query operations
       get_rates: "query",
@@ -339,19 +344,37 @@ export class Transformer {
 
     // Map arguments based on action type
     if (actionType === "lend" || actionType === "withdraw") {
-      if (stmt.args.length >= 1) {
-        action.asset = this.exprToString(stmt.args[0]!);
+      const assetArg = stmt.args[0];
+      const amountArg = stmt.args[1];
+      if (assetArg) {
+        action.asset = this.exprToString(assetArg);
       }
-      if (stmt.args.length >= 2) {
-        action.amount = this.exprToString(stmt.args[1]!);
+      if (amountArg) {
+        action.amount = this.exprToString(amountArg);
+      }
+    } else if (actionType === "bridge") {
+      const assetArg = stmt.args[0];
+      const amountArg = stmt.args[1];
+      const chainArg = stmt.args[2];
+      if (assetArg) {
+        action.asset = this.exprToString(assetArg);
+      }
+      if (amountArg) {
+        action.amount = this.exprToString(amountArg);
+      }
+      if (chainArg) {
+        action.to_chain = this.exprToString(chainArg);
       }
     } else if (actionType === "swap") {
-      if (stmt.args.length >= 2) {
-        action.asset_in = this.exprToString(stmt.args[0]!);
-        action.asset_out = this.exprToString(stmt.args[1]!);
+      const assetInArg = stmt.args[0];
+      const assetOutArg = stmt.args[1];
+      const amountArg = stmt.args[2];
+      if (assetInArg && assetOutArg) {
+        action.asset_in = this.exprToString(assetInArg);
+        action.asset_out = this.exprToString(assetOutArg);
       }
-      if (stmt.args.length >= 3) {
-        action.amount = this.exprToString(stmt.args[2]!);
+      if (amountArg) {
+        action.amount = this.exprToString(amountArg);
       }
     } else if (actionType === "query") {
       // Query operations become compute steps

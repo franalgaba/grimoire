@@ -4,7 +4,20 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { type Address, compile, execute } from "./index.js";
+import { type Address, compile, createProvider, execute } from "./index.js";
+import type { Action } from "./types/actions.js";
+import type { SpellIR } from "./types/ir.js";
+import type { VenueAdapter } from "./venues/types.js";
+import type { Wallet } from "./wallet/types.js";
+
+/** Helper to assert compile result has IR */
+function assertIR(
+  result: ReturnType<typeof compile>
+): asserts result is { success: true; ir: SpellIR; errors: never[]; warnings: never[] } {
+  if (!result.success || !result.ir) {
+    throw new Error("Expected successful compilation with IR");
+  }
+}
 
 describe("E2E: Compile and Execute", () => {
   describe("Basic Compute Spells", () => {
@@ -23,10 +36,10 @@ describe("E2E: Compile and Execute", () => {
 `;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
-      expect(compileResult.ir).toBeDefined();
+      assertIR(compileResult);
 
       const execResult = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
       });
@@ -48,10 +61,11 @@ describe("E2E: Compile and Execute", () => {
 `;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
 
       // Execute with default params
       const result1 = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
       });
@@ -59,7 +73,7 @@ describe("E2E: Compile and Execute", () => {
 
       // Execute with override
       const result2 = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
         params: { multiplier: 5 },
@@ -82,9 +96,10 @@ describe("E2E: Compile and Execute", () => {
 `;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
 
       const execResult = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
       });
@@ -111,9 +126,10 @@ describe("E2E: Compile and Execute", () => {
 `;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
 
       const execResult = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
       });
@@ -137,9 +153,10 @@ describe("E2E: Compile and Execute", () => {
 `;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
 
       const execResult = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
         params: { value: 10 },
@@ -168,9 +185,10 @@ describe("E2E: Compile and Execute", () => {
 `;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
 
       const execResult = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
       });
@@ -210,9 +228,10 @@ describe("E2E: Compile and Execute", () => {
 `;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
 
       const execResult = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
       });
@@ -235,9 +254,10 @@ describe("E2E: Compile and Execute", () => {
 `;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
 
       const execResult = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
       });
@@ -258,9 +278,10 @@ describe("E2E: Compile and Execute", () => {
 `;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
 
       const execResult = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
       });
@@ -287,15 +308,50 @@ describe("E2E: Compile and Execute", () => {
 `;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
 
       const execResult = await execute({
-        spell: compileResult.ir!,
+        spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
         persistentState: { counter: 5 },
       });
 
       expect(execResult.success).toBe(true);
+    });
+  });
+
+  describe("Action Steps", () => {
+    test("simulates action steps and emits ledger events", async () => {
+      const source = `spell ActionSpell
+
+  version: "1.0.0"
+  assets: [USDC]
+
+  venues:
+    lending: [@aave]
+
+  on manual:
+    aave.deposit(USDC, 100)
+`;
+      const compileResult = compile(source);
+      expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
+
+      const execResult = await execute({
+        spell: compileResult.ir,
+        vault: "0x0000000000000000000000000000000000000000" as Address,
+        chain: 1,
+        simulate: true,
+      });
+
+      expect(execResult.success).toBe(true);
+      expect(execResult.metrics.actionsExecuted).toBeGreaterThan(0);
+
+      const simulated = execResult.ledgerEvents.find(
+        (entry) => entry.event.type === "action_simulated"
+      );
+      expect(simulated).toBeDefined();
     });
   });
 });
@@ -319,9 +375,10 @@ describe("E2E: Expression Evaluation", () => {
 `;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
 
     const execResult = await execute({
-      spell: compileResult.ir!,
+      spell: compileResult.ir,
       vault: "0x0000000000000000000000000000000000000000" as Address,
       chain: 1,
     });
@@ -346,9 +403,10 @@ describe("E2E: Expression Evaluation", () => {
 `;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
 
     const execResult = await execute({
-      spell: compileResult.ir!,
+      spell: compileResult.ir,
       vault: "0x0000000000000000000000000000000000000000" as Address,
       chain: 1,
     });
@@ -371,9 +429,10 @@ describe("E2E: Expression Evaluation", () => {
 `;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
 
     const execResult = await execute({
-      spell: compileResult.ir!,
+      spell: compileResult.ir,
       vault: "0x0000000000000000000000000000000000000000" as Address,
       chain: 1,
     });
@@ -397,9 +456,10 @@ describe("E2E: Expression Evaluation", () => {
 `;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
 
     const execResult = await execute({
-      spell: compileResult.ir!,
+      spell: compileResult.ir,
       vault: "0x0000000000000000000000000000000000000000" as Address,
       chain: 1,
     });
@@ -420,14 +480,84 @@ describe("E2E: Expression Evaluation", () => {
 `;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
 
     const execResult = await execute({
-      spell: compileResult.ir!,
+      spell: compileResult.ir,
       vault: "0x0000000000000000000000000000000000000000" as Address,
       chain: 1,
     });
 
     expect(execResult.success).toBe(true);
+  });
+
+  describe("Action execution", () => {
+    test("executes action with approval flow", async () => {
+      const source = `spell ActionApproval
+
+  version: "1.0.0"
+
+  venues:
+    lending: @aave_v3
+
+  on manual:
+    aave_v3.deposit(USDC, 100)
+`;
+      const compileResult = compile(source);
+      expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
+
+      const adapter: VenueAdapter = {
+        meta: {
+          name: "aave_v3",
+          supportedChains: [1],
+          actions: ["lend"],
+        },
+        buildAction: async (action: Action) => [
+          {
+            tx: { to: "0x0000000000000000000000000000000000000002", data: "0x" },
+            description: "Approve",
+            action,
+          },
+          {
+            tx: { to: "0x0000000000000000000000000000000000000003", data: "0x" },
+            description: "Supply",
+            action,
+          },
+        ],
+      };
+
+      const wallet: Wallet = {
+        address: "0x0000000000000000000000000000000000000001" as Address,
+        chainId: 1,
+        signTransaction: async () => "0x",
+        signMessage: async () => "0x",
+        sendTransaction: async () => ({
+          hash: "0x",
+          blockNumber: 1n,
+          blockHash: "0x",
+          gasUsed: 0n,
+          effectiveGasPrice: 0n,
+          status: "success",
+          logs: [],
+        }),
+      };
+
+      const provider = createProvider(1, "http://localhost");
+
+      const execResult = await execute({
+        spell: compileResult.ir,
+        vault: "0x0000000000000000000000000000000000000000" as Address,
+        chain: 1,
+        executionMode: "dry-run",
+        wallet,
+        provider,
+        adapters: [adapter],
+      });
+
+      expect(execResult.success).toBe(true);
+      expect(execResult.metrics.actionsExecuted).toBe(1);
+    });
   });
 });
 
@@ -500,9 +630,10 @@ describe("E2E: Complex Spells", () => {
 `;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
 
     const execResult = await execute({
-      spell: compileResult.ir!,
+      spell: compileResult.ir,
       vault: "0x0000000000000000000000000000000000000000" as Address,
       chain: 1,
     });
@@ -524,9 +655,10 @@ describe("E2E: Complex Spells", () => {
 `;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
 
     const execResult = await execute({
-      spell: compileResult.ir!,
+      spell: compileResult.ir,
       vault: "0x0000000000000000000000000000000000000000" as Address,
       chain: 1,
     });

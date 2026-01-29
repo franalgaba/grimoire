@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@grimoire/core": "workspace:*",
+    "@grimoire/venues": "workspace:*",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "ora": "^8.1.0"

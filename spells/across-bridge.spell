@@ -1,0 +1,19 @@
+# Bridge USDC across chains with Across
+
+spell AcrossBridge
+
+  version: "1.0.0"
+  description: "Bridge USDC across chains using Across"
+
+  assets: [USDC]
+
+  params:
+    amount: 100000000
+    destination_chain: 10
+
+  venues:
+    across: @across
+
+  on manual:
+    across.bridge(USDC, params.amount, params.destination_chain)
+    emit bridge_submitted(asset=USDC, amount=params.amount, to_chain=params.destination_chain)

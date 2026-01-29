@@ -6,6 +6,20 @@ import { describe, expect, test } from "bun:test";
 import { parse } from "./parser.js";
 import { transform } from "./transformer.js";
 
+type StepRecord = Record<string, unknown>;
+
+const findStep = (steps: StepRecord[] | undefined, key: string): StepRecord | undefined =>
+  steps?.find((step) => key in step);
+
+const getAction = (step: StepRecord | undefined): { type?: string; venue?: string } | undefined =>
+  step && "action" in step ? (step.action as { type?: string; venue?: string }) : undefined;
+
+const getCompute = (step: StepRecord | undefined): Record<string, string> | undefined =>
+  step && "compute" in step ? (step.compute as Record<string, string>) : undefined;
+
+const getEmit = (step: StepRecord | undefined): { event?: string } | undefined =>
+  step && "emit" in step ? (step.emit as { event?: string }) : undefined;
+
 describe("Transformer", () => {
   describe("basic transformation", () => {
     test("transforms spell name", () => {
@@ -61,8 +75,8 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      expect(result.assets).toBeDefined();
-      expect(Object.keys(result.assets!)).toEqual(["USDC", "DAI", "USDT"]);
+      const assets = result.assets ?? {};
+      expect(Object.keys(assets)).toEqual(["USDC", "DAI", "USDT"]);
     });
 
     test("assets have default chain", () => {
@@ -283,7 +297,7 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const condStep = result.steps?.find((s: any) => s.if);
+      const condStep = findStep(result.steps, "if");
       expect(condStep).toBeDefined();
     });
 
@@ -298,7 +312,7 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const loopStep = result.steps?.find((s: any) => s.for);
+      const loopStep = findStep(result.steps, "for");
       expect(loopStep).toBeDefined();
     });
 
@@ -312,9 +326,10 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const emitStep = result.steps?.find((s: any) => s.emit);
+      const emitStep = findStep(result.steps, "emit");
       expect(emitStep).toBeDefined();
-      expect((emitStep as any)?.emit.event).toBe("done");
+      const emit = getEmit(emitStep);
+      expect(emit?.event).toBe("done");
     });
 
     test("transforms halt statement", () => {
@@ -327,7 +342,7 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const haltStep = result.steps?.find((s: any) => s.halt);
+      const haltStep = findStep(result.steps, "halt");
       expect(haltStep).toBeDefined();
       expect(haltStep?.halt).toBe("stopped");
     });
@@ -342,7 +357,7 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const waitStep = result.steps?.find((s: any) => s.wait !== undefined);
+      const waitStep = findStep(result.steps, "wait");
       expect(waitStep).toBeDefined();
       expect(waitStep?.wait).toBe(60);
     });
@@ -359,7 +374,7 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const tryStep = result.steps?.find((s: any) => s.try);
+      const tryStep = findStep(result.steps, "try");
       expect(tryStep).toBeDefined();
     });
   });
@@ -390,8 +405,9 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const step = result.steps?.[0] as any;
-      expect(step.compute.x).toContain("+");
+      const step = result.steps?.[0];
+      const compute = getCompute(step);
+      expect(compute?.x).toContain("+");
     });
 
     test("transforms function calls", () => {
@@ -404,8 +420,9 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const step = result.steps?.[0] as any;
-      expect(step.compute.x).toContain("max");
+      const step = result.steps?.[0];
+      const compute = getCompute(step);
+      expect(compute?.x).toContain("max");
     });
 
     test("transforms property access", () => {
@@ -418,8 +435,9 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const step = result.steps?.[0] as any;
-      expect(step.compute.x).toContain("params.amount");
+      const step = result.steps?.[0];
+      const compute = getCompute(step);
+      expect(compute?.x).toContain("params.amount");
     });
 
     test("transforms array literal", () => {
@@ -432,8 +450,9 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const step = result.steps?.[0] as any;
-      expect(step.compute.x).toContain("[");
+      const step = result.steps?.[0];
+      const compute = getCompute(step);
+      expect(compute?.x).toContain("[");
     });
 
     test("transforms venue reference", () => {
@@ -446,8 +465,9 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const step = result.steps?.[0] as any;
-      expect(step.compute.x).toContain("@aave_v3");
+      const step = result.steps?.[0];
+      const compute = getCompute(step);
+      expect(compute?.x).toContain("@aave_v3");
     });
 
     test("transforms percentage", () => {
@@ -460,8 +480,9 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const step = result.steps?.[0] as any;
-      expect(step.compute.x).toBe("0.5");
+      const step = result.steps?.[0];
+      const compute = getCompute(step);
+      expect(compute?.x).toBe("0.5");
     });
 
     test("transforms unary expressions", () => {
@@ -488,8 +509,9 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const step = result.steps?.[0] as any;
-      expect(step.compute.x).toContain("?");
+      const step = result.steps?.[0];
+      const compute = getCompute(step);
+      expect(compute?.x).toContain("?");
     });
   });
 
@@ -523,9 +545,9 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const actionStep = result.steps?.find((s: any) => s.action);
+      const actionStep = findStep(result.steps, "action");
       expect(actionStep).toBeDefined();
-      expect((actionStep as any)?.action.type).toBe("lend");
+      expect(getAction(actionStep)?.type).toBe("lend");
     });
 
     test("transforms withdraw method call", () => {
@@ -538,9 +560,9 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const actionStep = result.steps?.find((s: any) => s.action);
+      const actionStep = findStep(result.steps, "action");
       expect(actionStep).toBeDefined();
-      expect((actionStep as any)?.action.type).toBe("withdraw");
+      expect(getAction(actionStep)?.type).toBe("withdraw");
     });
 
     test("transforms swap method call", () => {
@@ -553,9 +575,9 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const actionStep = result.steps?.find((s: any) => s.action);
+      const actionStep = findStep(result.steps, "action");
       expect(actionStep).toBeDefined();
-      expect((actionStep as any)?.action.type).toBe("swap");
+      expect(getAction(actionStep)?.type).toBe("swap");
     });
 
     test("transforms generic method call", () => {
@@ -568,7 +590,7 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const actionStep = result.steps?.find((s: any) => s.action);
+      const actionStep = findStep(result.steps, "action");
       expect(actionStep).toBeDefined();
     });
 
@@ -582,7 +604,7 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const computeStep = result.steps?.find((s: any) => s.compute);
+      const computeStep = findStep(result.steps, "compute");
       expect(computeStep).toBeDefined();
     });
 
@@ -596,8 +618,8 @@ describe("Transformer", () => {
 `;
       const ast = parse(source);
       const result = transform(ast);
-      const actionStep = result.steps?.find((s: any) => s.action);
-      expect((actionStep as any)?.action.venue).toBe("myVenue");
+      const actionStep = findStep(result.steps, "action");
+      expect(getAction(actionStep)?.venue).toBe("myVenue");
     });
   });
 

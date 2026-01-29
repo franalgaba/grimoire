@@ -3,7 +3,23 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type { AssignmentNode, ForNode, IfNode } from "./ast.js";
+import type {
+  AdvisoryExpr,
+  ArrayLiteralNode,
+  AssetsSection,
+  AssignmentNode,
+  BinaryExprNode,
+  CallExprNode,
+  ForNode,
+  IfNode,
+  ParamsSection,
+  PercentageExpr,
+  StateSection,
+  UnaryExprNode,
+  VenueRefExpr,
+  VenuesSection,
+  VersionSection,
+} from "./ast.js";
 import { parse } from "./parser.js";
 
 describe("Parser", () => {
@@ -48,9 +64,9 @@ describe("Parser", () => {
       const ast = parse(source);
       expect(ast.name).toBe("MySpell");
 
-      const versionSection = ast.sections.find((s) => s.kind === "version");
+      const versionSection = ast.sections.find((s): s is VersionSection => s.kind === "version");
       expect(versionSection).toBeDefined();
-      expect((versionSection as any).value).toBe("2.0.0");
+      expect(versionSection?.value).toBe("2.0.0");
     });
   });
 
@@ -62,14 +78,10 @@ describe("Parser", () => {
   assets: [USDC, USDT, DAI]
 `;
       const ast = parse(source);
-      const assetsSection = ast.sections.find((s) => s.kind === "assets");
+      const assetsSection = ast.sections.find((s): s is AssetsSection => s.kind === "assets");
       expect(assetsSection).toBeDefined();
-      expect((assetsSection as any).items.length).toBe(3);
-      expect((assetsSection as any).items.map((i: any) => i.symbol)).toEqual([
-        "USDC",
-        "USDT",
-        "DAI",
-      ]);
+      expect(assetsSection?.items.length).toBe(3);
+      expect(assetsSection?.items.map((item) => item.symbol)).toEqual(["USDC", "USDT", "DAI"]);
     });
 
     test("parses params section", () => {
@@ -81,9 +93,9 @@ describe("Parser", () => {
     threshold: 0.5
 `;
       const ast = parse(source);
-      const paramsSection = ast.sections.find((s) => s.kind === "params");
+      const paramsSection = ast.sections.find((s): s is ParamsSection => s.kind === "params");
       expect(paramsSection).toBeDefined();
-      expect((paramsSection as any).items.length).toBe(2);
+      expect(paramsSection?.items.length).toBe(2);
     });
 
     test("parses limits section with percentages", () => {
@@ -108,9 +120,9 @@ describe("Parser", () => {
     swap: @uniswap_v3
 `;
       const ast = parse(source);
-      const venuesSection = ast.sections.find((s) => s.kind === "venues");
+      const venuesSection = ast.sections.find((s): s is VenuesSection => s.kind === "venues");
       expect(venuesSection).toBeDefined();
-      expect((venuesSection as any).groups.length).toBe(2);
+      expect(venuesSection?.groups.length).toBe(2);
     });
   });
 
@@ -171,10 +183,10 @@ describe("Parser", () => {
     pass
 `;
       const ast = parse(source);
-      const stateSection = ast.sections.find((s) => s.kind === "state");
+      const stateSection = ast.sections.find((s): s is StateSection => s.kind === "state");
       expect(stateSection).toBeDefined();
-      expect((stateSection as any).persistent.length).toBe(1);
-      expect((stateSection as any).ephemeral.length).toBe(1);
+      expect(stateSection?.persistent.length).toBe(1);
+      expect(stateSection?.ephemeral.length).toBe(1);
     });
   });
 
@@ -366,9 +378,16 @@ describe("Parser", () => {
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("binary");
       // a + (b * c) - multiplication has higher precedence
-      const binExpr = stmt.value as any;
+      if (stmt.value.kind !== "binary") {
+        throw new Error("Expected binary expression");
+      }
+      const binExpr = stmt.value as BinaryExprNode;
       expect(binExpr.op).toBe("+");
-      expect(binExpr.right.op).toBe("*");
+      if (binExpr.right.kind !== "binary") {
+        throw new Error("Expected binary expression");
+      }
+      const rightExpr = binExpr.right as BinaryExprNode;
+      expect(rightExpr.op).toBe("*");
     });
 
     test("parses comparison expressions", () => {
@@ -382,7 +401,10 @@ describe("Parser", () => {
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("binary");
-      expect((stmt.value as any).op).toBe(">");
+      if (stmt.value.kind !== "binary") {
+        throw new Error("Expected binary expression");
+      }
+      expect((stmt.value as BinaryExprNode).op).toBe(">");
     });
 
     test("parses logical expressions", () => {
@@ -396,7 +418,10 @@ describe("Parser", () => {
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       // (a and b) or c - and has higher precedence
-      expect((stmt.value as any).op).toBe("or");
+      if (stmt.value.kind !== "binary") {
+        throw new Error("Expected binary expression");
+      }
+      expect((stmt.value as BinaryExprNode).op).toBe("or");
     });
 
     test("parses unary not", () => {
@@ -410,7 +435,10 @@ describe("Parser", () => {
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("unary");
-      expect((stmt.value as any).op).toBe("not");
+      if (stmt.value.kind !== "unary") {
+        throw new Error("Expected unary expression");
+      }
+      expect((stmt.value as UnaryExprNode).op).toBe("not");
     });
 
     test("parses property access", () => {
@@ -450,7 +478,10 @@ describe("Parser", () => {
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("call");
-      expect((stmt.value as any).args.length).toBe(2);
+      if (stmt.value.kind !== "call") {
+        throw new Error("Expected call expression");
+      }
+      expect((stmt.value as CallExprNode).args.length).toBe(2);
     });
 
     test("parses method call", () => {
@@ -477,7 +508,10 @@ describe("Parser", () => {
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("array_literal");
-      expect((stmt.value as any).elements.length).toBe(3);
+      if (stmt.value.kind !== "array_literal") {
+        throw new Error("Expected array literal");
+      }
+      expect((stmt.value as ArrayLiteralNode).elements.length).toBe(3);
     });
 
     test("parses venue reference expression", () => {
@@ -491,7 +525,10 @@ describe("Parser", () => {
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("venue_ref_expr");
-      expect((stmt.value as any).name).toBe("aave_v3");
+      if (stmt.value.kind !== "venue_ref_expr") {
+        throw new Error("Expected venue ref expression");
+      }
+      expect((stmt.value as VenueRefExpr).name).toBe("aave_v3");
     });
 
     test("parses percentage expression", () => {
@@ -505,7 +542,10 @@ describe("Parser", () => {
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("percentage");
-      expect((stmt.value as any).value).toBe(0.5);
+      if (stmt.value.kind !== "percentage") {
+        throw new Error("Expected percentage expression");
+      }
+      expect((stmt.value as PercentageExpr).value).toBe(0.5);
     });
 
     test("parses advisory expression in if condition", () => {
@@ -520,7 +560,10 @@ describe("Parser", () => {
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as IfNode;
       expect(stmt.condition.kind).toBe("advisory_expr");
-      expect((stmt.condition as any).prompt).toBe("is this safe");
+      if (stmt.condition.kind !== "advisory_expr") {
+        throw new Error("Expected advisory expression");
+      }
+      expect((stmt.condition as AdvisoryExpr).prompt).toBe("is this safe");
     });
   });
 

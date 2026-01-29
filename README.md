@@ -10,7 +10,11 @@ Grimoire enables you to define, simulate, and execute complex DeFi strategies us
 
 - **Human-readable DSL** - Write strategies in a clean, Python-like syntax
 - **Compile-time validation** - Catch errors before execution
-- **Multi-venue support** - Integrate with Aave, Morpho, Uniswap, and more
+- **Adapter-based venues** - Protocol SDKs live outside core (`@grimoire/venues`)
+- **Multi-tx approvals** - Adapters return approval + action plans
+- **Onchain + offchain** - EVM transactions or offchain execution (Hyperliquid)
+- **Bridging support** - Across bridge integration
+- **Action constraints** - Slippage, deadlines, and bounds per action
 - **Advisory AI integration** - Use `**prompts**` for AI-assisted decisions
 - **Atomic transactions** - Group operations for all-or-nothing execution
 - **Scheduled triggers** - Run strategies hourly, daily, or manually
@@ -29,6 +33,9 @@ bun run packages/cli/src/index.ts compile spells/yield-optimizer.spell --pretty
 
 # Simulate a spell (dry run)
 bun run packages/cli/src/index.ts simulate spells/compute-only.spell
+
+# Execute a spell (requires wallet + RPC)
+bun run packages/cli/src/index.ts cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url <rpc>
 ```
 
 ## Example Spell
@@ -49,7 +56,7 @@ spell YieldOptimizer
     max_per_venue: 50%
 
   venues:
-    lending: [@aave_v3, @morpho, @compound_v3]
+    lending: [@aave_v3, @morpho_blue]
     swap: @uniswap_v3
 
   on hourly:
@@ -72,7 +79,7 @@ spell YieldOptimizer
 |---------|--------|-------------|
 | Spell declaration | `spell Name` | Define a new strategy |
 | Assets | `assets: [USDC, DAI]` | Tokens the spell interacts with |
-| Venue references | `@aave_v3` | Reference to a DeFi protocol |
+| Venue references | `@aave_v3` | Reference to a venue adapter |
 | Percentages | `50%` | Automatically converts to 0.5 |
 | Triggers | `on hourly:` | Schedule: `manual`, `hourly`, `daily` |
 | Loops | `for x in items:` | Iterate over collections |
@@ -87,34 +94,60 @@ spell YieldOptimizer
 |---------|-------------|
 | `grimoire init` | Initialize a new .grimoire directory |
 | `grimoire compile <spell>` | Compile a .spell file to IR |
+| `grimoire compile-all [dir]` | Compile all .spell files in a directory |
 | `grimoire validate <spell>` | Validate a .spell file |
 | `grimoire simulate <spell>` | Simulate spell execution (dry run) |
 | `grimoire cast <spell>` | Execute a spell onchain |
+| `grimoire venues` | List adapters and supported chains |
+
+### Venue CLIs
+
+- `grimoire-aave`
+- `grimoire-uniswap`
+- `grimoire-morpho-blue`
+- `grimoire-hyperliquid`
 
 ## Project Structure
 
 ```
 grimoire/
 ├── packages/
-│   ├── core/              # Compiler and runtime
+│   ├── core/              # Compiler, runtime, adapter registry
 │   │   └── src/
 │   │       ├── compiler/  # Tokenizer, parser, IR generator
 │   │       ├── runtime/   # Execution engine
+│   │       ├── venues/    # Adapter registry + types
 │   │       ├── types/     # TypeScript definitions
 │   │       └── builders/  # Fluent spell builder API
+│   ├── venues/            # Official SDK adapters
 │   ├── cli/               # Command-line interface
 │   └── sdk/               # High-level SDK (WIP)
 ├── spells/                # Example spell files
-└── docs/                  # Specifications
+├── skills/                # Agent skills (per-venue)
+└── docs/                  # Diátaxis documentation
 ```
 
 ## Supported Venues
 
 | Category | Protocols |
 |----------|-----------|
-| **Lending** | Aave V3, Morpho, Compound V3 |
-| **Swaps** | Uniswap V3, 1inch |
+| **Lending** | Aave V3, Morpho Blue |
+| **Swaps** | Uniswap V3 |
 | **Perps** | Hyperliquid |
+| **Bridge** | Across |
+
+## Venue Adapters
+
+Adapters live in `@grimoire/venues` and are injected at execution time. Core stays SDK-free.
+
+```ts
+import { adapters } from "@grimoire/venues";
+import { execute } from "@grimoire/core";
+
+await execute({ spell, vault, chain: 1, adapters });
+```
+
+Adapters can return multi-transaction plans to handle ERC20 approvals.
 
 ## Development
 
@@ -145,15 +178,19 @@ bun run validate
 
 ```
 Source (.spell) → Tokenizer → Parser → AST → Transformer → SpellSource → IR Generator → SpellIR
-                     ↓           ↓        ↓         ↓              ↓              ↓
-                  Tokens      Syntax    Tree    Normalized      YAML-like      Executable
-                             Check              Structure        Format          Format
+```
+
+Execution:
+
+```
+SpellIR → Runtime → Executor → (Adapter Registry) → Venue Adapter → Transactions/Offchain
 ```
 
 ## Programmatic Usage
 
 ```typescript
 import { compile, execute } from "@grimoire/core";
+import { adapters } from "@grimoire/venues";
 
 // Compile a spell
 const result = compile(spellSource);
@@ -168,16 +205,32 @@ const execResult = await execute({
   vault: "0x...",
   chain: 1,
   params: { min_amount: 500 },
+  adapters,
 });
 
 console.log("Execution result:", execResult);
 ```
+
+## Documentation
+
+Docs are organized with the [Diátaxis](https://diataxis.fr/) framework in `docs/`:
+
+- Tutorials
+- How-to guides
+- Reference
+- Explanation
+
+Start at [docs/README.md](./docs/README.md).
 
 ## More Examples
 
 See the [`spells/`](./spells) directory for more examples:
 
 - `simple-swap.spell` - Basic token swap
+- `uniswap-swap-execute.spell` - Uniswap V3 swap execution
+- `aave-supply-action.spell` - Aave V3 supply action
+- `morpho-blue-lend.spell` - Morpho Blue lend action
+- `across-bridge.spell` - Across bridge example
 - `yield-optimizer.spell` - Multi-venue yield optimization
 - `dca-trading.spell` - Dollar-cost averaging strategy
 - `lending-rebalancer.spell` - Lending position rebalancing

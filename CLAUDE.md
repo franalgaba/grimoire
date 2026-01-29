@@ -8,11 +8,22 @@ alwaysApply: false
 
 A domain-specific language (DSL) for defining and executing onchain DeFi strategies. Strategies are written in `.spell` files using a Python-like indentation-based syntax.
 
+## Agent Portability (LLM-agnostic)
+
+Keep guidance portable across any assistant (e.g., Claude, OpenCode, Amp):
+
+- **Avoid tool-specific assumptions.** Use standard shell commands and Bun scripts; do not depend on proprietary agent APIs.
+- **Prefer repo-local context.** Document workflows, examples, and constraints in this repo (docs/ + README + CLAUDE) instead of relying on conversation memory.
+- **Use relative paths.** Reference files relative to the repository root.
+- **Provide manual fallbacks.** If a workflow is automated by a tool, include the equivalent manual command steps.
+- **Keep secrets out of prompts.** Use environment variables and avoid hardcoding private keys or tokens.
+- **Explicit dependencies.** If a task requires new dependencies or SDKs, list them and pin versions.
+
 ## Project Structure
 
 ```
 packages/
-├── core/                    # Core compiler and runtime
+├── core/                    # Core compiler + runtime (protocol-agnostic)
 │   └── src/
 │       ├── compiler/        # Spell → IR compilation
 │       │   ├── grimoire/    # Tokenizer, parser, transformer
@@ -23,11 +34,22 @@ packages/
 │       │   ├── interpreter.ts
 │       │   ├── context.ts
 │       │   └── steps/       # Step handlers (compute, conditional, loop, etc.)
+│       ├── venues/          # Adapter registry + types (no SDKs)
 │       ├── types/           # TypeScript type definitions
 │       └── builders/        # Fluent API for building spells
-├── cli/                     # Command-line interface
+├── venues/                  # Official adapters (SDK integrations)
+│   └── src/
+│       ├── aave-v3.ts
+│       ├── uniswap-v3.ts
+│       ├── morpho-blue.ts
+│       ├── hyperliquid.ts
+│       ├── across.ts
+│       └── cli/             # per-venue CLIs
+├── cli/                     # grimoire-cast CLI
 └── sdk/                     # (WIP) SDK for external integrations
 spells/                      # Example spell files
+skills/                      # Agent skills (per-venue)
+docs/                        # Diátaxis docs
 ```
 
 ## Grimoire Syntax
@@ -49,7 +71,7 @@ spell YieldOptimizer
     max_allocation_per_venue: 50%
 
   venues:
-    lending: [@aave_v3, @morpho, @compound_v3]
+    lending: [@aave_v3, @morpho_blue, @compound_v3]
     swap: @uniswap_v3
 
   state:
@@ -77,7 +99,7 @@ spell YieldOptimizer
 | Spell declaration | `spell Name` | `spell YieldOptimizer` |
 | Arrays | `[item1, item2]` | `assets: [USDC, DAI]` |
 | Venue refs | `@name` | `@aave_v3` |
-| Venue groups | `name: [@v1, @v2]` | `lending: [@aave, @morpho]` |
+| Venue groups | `name: [@v1, @v2]` | `lending: [@aave_v3, @morpho_blue]` |
 | Percentages | `N%` | `50%` (converts to 0.5) |
 | Triggers | `on trigger:` | `on hourly:`, `on daily:`, `on manual:` |
 | For loops | `for x in y:` | `for asset in assets:` |
@@ -92,6 +114,14 @@ spell YieldOptimizer
 | Halt execution | `halt "reason"` | `halt "insufficient balance"` |
 | Wait | `wait N` | `wait 3600` (seconds) |
 
+## Example Spells
+
+- `spells/uniswap-swap-execute.spell`
+- `spells/aave-supply-action.spell`
+- `spells/morpho-blue-lend.spell`
+- `spells/across-bridge.spell`
+- `spells/hyperliquid-perps.spell`
+
 ## Compiler Pipeline
 
 ```
@@ -104,6 +134,30 @@ Key files:
 - `grimoire/ast.ts` - AST node type definitions
 - `grimoire/transformer.ts` - AST → SpellSource conversion
 - `ir-generator.ts` - SpellSource → SpellIR (executable format)
+
+## Venues and Adapters
+
+Core is SDK-free. Protocol integrations live in `@grimoire/venues` and are injected at execution time.
+
+Supported adapters:
+- `aave_v3` (AaveKit)
+- `uniswap_v3`
+- `morpho_blue`
+- `hyperliquid` (offchain)
+- `across` (bridge)
+
+Adapters can return multi-transaction plans to handle approvals. Offchain venues implement `executeAction`.
+
+## Action Constraints (Slippage)
+
+Action constraints are resolved at runtime and attached to `Action.constraints` for adapter use.
+
+- `maxSlippageBps`, `minOutput`, `maxInput`, `deadline`
+- Used by Uniswap V3 swaps and Across bridging
+
+## Bridge Actions
+
+`bridge` actions compile from `venue.bridge(asset, amount, to_chain)` and are supported by the Across adapter. The IR requires a literal chain ID for `to_chain`.
 
 ## Commands
 
@@ -131,6 +185,31 @@ bun run typecheck    # TypeScript type checking
 bun test packages/core/src/compiler/grimoire/  # Test grimoire module
 bun test --coverage packages/core/             # Coverage for core package
 ```
+
+### Compile All Spells
+
+```bash
+for file in spells/*.spell; do
+  bun -e "import { compileFile } from './packages/core/src/compiler/index.ts'; const res = await compileFile('$file'); if (!res.success) { console.error(res.errors); process.exit(1); }"
+done
+```
+
+## CLI
+
+- `grimoire-cast` compiles and executes spells (simulation, dry-run, or execute).
+- Per-venue CLIs in `@grimoire/venues`:
+  - `grimoire-aave`
+  - `grimoire-uniswap`
+  - `grimoire-morpho-blue`
+  - `grimoire-hyperliquid`
+
+## Documentation
+
+Docs live in `docs/` and follow the Diátaxis structure:
+- tutorials/
+- how-to/
+- reference/
+- explanation/
 
 ## Pre-commit Hooks
 
@@ -168,6 +247,13 @@ interface SpellIR {
 // Step types
 type Step = ComputeStep | ActionStep | ConditionalStep | LoopStep | EmitStep | HaltStep | WaitStep;
 
+// Venue adapters
+interface VenueAdapter {
+  meta: VenueAdapterMeta;
+  buildAction: (action: Action, ctx: VenueAdapterContext) => Promise<VenueBuildResult>;
+  executeAction?: (action: Action, ctx: VenueAdapterContext) => Promise<VenueExecutionResult>;
+}
+
 // Compilation result
 interface CompilationResult {
   success: boolean;
@@ -181,6 +267,7 @@ interface CompilationResult {
 
 ```typescript
 import { compile, execute } from "@grimoire/core";
+import { adapters } from "@grimoire/venues";
 
 // Compile a spell
 const result = compile(spellSource);
@@ -195,6 +282,7 @@ const execResult = await execute({
   vault: "0x...",
   chain: 1,
   params: { amount: 1000 },
+  adapters,
 });
 ```
 

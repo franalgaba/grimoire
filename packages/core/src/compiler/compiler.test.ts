@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { compile, parseExpression } from "./index.js";
+import { compile, parseExpression, tryParseExpression } from "./index.js";
 
 describe("Expression Parser", () => {
   test("parses literals", () => {
@@ -49,14 +49,18 @@ describe("Expression Parser", () => {
 
   test("parses comparison operators", () => {
     const expr = parseExpression("a >= 10");
-    expect(expr.kind).toBe("binary");
-    expect((expr as any).op).toBe(">=");
+    if (expr.kind !== "binary") {
+      throw new Error("Expected binary expression");
+    }
+    expect(expr.op).toBe(">=");
   });
 
   test("parses logical operators", () => {
     const expr = parseExpression("a AND b OR c");
-    expect(expr.kind).toBe("binary");
-    expect((expr as any).op).toBe("OR");
+    if (expr.kind !== "binary") {
+      throw new Error("Expected binary expression");
+    }
+    expect(expr.op).toBe("OR");
   });
 
   test("parses function calls", () => {
@@ -70,9 +74,11 @@ describe("Expression Parser", () => {
 
   test("parses nested function calls", () => {
     const expr = parseExpression("min(balance(USDC), 1000)");
-    expect(expr.kind).toBe("call");
-    expect((expr as any).fn).toBe("min");
-    expect((expr as any).args).toHaveLength(2);
+    if (expr.kind !== "call") {
+      throw new Error("Expected call expression");
+    }
+    expect(expr.fn).toBe("min");
+    expect(expr.args).toHaveLength(2);
   });
 
   test("parses ternary expressions", () => {
@@ -83,10 +89,19 @@ describe("Expression Parser", () => {
   test("respects operator precedence", () => {
     // Multiplication before addition
     const expr = parseExpression("1 + 2 * 3");
-    expect(expr.kind).toBe("binary");
-    expect((expr as any).op).toBe("+");
-    expect((expr as any).right.kind).toBe("binary");
-    expect((expr as any).right.op).toBe("*");
+    if (expr.kind !== "binary") {
+      throw new Error("Expected binary expression");
+    }
+    expect(expr.op).toBe("+");
+    expect(expr.right.kind).toBe("binary");
+    if (expr.right.kind === "binary") {
+      expect(expr.right.op).toBe("*");
+    }
+  });
+
+  test("tryParseExpression returns null on failure", () => {
+    const expr = tryParseExpression("1 +");
+    expect(expr).toBeNull();
   });
 });
 

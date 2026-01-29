@@ -1,0 +1,18 @@
+# Execute a swap on Uniswap V3
+
+spell UniswapSwapExecute
+
+  version: "1.0.0"
+  description: "Swap USDC for WETH on Uniswap V3"
+
+  assets: [USDC, WETH]
+
+  params:
+    amount: 1000000000
+
+  venues:
+    uniswap_v3: @uniswap_v3
+
+  on manual:
+    uniswap_v3.swap(USDC, WETH, params.amount)
+    emit swap_submitted(asset_in=USDC, asset_out=WETH, amount=params.amount)

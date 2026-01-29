@@ -17,7 +17,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "paths": {
+      "@grimoire/core": ["./packages/core/src/index.ts"],
+      "@grimoire/venues": ["./packages/venues/src/index.ts"],
+      "@grimoire/cli": ["./packages/cli/src/index.ts"]
+    }
   },
   "include": ["packages/*/src/**/*"],
   "exclude": ["node_modules", "**/dist/**", "packages/sdk/**"]

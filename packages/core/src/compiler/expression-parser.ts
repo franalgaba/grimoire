@@ -68,7 +68,7 @@ function tokenize(input: string): Token[] {
 
   while (pos < input.length) {
     // Skip whitespace
-    if (/\s/.test(input[pos]!)) {
+    if (/\s/.test(input[pos] ?? "")) {
       pos++;
       continue;
     }
@@ -97,7 +97,7 @@ function tokenize(input: string): Token[] {
     if (input.slice(pos, pos + 2) === "0x") {
       let value = "0x";
       pos += 2;
-      while (pos < input.length && /[0-9a-fA-F]/.test(input[pos]!)) {
+      while (pos < input.length && /[0-9a-fA-F]/.test(input[pos] ?? "")) {
         value += input[pos];
         pos++;
       }
@@ -106,9 +106,9 @@ function tokenize(input: string): Token[] {
     }
 
     // Number
-    if (/[0-9]/.test(input[pos]!)) {
+    if (/[0-9]/.test(input[pos] ?? "")) {
       let value = "";
-      while (pos < input.length && /[0-9.]/.test(input[pos]!)) {
+      while (pos < input.length && /[0-9.]/.test(input[pos] ?? "")) {
         value += input[pos];
         pos++;
       }
@@ -139,7 +139,7 @@ function tokenize(input: string): Token[] {
     }
 
     // Single character operators and punctuation
-    const char = input[pos]!;
+    const char = input[pos] ?? "";
     if ("+-*/%<>".includes(char)) {
       tokens.push({ type: "OPERATOR", value: char, position: start });
       pos++;
@@ -189,7 +189,7 @@ function tokenize(input: string): Token[] {
     // Identifier or keyword
     if (/[a-zA-Z_]/.test(char)) {
       let value = "";
-      while (pos < input.length && /[a-zA-Z0-9_]/.test(input[pos]!)) {
+      while (pos < input.length && /[a-zA-Z0-9_]/.test(input[pos] ?? "")) {
         value += input[pos];
         pos++;
       }
@@ -230,7 +230,11 @@ class ExpressionParser {
   }
 
   private current(): Token {
-    return this.tokens[this.pos]!;
+    const token = this.tokens[this.pos];
+    if (!token) {
+      throw new Error("Unexpected end of expression tokens");
+    }
+    return token;
   }
 
   private advance(): Token {
