@@ -2,7 +2,7 @@
 
 **A Portable Execution Language for Onchain Strategies**
 
-[![CI](https://github.com/your-org/grimoire/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/grimoire/actions/workflows/ci.yml)
+[![CI](https://github.com/franalgaba/grimoire/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/grimoire/actions/workflows/ci.yml)
 
 Grimoire enables you to define, simulate, and execute complex DeFi strategies using a human-readable `.spell` format with Python-like syntax.
 
