@@ -1,0 +1,62 @@
+# Lending Protocol Rebalancer
+
+spell LendingRebalancer
+
+  version: "1.0.0"
+  description: "Rebalance stablecoins across lending protocols for optimal yield"
+
+  assets: [USDC, USDT, DAI]
+
+  params:
+    min_apy_improvement: 50
+    min_move_amount: 1000000000
+    gas_cost_estimate: 50000000
+
+  limits:
+    max_per_venue: 50%
+    min_yield: 100
+    max_moves_per_run: 3
+
+  venues:
+    aave: @aave_v3
+    morpho: @morpho
+    compound: @compound_v3
+
+  on hourly:
+    moves_made = 0
+
+    for asset in assets:
+      if moves_made >= limits.max_moves_per_run:
+        emit max_moves_reached(count=moves_made)
+      else:
+        aave_rate = get_apy(aave, asset)
+        morpho_rate = get_apy(morpho, asset)
+        compound_rate = get_apy(compound, asset)
+
+        wallet_balance = balance(asset)
+        best_rate = max(aave_rate, morpho_rate, compound_rate)
+        worst_rate = min(aave_rate, morpho_rate, compound_rate)
+
+        rate_diff = best_rate - worst_rate
+        should_rebalance = rate_diff >= params.min_apy_improvement
+        has_balance = wallet_balance >= params.min_move_amount
+
+        if should_rebalance and has_balance:
+          annual_benefit = wallet_balance * rate_diff / 10000
+          payback_days = params.gas_cost_estimate * 365 / annual_benefit
+
+          if payback_days < 30:
+            emit rebalance_opportunity(
+              asset=asset,
+              amount=wallet_balance,
+              rate_improvement=rate_diff,
+              payback_days=payback_days
+            )
+            moves_made = moves_made + 1
+
+    emit hourly_check_complete(
+      rebalances=moves_made,
+      aave_rate=get_apy(aave, USDC),
+      morpho_rate=get_apy(morpho, USDC),
+      compound_rate=get_apy(compound, USDC)
+    )

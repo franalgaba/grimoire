@@ -1,0 +1,52 @@
+# Hyperliquid Funding Rate Arbitrage
+
+spell FundingArbitrage
+
+  version: "1.0.0"
+  description: "Capture funding rate payments on Hyperliquid perpetuals"
+
+  assets: [USDC]
+
+  params:
+    min_funding_rate: 10
+    exit_funding_rate: 5
+    position_size_pct: 20%
+    max_positions: 5
+    leverage: 2
+    max_adverse_move: 300
+
+  limits:
+    max_leverage: 3
+    min_equity: 5000
+    max_exposure: 50%
+
+  venues:
+    perps: @hyperliquid
+
+  on hourly:
+    equity = balance(USDC)
+
+    if equity < limits.min_equity:
+      emit insufficient_equity(equity=equity, required=limits.min_equity)
+    else:
+      position_value = equity * params.position_size_pct
+
+      btc_price = price(BTC, USDC)
+      eth_price = price(ETH, USDC)
+
+      emit funding_check(
+        equity=equity,
+        position_value=position_value,
+        btc_price=btc_price,
+        eth_price=eth_price,
+        leverage=params.leverage
+      )
+
+  on daily:
+    equity = balance(USDC)
+
+    emit daily_funding_summary(
+      equity=equity,
+      max_positions=params.max_positions,
+      position_size_pct=params.position_size_pct
+    )

@@ -1,0 +1,44 @@
+# Multi-Venue Lending Yield Optimizer
+
+spell YieldOptimizer
+
+  version: "1.0.0"
+  description: "Optimize stablecoin yields across lending protocols"
+
+  assets: [USDC, USDT, DAI]
+
+  params:
+    min_apy_diff: 50
+    min_rebalance_amount: 100000000
+    gas_buffer: 50000000
+
+  limits:
+    max_allocation_per_venue: 50%
+    min_rebalance_threshold: 25
+
+  venues:
+    aave: @aave_v3
+    morpho: @morpho
+    compound: @compound_v3
+
+  on hourly:
+    for asset in assets:
+      wallet_balance = balance(asset)
+
+      if wallet_balance < params.min_rebalance_amount:
+        emit low_balance(asset=asset, balance=wallet_balance)
+      else:
+        aave_apy = get_apy(aave, asset)
+        morpho_apy = get_apy(morpho, asset)
+        compound_apy = get_apy(compound, asset)
+
+        best_apy = max(aave_apy, morpho_apy, compound_apy)
+
+        emit yield_check(
+          asset=asset,
+          balance=wallet_balance,
+          aave_apy=aave_apy,
+          morpho_apy=morpho_apy,
+          compound_apy=compound_apy,
+          best_apy=best_apy
+        )

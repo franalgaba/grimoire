@@ -1,0 +1,59 @@
+# Momentum-Based Spot Trading Strategy
+
+spell MomentumTrader
+
+  version: "1.0.0"
+  description: "Momentum rotation strategy across major crypto assets"
+
+  assets: [USDC, WETH, WBTC]
+
+  params:
+    max_positions: 3
+    position_size: 30%
+    entry_threshold: 500
+    exit_threshold: 300
+    stop_loss: 800
+    trailing_stop: 500
+
+  limits:
+    max_single_position: 40%
+    min_trade_size: 50000000
+    max_daily_turnover: 100%
+
+  venues:
+    swap: @uniswap_v3
+
+  on daily:
+    base_balance = balance(USDC)
+    eth_balance = balance(WETH)
+    btc_balance = balance(WBTC)
+
+    eth_price = price(WETH, USDC)
+    btc_price = price(WBTC, USDC)
+
+    portfolio_value = base_balance + (eth_balance * eth_price) + (btc_balance * btc_price)
+
+    position_count = 0
+    if eth_balance > 0:
+      position_count = position_count + 1
+    if btc_balance > 0:
+      position_count = position_count + 1
+
+    trade_size = min(base_balance * params.position_size, portfolio_value * limits.max_single_position)
+    can_trade = trade_size >= limits.min_trade_size
+
+    emit daily_rebalance(
+      portfolio_value=portfolio_value,
+      positions=position_count,
+      base_balance=base_balance,
+      can_trade=can_trade,
+      trade_size=trade_size
+    )
+
+    if position_count < params.max_positions and can_trade:
+      emit looking_for_entry(
+        available=base_balance,
+        trade_size=trade_size,
+        eth_price=eth_price,
+        btc_price=btc_price
+      )

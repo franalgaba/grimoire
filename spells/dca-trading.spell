@@ -1,0 +1,31 @@
+# Dollar Cost Averaging (DCA) Trading Strategy
+
+spell DCATrading
+
+  version: "1.0.0"
+  description: "Dollar cost average into ETH by buying fixed amounts at regular intervals"
+
+  assets: [USDC, WETH]
+
+  params:
+    buy_amount: 100000000
+    min_balance: 50000000
+    max_slippage: 100
+
+  limits:
+    max_single_trade: 500000000
+    min_trade_size: 10000000
+
+  venues:
+    swap: @uniswap_v3
+
+  on daily:
+    usdc_balance = balance(USDC)
+    available = usdc_balance - params.min_balance
+    trade_amount = min(available, params.buy_amount)
+
+    if trade_amount < limits.min_trade_size:
+      emit skipped_low_balance(available=available, required=limits.min_trade_size)
+    else:
+      current_price = price(WETH, USDC)
+      emit dca_buy_signal(amount_usdc=trade_amount, price=current_price)

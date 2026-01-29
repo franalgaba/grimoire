@@ -1,0 +1,24 @@
+# Simple USDC to ETH swap on Uniswap V3
+
+spell SimpleSwap
+
+  version: "1.0.0"
+  description: "Swap USDC for ETH on Uniswap V3"
+
+  assets: [USDC, WETH]
+
+  params:
+    amount: 1000000000
+    max_slippage: 50
+
+  venues:
+    swap: @uniswap_v3
+
+  on manual:
+    usdc_balance = balance(USDC)
+    has_enough = usdc_balance >= params.amount
+
+    if has_enough:
+      emit swap_executed(asset_in=USDC, amount=params.amount)
+    else:
+      emit insufficient_balance(required=params.amount, available=usdc_balance)

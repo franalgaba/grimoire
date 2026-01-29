@@ -1,0 +1,25 @@
+# Supply USDC to Aave V3 for yield
+
+spell AaveSupply
+
+  version: "1.0.0"
+  description: "Supply USDC to Aave V3 to earn yield"
+
+  assets: [USDC]
+
+  params:
+    amount: 1000000000
+    min_amount: 1000000
+
+  venues:
+    lending: @aave_v3
+
+  on manual:
+    usdc_balance = balance(USDC)
+    supply_amount = min(usdc_balance, params.amount)
+    should_supply = supply_amount >= params.min_amount
+
+    if should_supply:
+      emit supply_completed(amount=supply_amount)
+    else:
+      emit low_balance(available=usdc_balance, minimum=params.min_amount)

@@ -1,0 +1,23 @@
+# Simple compute-only spell (no blockchain queries)
+
+spell ComputeOnly
+
+  version: "1.0.0"
+  description: "Test spell with only compute steps"
+
+  params:
+    amount: 1000
+    target_weight: 60
+    current_weight: 50
+
+  on manual:
+    # Calculate rebalancing parameters
+    drift = params.target_weight - params.current_weight
+    needs_rebalance = drift > 5 or drift < -5
+
+    if needs_rebalance:
+      rebalance_amount = params.amount * drift / 100
+      fee_estimate = rebalance_amount * 3 / 1000
+      emit rebalance_needed(drift=drift, amount=rebalance_amount, fee=fee_estimate)
+    else:
+      emit no_rebalance_needed(drift=drift)

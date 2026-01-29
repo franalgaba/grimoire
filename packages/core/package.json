@@ -1,0 +1,27 @@
+{
+  "name": "@grimoire/core",
+  "version": "0.1.0",
+  "description": "Core compiler and runtime for Grimoire",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types/index.ts",
+    "./compiler": "./src/compiler/index.ts",
+    "./runtime": "./src/runtime/index.ts",
+    "./builders": "./src/builders/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "^2.21.0",
+    "yaml": "^2.6.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
