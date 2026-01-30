@@ -353,4 +353,136 @@ describe("Aave V3 adapter", () => {
 
     await expect(adapter.buildAction(unknownAssetAction, ctx)).rejects.toThrow("Unknown asset");
   });
+
+  test("rejects unconfigured chain", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: {},
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({}),
+        withdraw: async () => ({}),
+        borrow: async () => ({}),
+        repay: async () => ({}),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(adapter.buildAction(lendAction, ctx)).rejects.toThrow(
+      "No Aave V3 market configured"
+    );
+  });
+
+  test("rejects unsupported action type", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: { 1: market },
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({}),
+        withdraw: async () => ({}),
+        borrow: async () => ({}),
+        repay: async () => ({}),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const swapAction = {
+      type: "swap",
+      venue: "aave_v3",
+      asset: "USDC",
+      amount: amount1,
+    } as unknown as Action;
+
+    await expect(adapter.buildAction(swapAction, ctx)).rejects.toThrow("Unsupported Aave action");
+  });
+
+  test("throws on isErr plan result", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: { 1: market },
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({
+          isErr: () => true,
+          error: { message: "Insufficient collateral" },
+        }),
+        withdraw: async () => ({}),
+        borrow: async () => ({}),
+        repay: async () => ({}),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(adapter.buildAction(lendAction, ctx)).rejects.toThrow("Insufficient collateral");
+  });
+
+  test("converts numeric value to bigint in transaction", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: { 1: market },
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({
+          __typename: "TransactionRequest",
+          to: "0x0000000000000000000000000000000000000004",
+          data: "0x03",
+          value: 42,
+        }),
+        withdraw: async () => ({}),
+        borrow: async () => ({}),
+        repay: async () => ({}),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const result = await adapter.buildAction(lendAction, ctx);
+    const built = Array.isArray(result) ? result : [result];
+    expect(built[0]?.tx.value).toBe(42n);
+  });
+
+  test("handles plan result without __typename wrapper", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: { 1: market },
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({
+          notTypename: true,
+          notValue: true,
+        }),
+        withdraw: async () => ({}),
+        borrow: async () => ({}),
+        repay: async () => ({}),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    // This plan result has no __typename and no value property, so extractExecutionPlan
+    // falls through to the last return. Then buildAaveTransactions will reject it.
+    await expect(adapter.buildAction(lendAction, ctx)).rejects.toThrow(
+      "Unsupported Aave execution plan"
+    );
+  });
+
+  test("rejects unsupported execution plan type", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: { 1: market },
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({
+          __typename: "UnknownPlanType",
+        }),
+        withdraw: async () => ({}),
+        borrow: async () => ({}),
+        repay: async () => ({}),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(adapter.buildAction(lendAction, ctx)).rejects.toThrow(
+      "Unsupported Aave execution plan"
+    );
+  });
 });

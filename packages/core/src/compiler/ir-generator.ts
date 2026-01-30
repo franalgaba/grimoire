@@ -164,9 +164,10 @@ export function generateIR(source: SpellSource): IRGeneratorResult {
     triggers.push({ type: "manual" });
   }
 
-  // Transform steps
+  // Transform steps and build source map
   const steps: Step[] = [];
   const stepIds = new Set<string>();
+  const sourceMap: Record<string, { line: number; column: number }> = {};
 
   if (source.steps) {
     for (const rawStep of source.steps) {
@@ -175,6 +176,12 @@ export function generateIR(source: SpellSource): IRGeneratorResult {
         if (step) {
           steps.push(step);
           stepIds.add(step.id);
+
+          // Extract source location from transformer metadata
+          const loc = rawStep._sourceLocation as { line: number; column: number } | undefined;
+          if (loc) {
+            sourceMap[step.id] = { line: loc.line, column: loc.column };
+          }
         }
       } catch (e) {
         errors.push({
@@ -225,6 +232,7 @@ export function generateIR(source: SpellSource): IRGeneratorResult {
     steps,
     guards,
     triggers,
+    sourceMap: Object.keys(sourceMap).length > 0 ? sourceMap : undefined,
   };
 
   return { success: true, ir, errors, warnings };

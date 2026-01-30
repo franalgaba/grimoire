@@ -4,9 +4,11 @@
 
 import { describe, expect, test } from "bun:test";
 import type { SpellIR } from "../../types/ir.js";
+import type { CircuitBreaker } from "../../types/policy.js";
 import type { Address } from "../../types/primitives.js";
 import type { ActionStep } from "../../types/steps.js";
 import type { Executor } from "../../wallet/executor.js";
+import { CircuitBreakerManager } from "../circuit-breaker.js";
 import { InMemoryLedger, createContext } from "../context.js";
 import { executeActionStep } from "./action.js";
 
@@ -188,5 +190,222 @@ describe("Action Step", () => {
 
     const result = await executeActionStep(step, ctx, ledger, { mode: "execute" });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("Action Step: Circuit Breaker Integration", () => {
+  function makeStep(): ActionStep {
+    return {
+      kind: "action",
+      id: "action_cb",
+      action: {
+        type: "transfer",
+        asset: "USDC",
+        amount: { kind: "literal", value: 100, type: "int" },
+        to: "0x0000000000000000000000000000000000000003",
+      },
+      constraints: {},
+      dependsOn: [],
+      onFailure: "revert",
+    };
+  }
+
+  function makeOpenBreakerManager(action: CircuitBreaker["action"]): CircuitBreakerManager {
+    const now = 1000;
+    const mgr = new CircuitBreakerManager(
+      [
+        {
+          id: "test-breaker",
+          trigger: { type: "revert_rate", maxPercent: 0.3, window: 60 },
+          action,
+          cooldown: 300,
+        },
+      ],
+      () => now
+    );
+    // Force the breaker open
+    mgr.recordEvent({ timestamp: now, type: "revert" });
+    return mgr;
+  }
+
+  test("skips action when circuit breaker is open with pause action", async () => {
+    const step = makeStep();
+    const ctx = createContext({
+      spell: createSpell(),
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+    const cbManager = makeOpenBreakerManager("pause");
+
+    const result = await executeActionStep(step, ctx, ledger, {
+      mode: "simulate",
+      circuitBreakerManager: cbManager,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.skipped).toBe(true);
+
+    const skipEvent = ledger.getEntries().find((e) => e.event.type === "step_skipped");
+    expect(skipEvent).toBeDefined();
+
+    const cbActionEvent = ledger
+      .getEntries()
+      .find((e) => e.event.type === "circuit_breaker_action");
+    expect(cbActionEvent).toBeDefined();
+  });
+
+  test("fails action when circuit breaker is open with unwind action", async () => {
+    const step = makeStep();
+    const ctx = createContext({
+      spell: createSpell(),
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+    const cbManager = makeOpenBreakerManager("unwind");
+
+    const result = await executeActionStep(step, ctx, ledger, {
+      mode: "simulate",
+      circuitBreakerManager: cbManager,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Circuit breaker");
+
+    const failEvent = ledger.getEntries().find((e) => e.event.type === "step_failed");
+    expect(failEvent).toBeDefined();
+  });
+
+  test("records failure event and triggers breaker", async () => {
+    const step = makeStep();
+    const ctx = createContext({
+      spell: createSpell(),
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+
+    // Create a breaker that's closed but has a very low threshold
+    const cbManager = new CircuitBreakerManager([
+      {
+        id: "sensitive-breaker",
+        trigger: { type: "revert_rate", maxPercent: 0.3, window: 60 },
+        action: "pause",
+        cooldown: 300,
+      },
+    ]);
+
+    // Set up a failing executor
+    const executor = {
+      executeAction: async () => ({
+        success: false,
+        error: "tx reverted",
+        hash: "0xfail",
+      }),
+    } as unknown as Executor;
+
+    const result = await executeActionStep(step, ctx, ledger, {
+      mode: "execute",
+      executor,
+      circuitBreakerManager: cbManager,
+    });
+
+    expect(result.success).toBe(false);
+
+    // Check the breaker was triggered by the failure
+    const cbTriggered = ledger
+      .getEntries()
+      .find((e) => e.event.type === "circuit_breaker_triggered");
+    expect(cbTriggered).toBeDefined();
+
+    // Breaker should now be open
+    const states = cbManager.getStates();
+    expect(states[0]?.state).toBe("open");
+  });
+
+  test("records success and transitions half-open breaker to closed", async () => {
+    const step = makeStep();
+    const ctx = createContext({
+      spell: createSpell(),
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+
+    // Create a breaker that's in half_open state
+    let now = 1000;
+    const cbManager = new CircuitBreakerManager(
+      [
+        {
+          id: "recovering-breaker",
+          trigger: { type: "revert_rate", maxPercent: 0.3, window: 60 },
+          action: "pause",
+          cooldown: 5,
+        },
+      ],
+      () => now
+    );
+    // Trip it
+    cbManager.recordEvent({ timestamp: now, type: "revert" });
+    expect(cbManager.getStates()[0]?.state).toBe("open");
+    // Advance past cooldown
+    now = 1000 + 5000;
+    cbManager.check(); // transitions to half_open
+    expect(cbManager.getStates()[0]?.state).toBe("half_open");
+
+    const executor = {
+      executeAction: async () => ({
+        success: true,
+        hash: "0xsuccess",
+        receipt: {
+          hash: "0xsuccess",
+          blockNumber: 1n,
+          blockHash: "0xdef",
+          gasUsed: 21000n,
+          effectiveGasPrice: 100n,
+          status: "success",
+          logs: [],
+        },
+        gasUsed: 21000n,
+        builtTx: { tx: {}, description: "", action: step.action },
+      }),
+    } as unknown as Executor;
+
+    const result = await executeActionStep(step, ctx, ledger, {
+      mode: "execute",
+      executor,
+      circuitBreakerManager: cbManager,
+    });
+
+    expect(result.success).toBe(true);
+    // Breaker should now be closed after success in half_open
+    expect(cbManager.getStates()[0]?.state).toBe("closed");
+  });
+
+  test("allows action when circuit breaker is closed", async () => {
+    const step = makeStep();
+    const ctx = createContext({
+      spell: createSpell(),
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+
+    const cbManager = new CircuitBreakerManager([
+      {
+        id: "closed-breaker",
+        trigger: { type: "revert_rate", maxPercent: 0.5, window: 60 },
+        action: "pause",
+      },
+    ]);
+
+    const result = await executeActionStep(step, ctx, ledger, {
+      mode: "simulate",
+      circuitBreakerManager: cbManager,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.skipped).toBeUndefined();
   });
 });

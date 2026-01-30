@@ -15,13 +15,16 @@ import type { VenueAlias } from "../../types/primitives.js";
 import type { ActionStep } from "../../types/steps.js";
 import type { Executor } from "../../wallet/executor.js";
 import type { ExecutionMode } from "../../wallet/executor.js";
+import type { CircuitBreakerManager } from "../circuit-breaker.js";
 import { addGasUsed, incrementActions, setBinding } from "../context.js";
 import type { InMemoryLedger } from "../context.js";
+import { classifyError } from "../error-classifier.js";
 import { type EvalValue, createEvalContext, evaluateAsync } from "../expression-evaluator.js";
 
 export interface ActionExecutionOptions {
   mode: ExecutionMode;
   executor?: Executor;
+  circuitBreakerManager?: CircuitBreakerManager;
 }
 
 export async function executeActionStep(
@@ -32,6 +35,46 @@ export async function executeActionStep(
 ): Promise<StepResult> {
   ledger.emit({ type: "step_started", stepId: step.id, kind: "action" });
   incrementActions(ctx);
+
+  // Circuit breaker pre-check
+  if (options.circuitBreakerManager) {
+    const cbCheck = options.circuitBreakerManager.check();
+    if (!cbCheck.allowed) {
+      for (const blocker of cbCheck.blockedBy) {
+        ledger.emit({
+          type: "circuit_breaker_action",
+          breakerId: blocker.id,
+          action: blocker.action,
+        });
+      }
+      const firstBlocker = cbCheck.blockedBy[0];
+      if (firstBlocker?.action === "pause") {
+        ledger.emit({
+          type: "step_skipped",
+          stepId: step.id,
+          reason: `Circuit breaker '${firstBlocker.id}' is open`,
+        });
+        return {
+          success: true,
+          stepId: step.id,
+          skipped: true,
+          output: { skippedByCircuitBreaker: firstBlocker.id },
+        };
+      }
+      // halt or unwind
+      const breakerLabel = firstBlocker?.id ?? "unknown";
+      ledger.emit({
+        type: "step_failed",
+        stepId: step.id,
+        error: `Circuit breaker '${breakerLabel}' is open`,
+      });
+      return {
+        success: false,
+        stepId: step.id,
+        error: `Circuit breaker '${breakerLabel}' is open`,
+      };
+    }
+  }
 
   try {
     const evalCtx = createEvalContext(ctx);
@@ -84,24 +127,48 @@ export async function executeActionStep(
     const result = await options.executor.executeAction(actionWithConstraints);
 
     if (!result.success) {
+      const failError = result.error ?? "Action execution failed";
+
+      // Feed failure to circuit breaker
+      if (options.circuitBreakerManager) {
+        const errorType = classifyError(failError);
+        const eventType: "revert" | "slippage" | "gas" =
+          errorType === "slippage_exceeded"
+            ? "slippage"
+            : errorType === "gas_exceeded"
+              ? "gas"
+              : "revert";
+        const cbResult = options.circuitBreakerManager.recordEvent({
+          timestamp: Date.now(),
+          type: eventType,
+        });
+        if (cbResult) {
+          ledger.emit({
+            type: "circuit_breaker_triggered",
+            breakerId: cbResult.breakerId,
+            trigger: cbResult.trigger,
+          });
+        }
+      }
+
       ledger.emit({
         type: "step_failed",
         stepId: step.id,
-        error: result.error ?? "Action execution failed",
+        error: failError,
       });
 
       if (result.hash) {
         ledger.emit({
           type: "action_reverted",
           txHash: result.hash,
-          reason: result.error ?? "Unknown error",
+          reason: failError,
         });
       }
 
       return {
         success: false,
         stepId: step.id,
-        error: result.error ?? "Action execution failed",
+        error: failError,
       };
     }
 
@@ -120,6 +187,11 @@ export async function executeActionStep(
         txHash: result.receipt.hash,
         gasUsed: result.receipt.gasUsed.toString(),
       });
+    }
+
+    // Record success for circuit breaker tracking
+    if (options.circuitBreakerManager) {
+      options.circuitBreakerManager.recordSuccess();
     }
 
     const output = {

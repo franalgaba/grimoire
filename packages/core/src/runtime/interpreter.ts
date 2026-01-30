@@ -5,12 +5,14 @@
 
 import type { ExecutionContext, ExecutionResult, StepResult } from "../types/execution.js";
 import type { Guard, GuardDef, SpellIR } from "../types/ir.js";
+import type { PolicySet } from "../types/policy.js";
 import type { Address, ChainId } from "../types/primitives.js";
 import type { Step } from "../types/steps.js";
 import type { VenueAdapter } from "../venues/types.js";
 import { type ExecutionMode, createExecutor } from "../wallet/executor.js";
 import { type Provider, createProvider } from "../wallet/provider.js";
 import type { Wallet } from "../wallet/types.js";
+import { CircuitBreakerManager } from "./circuit-breaker.js";
 import {
   InMemoryLedger,
   createContext,
@@ -63,6 +65,8 @@ export interface ExecuteOptions {
   progressCallback?: (message: string) => void;
   /** Venue adapters */
   adapters?: VenueAdapter[];
+  /** Policy set with risk controls (circuit breakers, etc.) */
+  policy?: PolicySet;
 }
 
 /**
@@ -73,6 +77,13 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
 
   const actionMode = resolveExecutionMode(options, simulate);
   const actionExecution = createActionExecutionOptions(options, actionMode, chain);
+
+  // Initialize circuit breaker manager if policy has breakers
+  if (options.policy?.circuitBreakers?.length) {
+    actionExecution.circuitBreakerManager = new CircuitBreakerManager(
+      options.policy.circuitBreakers
+    );
+  }
 
   // Create execution context
   const ctx = createContext({
@@ -116,6 +127,14 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
       // Execute step
       const result = await executeStep(step, ctx, ledger, stepMap, actionExecution);
 
+      // Enrich step_failed ledger events with source location
+      if (!result.success) {
+        const loc = spell.sourceMap?.[step.id];
+        if (loc) {
+          enrichStepFailedEvents(ledger, step.id, loc);
+        }
+      }
+
       // Handle halt
       if (result.halted) {
         ledger.emit({
@@ -140,12 +159,14 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
       // Handle failure
       if (!result.success) {
         const onFailure = "onFailure" in step ? step.onFailure : "revert";
+        const loc = spell.sourceMap?.[step.id];
+        const locSuffix = loc ? ` at line ${loc.line}, column ${loc.column}` : "";
 
         switch (onFailure) {
           case "halt":
-            throw new Error(`Step '${step.id}' failed: ${result.error}`);
+            throw new Error(`Step '${step.id}' failed${locSuffix}: ${result.error}`);
           case "revert":
-            throw new Error(`Step '${step.id}' failed: ${result.error}`);
+            throw new Error(`Step '${step.id}' failed${locSuffix}: ${result.error}`);
           case "skip":
             ledger.emit({
               type: "step_skipped",
@@ -401,4 +422,26 @@ async function checkGuards(
   }
 
   return { success: true };
+}
+
+/**
+ * Enrich step_failed ledger events with source location info.
+ * Scans recent events to find step_failed events for the given stepId
+ * and adds line/column from the source map.
+ */
+function enrichStepFailedEvents(
+  ledger: InMemoryLedger,
+  stepId: string,
+  loc: { line: number; column: number }
+): void {
+  const entries = ledger.getEntries();
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (!entry) continue;
+    if (entry.event.type === "step_failed" && entry.event.stepId === stepId) {
+      (entry.event as { line?: number; column?: number }).line = loc.line;
+      (entry.event as { line?: number; column?: number }).column = loc.column;
+      break;
+    }
+  }
 }

@@ -196,4 +196,106 @@ describe("Morpho Blue adapter", () => {
     expect(builtString[0]?.description).toContain("Approve USDC");
     expect(builtLiteral[0]?.description).toContain("Approve USDC");
   });
+
+  test("rejects unsupported action type", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "swap",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount1,
+    } as unknown as Action;
+
+    await expect(adapter.buildAction(action, ctx)).rejects.toThrow(
+      "Unsupported Morpho Blue action"
+    );
+  });
+
+  test("selects market matching collateral", async () => {
+    const market2 = {
+      ...market,
+      id: "test2",
+      collateralToken: "0x6B175474E89094C44Da98b954EedeAC495271d0F" as Address,
+    };
+    const adapter = createMorphoBlueAdapter({ markets: [market, market2] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    // With collateral matching market2
+    const action = {
+      type: "borrow",
+      venue: "morpho_blue",
+      asset: "USDC",
+      collateral: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+      amount: amount1,
+    } as unknown as Action;
+
+    const result = await adapter.buildAction(action, ctx);
+    const built = Array.isArray(result) ? result : [result];
+    expect(built[0]?.description).toContain("Morpho Blue borrow");
+  });
+
+  test("rejects ambiguous market with no collateral", async () => {
+    const market2 = {
+      ...market,
+      id: "test2",
+      collateralToken: "0x6B175474E89094C44Da98b954EedeAC495271d0F" as Address,
+    };
+    const adapter = createMorphoBlueAdapter({ markets: [market, market2] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    // Multiple USDC markets, no collateral specified
+    const action = {
+      type: "borrow",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount1,
+    } as unknown as Action;
+
+    await expect(adapter.buildAction(action, ctx)).rejects.toThrow("market not configured");
+  });
+
+  test("rejects no matching loan token market", async () => {
+    // Market is for USDC but we ask for WETH lending
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "lend",
+      venue: "morpho_blue",
+      asset: "WETH",
+      amount: amount1,
+    } as unknown as Action;
+
+    await expect(adapter.buildAction(action, ctx)).rejects.toThrow("market not configured");
+  });
+
+  test("rejects missing asset", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "lend",
+      venue: "morpho_blue",
+      asset: undefined,
+      amount: amount1,
+    } as unknown as Action;
+
+    await expect(adapter.buildAction(action, ctx)).rejects.toThrow("Asset is required");
+  });
+
+  test("rejects unsupported amount type", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "lend",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: { foo: true },
+    } as unknown as Action;
+
+    await expect(adapter.buildAction(action, ctx)).rejects.toThrow("Unsupported amount type");
+  });
 });

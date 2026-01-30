@@ -119,6 +119,9 @@ export interface SpellIR {
 
   /** Triggers */
   triggers: Trigger[];
+
+  /** Source map: step ID -> source location in the .spell file */
+  sourceMap?: Record<string, { line: number; column: number }>;
 }
 
 /**

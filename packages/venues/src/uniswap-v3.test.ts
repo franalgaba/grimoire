@@ -81,4 +81,155 @@ describe("Uniswap V3 adapter", () => {
     expect(built).toHaveLength(1);
     expect(built[0]?.description).toContain("Uniswap V3 swap");
   });
+
+  test("rejects non-swap action types", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "bridge",
+      venue: "uniswap_v3",
+      assetIn: "USDC",
+      assetOut: "WETH",
+      amount: 10n,
+      mode: "exact_in",
+    } as unknown as Parameters<NonNullable<typeof adapter.buildAction>>[0];
+
+    await expect(adapter.buildAction(action, ctx)).rejects.toThrow(
+      "Uniswap adapter only supports swap actions"
+    );
+  });
+
+  test("rejects unconfigured chain", async () => {
+    const adapter = createUniswapV3Adapter({ routers: {} });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const amount: Expression = { kind: "literal", value: 10n, type: "int" };
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "uniswap_v3",
+          assetIn: "USDC",
+          assetOut: "WETH",
+          amount,
+          mode: "exact_in",
+        },
+        ctx
+      )
+    ).rejects.toThrow("No Uniswap router configured");
+  });
+
+  test("builds exact_out swap with amountInMaximum", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const result = await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "uniswap_v3",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: 10n as unknown as Expression,
+        mode: "exact_out",
+      },
+      ctx
+    );
+
+    const built = Array.isArray(result) ? result : [result];
+    const swapTx = built[built.length - 1];
+
+    expect(swapTx?.description).toContain("Uniswap V3 swap");
+    expect(swapTx?.tx.data).toBeDefined();
+  });
+
+  test("resolves direct 0x address for token", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const result = await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "uniswap_v3",
+        assetIn: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        assetOut: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        amount: 10n as unknown as Expression,
+        mode: "exact_in",
+      },
+      ctx
+    );
+
+    const built = Array.isArray(result) ? result : [result];
+    expect(built[built.length - 1]?.description).toContain("Uniswap V3 swap");
+  });
+
+  test("rejects unknown asset symbol", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "uniswap_v3",
+          assetIn: "UNKNOWN",
+          assetOut: "WETH",
+          amount: 10n as unknown as Expression,
+          mode: "exact_in",
+        },
+        ctx
+      )
+    ).rejects.toThrow("Unknown asset");
+  });
+
+  test("handles various amount types and rejects unsupported", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    // number amount
+    const numResult = await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "uniswap_v3",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: 10 as unknown as Expression,
+        mode: "exact_in",
+      },
+      ctx
+    );
+    const numBuilt = Array.isArray(numResult) ? numResult : [numResult];
+    expect(numBuilt[numBuilt.length - 1]?.description).toContain("Uniswap V3 swap");
+
+    // string amount
+    const strResult = await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "uniswap_v3",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: "10" as unknown as Expression,
+        mode: "exact_in",
+      },
+      ctx
+    );
+    const strBuilt = Array.isArray(strResult) ? strResult : [strResult];
+    expect(strBuilt[strBuilt.length - 1]?.description).toContain("Uniswap V3 swap");
+
+    // unsupported amount type
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "uniswap_v3",
+          assetIn: "USDC",
+          assetOut: "WETH",
+          amount: { foo: true } as unknown as Expression,
+          mode: "exact_in",
+        },
+        ctx
+      )
+    ).rejects.toThrow("Unsupported amount type");
+  });
 });

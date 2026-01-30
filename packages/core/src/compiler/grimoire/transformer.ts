@@ -160,6 +160,16 @@ export class Transformer {
 
     for (const stmt of statements) {
       const stmtSteps = this.transformStatement(stmt);
+      // Attach source location from AST span to the first step produced by this statement
+      if (stmt.span && stmtSteps.length > 0) {
+        const firstStep = stmtSteps[0];
+        if (firstStep) {
+          firstStep._sourceLocation = {
+            line: stmt.span.start.line,
+            column: stmt.span.start.column,
+          };
+        }
+      }
       steps.push(...stmtSteps);
     }
 

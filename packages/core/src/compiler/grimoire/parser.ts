@@ -48,7 +48,7 @@ import type {
   VersionSection,
   WaitNode,
 } from "./ast.js";
-import { ParseError } from "./errors.js";
+import { ParseError, type SourceSpan } from "./errors.js";
 import { type Token, type TokenType, tokenize } from "./tokenizer.js";
 
 // =============================================================================
@@ -144,6 +144,12 @@ export class Parser {
     if (this.check("NEWLINE")) {
       this.advance();
     }
+  }
+
+  /** Create a source span from a start location to the current token's location */
+  private makeSpan(startToken: Token): SourceSpan {
+    const end = this.current().location;
+    return { start: startToken.location, end };
   }
 
   // ===========================================================================
@@ -595,10 +601,14 @@ export class Parser {
           return this.parseHaltStatement();
         case "wait":
           return this.parseWaitStatement();
-        case "pass":
+        case "pass": {
+          const startToken = this.current();
           this.advance();
           this.expectNewline();
-          return { kind: "pass" } as PassNode;
+          const node: PassNode = { kind: "pass" };
+          node.span = this.makeSpan(startToken);
+          return node;
+        }
       }
     }
 
@@ -612,6 +622,7 @@ export class Parser {
     }
 
     // Expression statement (method call, etc.)
+    const startToken = this.current();
     const expr = this.parseExpression();
     this.expectNewline();
 
@@ -620,12 +631,14 @@ export class Parser {
       const callExpr = expr as CallExprNode;
       if (callExpr.callee.kind === "property_access") {
         const prop = callExpr.callee as PropertyAccessNode;
-        return {
+        const node: MethodCallNode = {
           kind: "method_call",
           object: prop.object,
           method: prop.property,
           args: callExpr.args,
-        } as MethodCallNode;
+        };
+        node.span = this.makeSpan(startToken);
+        return node;
       }
     }
 
@@ -638,15 +651,19 @@ export class Parser {
 
   /** Parse assignment: x = expr */
   private parseAssignment(): AssignmentNode {
+    const startToken = this.current();
     const target = this.expect("IDENTIFIER").value;
     this.expect("ASSIGN");
     const value = this.parseExpression();
     this.expectNewline();
-    return { kind: "assignment", target, value };
+    const node: AssignmentNode = { kind: "assignment", target, value };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   /** Parse if statement */
   private parseIfStatement(): IfNode {
+    const startToken = this.current();
     this.expect("KEYWORD", "if");
 
     // Check for advisory condition: if **prompt**:
@@ -683,11 +700,14 @@ export class Parser {
       elseBody = this.parseStatementBlock();
     }
 
-    return { kind: "if", condition, thenBody, elifs, elseBody };
+    const node: IfNode = { kind: "if", condition, thenBody, elifs, elseBody };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   /** Parse for loop */
   private parseForStatement(): ForNode {
+    const startToken = this.current();
     this.expect("KEYWORD", "for");
     const variable = this.expect("IDENTIFIER").value;
     this.expect("KEYWORD", "in");
@@ -697,22 +717,28 @@ export class Parser {
 
     const body = this.parseStatementBlock();
 
-    return { kind: "for", variable, iterable, body };
+    const node: ForNode = { kind: "for", variable, iterable, body };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   /** Parse atomic block */
   private parseAtomicStatement(): AtomicNode {
+    const startToken = this.current();
     this.expect("KEYWORD", "atomic");
     this.expect("COLON");
     this.expectNewline();
 
     const body = this.parseStatementBlock();
 
-    return { kind: "atomic", body };
+    const node: AtomicNode = { kind: "atomic", body };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   /** Parse emit statement: emit event_name(key=value) */
   private parseEmitStatement(): EmitNode {
+    const startToken = this.current();
     this.expect("KEYWORD", "emit");
     const event = this.expect("IDENTIFIER").value;
 
@@ -733,27 +759,35 @@ export class Parser {
     }
 
     this.expectNewline();
-    return { kind: "emit", event, data };
+    const node: EmitNode = { kind: "emit", event, data };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   /** Parse halt statement */
   private parseHaltStatement(): HaltNode {
+    const startToken = this.current();
     this.expect("KEYWORD", "halt");
     let reason = "halted";
     if (this.check("STRING")) {
       reason = this.advance().value;
     }
     this.expectNewline();
-    return { kind: "halt", reason };
+    const node: HaltNode = { kind: "halt", reason };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   /** Parse wait statement */
   private parseWaitStatement(): WaitNode {
+    const startToken = this.current();
     this.expect("KEYWORD", "wait");
     const durationToken = this.expect("NUMBER");
     const duration = Number.parseFloat(durationToken.value);
     this.expectNewline();
-    return { kind: "wait", duration };
+    const node: WaitNode = { kind: "wait", duration };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   // ===========================================================================

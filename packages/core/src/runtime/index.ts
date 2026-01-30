@@ -24,6 +24,14 @@ export {
 } from "./expression-evaluator.js";
 export { classifyError, matchesCatchBlock } from "./error-classifier.js";
 export {
+  CircuitBreakerManager,
+  type BreakerState,
+  type BreakerRecord,
+  type TimestampedEvent,
+  type CircuitBreakerCheckResult,
+  type CircuitBreakerTriggerResult,
+} from "./circuit-breaker.js";
+export {
   type StateStore,
   type RunRecord,
   type RunMetrics,

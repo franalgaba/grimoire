@@ -167,6 +167,8 @@ interface StepFailedEvent {
   type: "step_failed";
   stepId: string;
   error: string;
+  line?: number;
+  column?: number;
 }
 
 interface StepSkippedEvent {

@@ -19,6 +19,7 @@ export {
   evaluateAsync,
   createRunRecord,
   SqliteStateStore,
+  CircuitBreakerManager,
 } from "./runtime/index.js";
 export type {
   ExecuteOptions,
@@ -29,6 +30,11 @@ export type {
   RunRecord,
   RunMetrics,
   SqliteStateStoreOptions,
+  BreakerState,
+  BreakerRecord,
+  TimestampedEvent,
+  CircuitBreakerCheckResult,
+  CircuitBreakerTriggerResult,
 } from "./runtime/index.js";
 
 // Wallet
