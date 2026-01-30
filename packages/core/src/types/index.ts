@@ -21,6 +21,24 @@ export type {
 
 export { CHAINS } from "./primitives.js";
 
+// Builders
+export type { SpellBuilder } from "../builders/spell-builder.js";
+
+export type {
+  StepBuilder,
+  ComputeBuilder,
+  ActionBuilder,
+  ConditionalBuilder,
+  LoopBuilder,
+  ParallelBuilder,
+  PipelineBuilder,
+  TryBuilder,
+  AdvisoryBuilder,
+  WaitBuilder,
+  EmitBuilder,
+  HaltBuilder,
+} from "../builders/step-builder.js";
+
 // Expressions
 export type {
   Expression,
@@ -40,8 +58,6 @@ export type {
   ArrayAccessExpr,
   PropertyAccessExpr,
 } from "./expressions.js";
-
-export { literal, param, binding, binary, call } from "./expressions.js";
 
 // Actions
 export type {

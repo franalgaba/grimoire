@@ -18,6 +18,8 @@ Grimoire enables you to define, simulate, and execute complex DeFi strategies us
 - **Advisory AI integration** - Use `**prompts**` for AI-assisted decisions
 - **Atomic transactions** - Group operations for all-or-nothing execution
 - **Scheduled triggers** - Run strategies hourly, daily, or manually
+- **State persistence** - Spell state survives across runs (SQLite-backed)
+- **Execution history** - Run history and ledger events stored per spell
 
 ## Quick Start
 
@@ -99,6 +101,8 @@ spell YieldOptimizer
 | `grimoire simulate <spell>` | Simulate spell execution (dry run) |
 | `grimoire cast <spell>` | Execute a spell onchain |
 | `grimoire venues` | List adapters and supported chains |
+| `grimoire history [spell]` | View execution history |
+| `grimoire log <spell> <runId>` | View ledger events for a run |
 
 ### Venue CLIs
 
@@ -115,7 +119,7 @@ grimoire/
 │   ├── core/              # Compiler, runtime, adapter registry
 │   │   └── src/
 │   │       ├── compiler/  # Tokenizer, parser, IR generator
-│   │       ├── runtime/   # Execution engine
+│   │       ├── runtime/   # Execution engine + state persistence
 │   │       ├── venues/    # Adapter registry + types
 │   │       ├── types/     # TypeScript definitions
 │   │       └── builders/  # Fluent spell builder API
@@ -189,7 +193,7 @@ SpellIR → Runtime → Executor → (Adapter Registry) → Venue Adapter → Tr
 ## Programmatic Usage
 
 ```typescript
-import { compile, execute } from "@grimoire/core";
+import { compile, execute, SqliteStateStore, createRunRecord } from "@grimoire/core";
 import { adapters } from "@grimoire/venues";
 
 // Compile a spell
@@ -199,16 +203,24 @@ if (!result.success) {
   process.exit(1);
 }
 
-// Execute the compiled spell
+// Load persisted state
+const store = new SqliteStateStore();
+const persistentState = await store.load(result.ir.id) ?? {};
+
+// Execute the compiled spell with state
 const execResult = await execute({
   spell: result.ir,
   vault: "0x...",
   chain: 1,
   params: { min_amount: 500 },
+  persistentState,
   adapters,
 });
 
-console.log("Execution result:", execResult);
+// Persist results
+await store.save(result.ir.id, execResult.finalState);
+await store.addRun(result.ir.id, createRunRecord(execResult));
+store.close();
 ```
 
 ## Documentation

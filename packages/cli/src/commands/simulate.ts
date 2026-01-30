@@ -6,11 +6,14 @@
 import { type Address, compileFile, execute } from "@grimoire/core";
 import chalk from "chalk";
 import ora from "ora";
+import { withStatePersistence } from "./state-helpers.js";
 
 interface SimulateOptions {
   params?: string;
   vault?: string;
   chain?: string;
+  stateDir?: string;
+  noState?: boolean;
 }
 
 export async function simulateCommand(spellPath: string, options: SimulateOptions): Promise<void> {
@@ -44,14 +47,22 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
     spinner.text = "Executing simulation...";
     const vault = (options.vault ?? "0x0000000000000000000000000000000000000000") as Address;
     const chain = Number.parseInt(options.chain ?? "1", 10);
+    const spell = compileResult.ir;
 
-    const result = await execute({
-      spell: compileResult.ir,
-      vault,
-      chain,
-      params,
-      simulate: true,
-    });
+    const result = await withStatePersistence(
+      spell.id,
+      { stateDir: options.stateDir, noState: options.noState },
+      async (persistentState) => {
+        return execute({
+          spell,
+          vault,
+          chain,
+          params,
+          persistentState,
+          simulate: true,
+        });
+      }
+    );
 
     // Report result
     if (result.success) {

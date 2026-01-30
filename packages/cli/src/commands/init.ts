@@ -168,10 +168,6 @@ export async function initCommand(options: InitOptions): Promise<void> {
     // Write example spell
     await mkdir(join(baseDir, "spells", "example-swap"), { recursive: true });
     await Bun.write(join(baseDir, "spells", "example-swap", "spell.spell"), EXAMPLE_SPELL);
-    await Bun.write(
-      join(baseDir, "spells", "example-swap", "state.json"),
-      JSON.stringify({ version: 1, persistent: {} }, null, 2)
-    );
 
     spinner.succeed(chalk.green("Grimoire initialized successfully!"));
 

@@ -19,6 +19,7 @@ import {
 } from "@grimoire/core";
 import chalk from "chalk";
 import ora from "ora";
+import { withStatePersistence } from "./state-helpers.js";
 
 interface CastOptions {
   params?: string;
@@ -36,6 +37,9 @@ interface CastOptions {
   // Output options
   verbose?: boolean;
   json?: boolean;
+  // State options
+  stateDir?: string;
+  noState?: boolean;
 }
 
 export async function castCommand(spellPath: string, options: CastOptions): Promise<void> {
@@ -194,22 +198,29 @@ async function executeWithWallet(
   console.log();
   console.log(chalk.cyan(`🚀 Executing spell (${executionMode})...`));
 
-  const execResult = await execute({
-    spell,
-    vault,
-    chain: chainId,
-    params,
-    simulate: false,
-    executionMode,
-    wallet,
-    provider,
-    gasMultiplier,
-    confirmCallback,
-    progressCallback: (message: string) => {
-      console.log(chalk.dim(`  ${message}`));
-    },
-    skipTestnetConfirmation: options.skipConfirm ?? false,
-  });
+  const execResult = await withStatePersistence(
+    spell.id,
+    { stateDir: options.stateDir, noState: options.noState },
+    async (persistentState) => {
+      return execute({
+        spell,
+        vault,
+        chain: chainId,
+        params,
+        persistentState,
+        simulate: false,
+        executionMode,
+        wallet,
+        provider,
+        gasMultiplier,
+        confirmCallback,
+        progressCallback: (message: string) => {
+          console.log(chalk.dim(`  ${message}`));
+        },
+        skipTestnetConfirmation: options.skipConfirm ?? false,
+      });
+    }
+  );
 
   if (execResult.success) {
     console.log(chalk.green("Execution completed successfully"));
@@ -253,13 +264,20 @@ async function executeSimulation(
 
   const vault = (options.vault ?? "0x0000000000000000000000000000000000000000") as Address;
 
-  const result = await execute({
-    spell,
-    vault,
-    chain: chainId,
-    params,
-    simulate: true,
-  });
+  const result = await withStatePersistence(
+    spell.id,
+    { stateDir: options.stateDir, noState: options.noState },
+    async (persistentState) => {
+      return execute({
+        spell,
+        vault,
+        chain: chainId,
+        params,
+        persistentState,
+        simulate: true,
+      });
+    }
+  );
 
   if (result.success) {
     spinner.succeed(chalk.green("Simulation successful"));

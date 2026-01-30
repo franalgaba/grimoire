@@ -22,7 +22,16 @@ import type {
   Trigger,
   VenueAlias,
 } from "../types/primitives.js";
-import type { ActionStep, ComputeStep, ConditionalStep, LoopStep, Step } from "../types/steps.js";
+import type {
+  ActionStep,
+  CatchBlock,
+  ComputeStep,
+  ConditionalStep,
+  ErrorType,
+  LoopStep,
+  Step,
+  TryStep,
+} from "../types/steps.js";
 import { parseExpression } from "./expression-parser.js";
 
 export interface IRGeneratorResult {
@@ -431,6 +440,11 @@ function transformStep(
     return transformLoopStep(raw, id, errors);
   }
 
+  // Try step (from atomic blocks or explicit try)
+  if ("try" in raw) {
+    return transformTryStep(raw, id);
+  }
+
   // Wait step
   if ("wait" in raw) {
     return {
@@ -730,4 +744,70 @@ function transformGuard(
     });
     return null;
   }
+}
+
+const VALID_ERROR_TYPES = new Set<string>([
+  "slippage_exceeded",
+  "insufficient_liquidity",
+  "insufficient_balance",
+  "venue_unavailable",
+  "deadline_exceeded",
+  "simulation_failed",
+  "policy_violation",
+  "guard_failed",
+  "tx_reverted",
+  "gas_exceeded",
+]);
+
+/**
+ * Transform a try step from SpellSource into TryStep IR.
+ *
+ * The transformer emits: { id, try: string[], catch: Array<{ error, action?, steps?, retry? }> }
+ * We convert to the TryStep type expected by the runtime.
+ */
+function transformTryStep(raw: Record<string, unknown>, id: string): TryStep {
+  const trySteps = (raw.try as string[]) ?? [];
+  const rawCatch = (raw.catch as Array<Record<string, unknown>>) ?? [];
+  const finallySteps = (raw.finally as string[]) ?? undefined;
+
+  const catchBlocks: CatchBlock[] = rawCatch.map((c) => {
+    const errorField = (c.error as string) ?? "*";
+    const errorType: ErrorType | "*" =
+      errorField === "*"
+        ? "*"
+        : VALID_ERROR_TYPES.has(errorField)
+          ? (errorField as ErrorType)
+          : "*";
+
+    // Map "revert" → "rollback" to match CatchBlock action type
+    let action: CatchBlock["action"];
+    if (c.action) {
+      const rawAction = c.action as string;
+      action = rawAction === "revert" ? "rollback" : (rawAction as CatchBlock["action"]);
+    }
+
+    const block: CatchBlock = { errorType };
+    if (action) block.action = action;
+    if (c.steps) block.steps = c.steps as string[];
+    if (c.retry) {
+      const retry = c.retry as Record<string, unknown>;
+      block.retry = {
+        maxAttempts: (retry.maxAttempts as number) ?? 3,
+        backoff: (retry.backoff as CatchBlock["retry"] & { backoff: string })?.backoff ?? "none",
+        backoffBase: retry.backoffBase as number | undefined,
+        maxBackoff: retry.maxBackoff as number | undefined,
+      };
+    }
+
+    return block;
+  });
+
+  return {
+    kind: "try",
+    id,
+    trySteps,
+    catchBlocks,
+    finallySteps: finallySteps && finallySteps.length > 0 ? finallySteps : undefined,
+    dependsOn: [],
+  };
 }

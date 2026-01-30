@@ -4,12 +4,13 @@
  * Command-line interface for spell management and execution
  */
 
-import chalk from "chalk";
 import { Command } from "commander";
 import { castCommand } from "./commands/cast.js";
 import { compileAllCommand } from "./commands/compile-all.js";
 import { compileCommand } from "./commands/compile.js";
+import { historyCommand } from "./commands/history.js";
 import { initCommand } from "./commands/init.js";
+import { logCommand } from "./commands/log.js";
 import { simulateCommand } from "./commands/simulate.js";
 import { validateCommand } from "./commands/validate.js";
 import { venuesCommand } from "./commands/venues.js";
@@ -58,6 +59,8 @@ program
   .option("-p, --params <json>", "Parameters as JSON")
   .option("--vault <address>", "Vault address")
   .option("--chain <id>", "Chain ID", "1")
+  .option("--state-dir <dir>", "Directory for state database")
+  .option("--no-state", "Disable state persistence")
   .action(simulateCommand);
 
 // Cast command
@@ -75,6 +78,8 @@ program
   .option("--skip-confirm", "Skip confirmation prompt (use with caution)")
   .option("-v, --verbose", "Show verbose output")
   .option("--json", "Output results as JSON")
+  .option("--state-dir <dir>", "Directory for state database")
+  .option("--no-state", "Disable state persistence")
   .action(castCommand);
 
 // Venues command
@@ -84,25 +89,22 @@ program
   .option("--json", "Output results as JSON")
   .action(venuesCommand);
 
-// History command (placeholder)
+// History command
 program
   .command("history [spell]")
   .description("View execution history")
-  .action((spell) => {
-    console.log(chalk.yellow("History command not yet implemented"));
-    if (spell) {
-      console.log(`Spell: ${spell}`);
-    }
-  });
+  .option("--limit <n>", "Maximum number of runs to show", "20")
+  .option("--json", "Output results as JSON")
+  .option("--state-dir <dir>", "Directory for state database")
+  .action(historyCommand);
 
-// Log command (placeholder)
+// Log command
 program
   .command("log <spell> <runId>")
-  .description("View execution log")
-  .action((spell, runId) => {
-    console.log(chalk.yellow("Log command not yet implemented"));
-    console.log(`Spell: ${spell}, Run: ${runId}`);
-  });
+  .description("View ledger events for a run")
+  .option("--json", "Output results as JSON")
+  .option("--state-dir <dir>", "Directory for state database")
+  .action(logCommand);
 
 // Parse and run
 program.parse();

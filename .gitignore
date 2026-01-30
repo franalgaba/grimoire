@@ -1,6 +1,7 @@
 # dependencies (bun install)
 node_modules
 llms*
+roadmap.md
 
 # output
 out

@@ -33,6 +33,8 @@ packages/
 │       ├── runtime/         # IR execution engine
 │       │   ├── interpreter.ts
 │       │   ├── context.ts
+│       │   ├── state-store.ts     # StateStore interface + RunRecord types
+│       │   ├── sqlite-state-store.ts  # SQLite-based state persistence
 │       │   └── steps/       # Step handlers (compute, conditional, loop, etc.)
 │       ├── venues/          # Adapter registry + types (no SDKs)
 │       ├── types/           # TypeScript type definitions
@@ -148,6 +150,62 @@ Supported adapters:
 
 Adapters can return multi-transaction plans to handle approvals. Offchain venues implement `executeAction`.
 
+## State Persistence
+
+Spell state survives across runs via a SQLite-backed store. The `execute()` function stays pure — persistence is an orchestration concern handled by the CLI or caller.
+
+### Architecture
+
+```
+CLI:  state = await store.load(spellId)
+CLI:  result = await execute({ ..., persistentState: state })
+CLI:  await store.save(spellId, result.finalState)
+CLI:  await store.addRun(spellId, createRunRecord(result))
+CLI:  await store.saveLedger(spellId, result.runId, result.ledgerEvents)
+```
+
+### Key files
+
+- `runtime/state-store.ts` — `StateStore` interface, `RunRecord` type, `createRunRecord()` helper
+- `runtime/sqlite-state-store.ts` — `SqliteStateStore` class using `bun:sqlite`
+- `cli/src/commands/state-helpers.ts` — `withStatePersistence()` wrapper for CLI commands
+
+### StateStore interface
+
+```typescript
+interface StateStore {
+  load(spellId: string): Promise<Record<string, unknown> | null>;
+  save(spellId: string, state: Record<string, unknown>): Promise<void>;
+  addRun(spellId: string, run: RunRecord): Promise<void>;
+  getRuns(spellId: string, limit?: number): Promise<RunRecord[]>;
+  saveLedger(spellId: string, runId: string, entries: LedgerEntry[]): Promise<void>;
+  loadLedger(spellId: string, runId: string): Promise<LedgerEntry[] | null>;
+  listSpells(): Promise<string[]>;
+}
+```
+
+### SQLite schema
+
+Database lives at `.grimoire/grimoire.db` (configurable via `--state-dir`). Three tables: `spell_state` (persistent state), `runs` (execution history), `ledger` (event logs per run). Old runs are pruned beyond `maxRuns` (default 100).
+
+### CLI flags
+
+- `--state-dir <dir>` — custom directory for `grimoire.db` (on `simulate`, `cast`, `history`, `log`)
+- `--no-state` — disable persistence entirely (on `simulate`, `cast`)
+
+### Usage
+
+```typescript
+import { SqliteStateStore, createRunRecord, execute } from "@grimoire/core";
+
+const store = new SqliteStateStore(); // defaults to .grimoire/grimoire.db
+const state = await store.load("my-spell") ?? {};
+const result = await execute({ spell, vault, chain: 1, persistentState: state });
+await store.save("my-spell", result.finalState);
+await store.addRun("my-spell", createRunRecord(result));
+store.close();
+```
+
 ## Action Constraints (Slippage)
 
 Action constraints are resolved at runtime and attached to `Action.constraints` for adapter use.
@@ -196,7 +254,15 @@ done
 
 ## CLI
 
-- `grimoire-cast` compiles and executes spells (simulation, dry-run, or execute).
+- `grimoire compile <spell>` — compile a `.spell` file to IR
+- `grimoire compile-all [dir]` — compile all `.spell` files in a directory
+- `grimoire validate <spell>` — validate a `.spell` file
+- `grimoire simulate <spell>` — simulate execution (dry run), with state persistence
+- `grimoire cast <spell>` — execute a spell onchain, with state persistence
+- `grimoire history [spell]` — view execution history (all spells or runs for one spell)
+- `grimoire log <spell> <runId>` — view ledger events for a specific run
+- `grimoire venues` — list available venue adapters
+- `grimoire init` — initialize a new `.grimoire` directory
 - Per-venue CLIs in `@grimoire/venues`:
   - `grimoire-aave`
   - `grimoire-uniswap`
@@ -261,12 +327,34 @@ interface CompilationResult {
   errors: CompilationError[];
   warnings: CompilationWarning[];
 }
+
+// State persistence
+interface StateStore {
+  load(spellId: string): Promise<Record<string, unknown> | null>;
+  save(spellId: string, state: Record<string, unknown>): Promise<void>;
+  addRun(spellId: string, run: RunRecord): Promise<void>;
+  getRuns(spellId: string, limit?: number): Promise<RunRecord[]>;
+  saveLedger(spellId: string, runId: string, entries: LedgerEntry[]): Promise<void>;
+  loadLedger(spellId: string, runId: string): Promise<LedgerEntry[] | null>;
+  listSpells(): Promise<string[]>;
+}
+
+// Run record (stored in SQLite)
+interface RunRecord {
+  runId: string;
+  timestamp: string;
+  success: boolean;
+  error?: string;
+  duration: number;
+  metrics: RunMetrics;
+  finalState: Record<string, unknown>;
+}
 ```
 
 ## Usage Example
 
 ```typescript
-import { compile, execute } from "@grimoire/core";
+import { compile, execute, SqliteStateStore, createRunRecord } from "@grimoire/core";
 import { adapters } from "@grimoire/venues";
 
 // Compile a spell
@@ -276,14 +364,25 @@ if (!result.success) {
   process.exit(1);
 }
 
+// Load persisted state
+const store = new SqliteStateStore();
+const persistentState = await store.load(result.ir.id) ?? {};
+
 // Execute the spell
 const execResult = await execute({
   spell: result.ir,
   vault: "0x...",
   chain: 1,
   params: { amount: 1000 },
+  persistentState,
   adapters,
 });
+
+// Persist results
+await store.save(result.ir.id, execResult.finalState);
+await store.addRun(result.ir.id, createRunRecord(execResult));
+await store.saveLedger(result.ir.id, execResult.runId, execResult.ledgerEvents);
+store.close();
 ```
 
 ## Bun Runtime

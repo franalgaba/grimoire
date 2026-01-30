@@ -51,6 +51,29 @@ describe("Compiler index", () => {
     }
   });
 
+  test("compiles atomic block to TryStep IR", () => {
+    const source = `spell AtomicTest
+
+  version: "1.0.0"
+
+  on manual:
+    atomic:
+      x = 1
+      y = 2
+`;
+    const result = compile(source);
+    expect(result.success).toBe(true);
+
+    const tryStep = result.ir?.steps.find((s) => s.kind === "try");
+    expect(tryStep).toBeDefined();
+    if (tryStep?.kind === "try") {
+      expect(tryStep.trySteps.length).toBe(2);
+      expect(tryStep.catchBlocks.length).toBe(1);
+      expect(tryStep.catchBlocks[0].errorType).toBe("*");
+      expect(tryStep.catchBlocks[0].action).toBe("rollback");
+    }
+  });
+
   test("handles file read errors", async () => {
     const missingPath = join(tmpdir(), "missing.spell");
 

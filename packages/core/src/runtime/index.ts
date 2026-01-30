@@ -22,3 +22,11 @@ export {
   type EvalValue,
   type EvalContext,
 } from "./expression-evaluator.js";
+export { classifyError, matchesCatchBlock } from "./error-classifier.js";
+export {
+  type StateStore,
+  type RunRecord,
+  type RunMetrics,
+  createRunRecord,
+} from "./state-store.js";
+export { SqliteStateStore, type SqliteStateStoreOptions } from "./sqlite-state-store.js";

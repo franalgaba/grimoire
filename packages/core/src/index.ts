@@ -17,12 +17,18 @@ export {
   InMemoryLedger,
   evaluate,
   evaluateAsync,
+  createRunRecord,
+  SqliteStateStore,
 } from "./runtime/index.js";
 export type {
   ExecuteOptions,
   CreateContextOptions,
   EvalContext,
   EvalValue,
+  StateStore,
+  RunRecord,
+  RunMetrics,
+  SqliteStateStoreOptions,
 } from "./runtime/index.js";
 
 // Wallet
@@ -58,8 +64,47 @@ export type {
   ExecutionMode,
   ExecutorOptions,
   TransactionResult,
-  ExecutionResult,
+  ExecutionResult as WalletExecutionResult,
 } from "./wallet/index.js";
+
+// Builders
+export {
+  spell,
+  action,
+  conditional,
+  repeat,
+  forLoop,
+  until,
+  parallel,
+  compute,
+  wait,
+  emit,
+  halt,
+  tryBlock,
+  advisory,
+  pipeline,
+  arrayAccess,
+  propertyAccess,
+  literal,
+  param,
+  binding,
+  binary,
+  call,
+} from "./builders/index.js";
+export type {
+  SpellBuilder,
+  ActionBuilder,
+  ConditionalBuilder,
+  LoopBuilder,
+  ParallelBuilder,
+  ComputeBuilder,
+  WaitBuilder,
+  EmitBuilder,
+  HaltBuilder,
+  TryBuilder,
+  AdvisoryBuilder,
+  PipelineBuilder,
+} from "./builders/index.js";
 
 // Venues
 export { createVenueRegistry } from "./venues/index.js";

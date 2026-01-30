@@ -26,6 +26,7 @@ import { executeConditionalStep } from "./steps/conditional.js";
 import { executeEmitStep } from "./steps/emit.js";
 import { executeHaltStep } from "./steps/halt.js";
 import { executeLoopStep } from "./steps/loop.js";
+import { executeTryStep } from "./steps/try.js";
 import { executeWaitStep } from "./steps/wait.js";
 
 /**
@@ -315,9 +316,11 @@ async function executeStep(
     case "action":
       return executeActionStep(step, ctx, ledger, actionExecution);
 
+    case "try":
+      return executeTryStep(step, ctx, ledger, executeStepById);
+
     case "parallel":
     case "pipeline":
-    case "try":
     case "advisory":
       // TODO: Implement these step types
       ledger.emit({ type: "step_started", stepId: step.id, kind: step.kind });

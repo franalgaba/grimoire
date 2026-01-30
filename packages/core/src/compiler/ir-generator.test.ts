@@ -150,6 +150,102 @@ describe("IR Generator", () => {
     }
   });
 
+  test("transforms try step with wildcard catch and revert action", () => {
+    const source: SpellSource = {
+      ...baseSource,
+      steps: [
+        {
+          id: "atomic_1",
+          try: ["action_1", "action_2"],
+          catch: [{ error: "*", action: "revert" }],
+        },
+      ],
+    };
+
+    const result = generateIR(source);
+    expect(result.success).toBe(true);
+
+    const step = result.ir?.steps[0];
+    expect(step?.kind).toBe("try");
+    if (step?.kind === "try") {
+      expect(step.trySteps).toEqual(["action_1", "action_2"]);
+      expect(step.catchBlocks.length).toBe(1);
+      expect(step.catchBlocks[0].errorType).toBe("*");
+      expect(step.catchBlocks[0].action).toBe("rollback"); // "revert" mapped to "rollback"
+    }
+  });
+
+  test("transforms try step with specific error type", () => {
+    const source: SpellSource = {
+      ...baseSource,
+      steps: [
+        {
+          id: "try_1",
+          try: ["action_1"],
+          catch: [
+            { error: "slippage_exceeded", action: "skip" },
+            { error: "*", action: "halt" },
+          ],
+        },
+      ],
+    };
+
+    const result = generateIR(source);
+    expect(result.success).toBe(true);
+
+    const step = result.ir?.steps[0];
+    if (step?.kind === "try") {
+      expect(step.catchBlocks.length).toBe(2);
+      expect(step.catchBlocks[0].errorType).toBe("slippage_exceeded");
+      expect(step.catchBlocks[0].action).toBe("skip");
+      expect(step.catchBlocks[1].errorType).toBe("*");
+      expect(step.catchBlocks[1].action).toBe("halt");
+    }
+  });
+
+  test("transforms try step with finally", () => {
+    const source: SpellSource = {
+      ...baseSource,
+      steps: [
+        {
+          id: "try_2",
+          try: ["action_1"],
+          catch: [{ error: "*", action: "skip" }],
+          finally: ["cleanup_1"],
+        },
+      ],
+    };
+
+    const result = generateIR(source);
+    expect(result.success).toBe(true);
+
+    const step = result.ir?.steps[0];
+    if (step?.kind === "try") {
+      expect(step.finallySteps).toEqual(["cleanup_1"]);
+    }
+  });
+
+  test("transforms try step with unknown error type falls back to wildcard", () => {
+    const source: SpellSource = {
+      ...baseSource,
+      steps: [
+        {
+          id: "try_3",
+          try: ["action_1"],
+          catch: [{ error: "some_unknown_error", action: "skip" }],
+        },
+      ],
+    };
+
+    const result = generateIR(source);
+    expect(result.success).toBe(true);
+
+    const step = result.ir?.steps[0];
+    if (step?.kind === "try") {
+      expect(step.catchBlocks[0].errorType).toBe("*");
+    }
+  });
+
   test("handles until loop and expression errors", () => {
     const source: SpellSource = {
       ...baseSource,
