@@ -1,0 +1,18 @@
+# Send ETH to an address
+
+spell SendEth
+
+  version: "1.0.0"
+  description: "Send ETH to a specified address"
+  assets: [ETH]
+
+  params:
+    amount: 1000000000000000
+    to: "0x0000000000000000000000000000000000000000"
+
+  venues:
+    wallet: @wallet
+
+  on manual:
+    wallet.transfer(ETH, params.amount, params.to)
+    emit transfer_done(asset=ETH, amount=params.amount, to=params.to)

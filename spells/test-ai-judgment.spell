@@ -1,0 +1,21 @@
+# Test: AI judgment — advisory condition for swap decision
+
+spell TestAIJudgment
+
+  version: "1.0.0"
+  description: "Use AI advisory to decide whether to execute a swap"
+  assets: [ETH, USDC]
+
+  params:
+    amount: 200000000000000
+    price_threshold: 3000
+
+  venues:
+    uniswap_v4: @uniswap_v4
+
+  on manual:
+    if **should we swap ETH to USDC given current market conditions**:
+      uniswap_v4.swap(ETH, USDC, params.amount)
+      emit ai_approved_swap(amount=params.amount)
+    else:
+      emit ai_rejected_swap(reason="advisory_declined")

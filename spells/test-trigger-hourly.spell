@@ -1,0 +1,15 @@
+# Test: Hourly trigger — executes on schedule
+
+spell TestTriggerHourly
+
+  version: "1.0.0"
+  description: "Hourly scheduled spell — tests non-manual trigger"
+  assets: []
+
+  state:
+    persistent:
+      checks: 0
+
+  on hourly:
+    checks = checks + 1
+    emit hourly_check(run=checks)

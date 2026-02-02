@@ -9,7 +9,7 @@ import type { LoopStep } from "../../types/steps.js";
 import { InMemoryLedger, createContext } from "../context.js";
 import { executeLoopStep } from "./loop.js";
 
-function createSpell(): SpellIR {
+function createSpell(overrides?: Partial<SpellIR>): SpellIR {
   return {
     id: "spell",
     version: "1.0.0",
@@ -27,6 +27,7 @@ function createSpell(): SpellIR {
     steps: [],
     guards: [],
     triggers: [{ type: "manual" }],
+    ...overrides,
   };
 }
 
@@ -130,6 +131,44 @@ describe("Loop Step", () => {
 
     expect(result.success).toBe(true);
     expect(result.iterations).toBe(2);
+  });
+
+  test("iterates over assets array binding", async () => {
+    const ctx = createContext({
+      spell: createSpell({
+        assets: [
+          { symbol: "USDC", chain: 1, address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
+          { symbol: "DAI", chain: 1, address: "0x6B175474E89094C44Da98b954EedeAC495271d0F" },
+          { symbol: "USDT", chain: 1, address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" },
+        ],
+      }),
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+
+    const step: LoopStep = {
+      kind: "loop",
+      id: "loop_assets",
+      loopType: {
+        type: "for",
+        variable: "asset",
+        source: { kind: "binding", name: "assets" },
+      },
+      bodySteps: ["step_body"],
+      maxIterations: 10,
+      dependsOn: [],
+    };
+
+    const visited: unknown[] = [];
+    const result = await executeLoopStep(step, ctx, ledger, async () => {
+      visited.push(ctx.bindings.get("asset"));
+      return { success: true, stepId: "step_body", output: {} };
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.iterations).toBe(3);
+    expect(visited).toEqual(["USDC", "DAI", "USDT"]);
   });
 
   test("fails when for-loop source is not array", async () => {

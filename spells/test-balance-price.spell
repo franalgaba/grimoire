@@ -1,0 +1,25 @@
+# Test: Async query functions — balance and price lookups
+
+spell TestBalancePrice
+
+  version: "1.0.0"
+  description: "Query balance and price — tests async built-in functions"
+  assets: [ETH, USDC]
+
+  params:
+    min_balance: 100000
+
+  venues:
+    uniswap_v4: @uniswap_v4
+
+  on manual:
+    eth_balance = balance(ETH)
+    usdc_balance = balance(USDC)
+    eth_price = price(ETH, USDC)
+    total_value = eth_balance * eth_price + usdc_balance
+    emit portfolio(eth=eth_balance, usdc=usdc_balance, eth_price=eth_price, total=total_value)
+
+    if usdc_balance > params.min_balance:
+      emit sufficient_balance(amount=usdc_balance)
+    else:
+      emit low_balance(amount=usdc_balance, minimum=params.min_balance)

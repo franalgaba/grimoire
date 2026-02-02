@@ -14,6 +14,7 @@ import { logCommand } from "./commands/log.js";
 import { simulateCommand } from "./commands/simulate.js";
 import { validateCommand } from "./commands/validate.js";
 import { venuesCommand } from "./commands/venues.js";
+import { walletCommand } from "./commands/wallet.js";
 
 const program = new Command();
 
@@ -72,7 +73,9 @@ program
   .option("--chain <id>", "Chain ID", "1")
   .option("--dry-run", "Simulate without executing")
   .option("--private-key <key>", "Private key (hex) - NOT RECOMMENDED, use --key-env")
-  .option("--key-env <name>", "Environment variable containing private key", "PRIVATE_KEY")
+  .option("--key-env <name>", "Environment variable containing private key")
+  .option("--keystore <path>", "Path to keystore file")
+  .option("--password-env <name>", "Environment variable for keystore password")
   .option("--rpc-url <url>", "RPC URL (or set RPC_URL env var)")
   .option("--gas-multiplier <n>", "Gas price multiplier (default: 1.1)")
   .option("--skip-confirm", "Skip confirmation prompt (use with caution)")
@@ -105,6 +108,9 @@ program
   .option("--json", "Output results as JSON")
   .option("--state-dir <dir>", "Directory for state database")
   .action(logCommand);
+
+// Wallet command
+program.addCommand(walletCommand);
 
 // Parse and run
 program.parse();

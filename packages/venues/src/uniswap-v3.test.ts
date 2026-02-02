@@ -2,10 +2,29 @@ import { describe, expect, test } from "bun:test";
 import type { Address, Expression, Provider, VenueAdapterContext } from "@grimoire/core";
 import { createUniswapV3Adapter } from "./uniswap-v3.js";
 
+/** Mock pool state: sqrtPriceX96 = 2^96 (price = 1 in raw units), tick = 0 */
+const MOCK_SLOT0 = [
+  79228162514264337593543950336n, // sqrtPriceX96
+  0n, // tick
+  0n, // observationIndex
+  0n, // observationCardinality
+  0n, // observationCardinalityNext
+  0n, // feeProtocol
+  true, // unlocked
+] as const;
+const MOCK_LIQUIDITY = 1_000_000_000_000_000_000n;
+
+const mockReadContract = async (params: { functionName: string }) => {
+  if (params.functionName === "slot0") return MOCK_SLOT0;
+  if (params.functionName === "liquidity") return MOCK_LIQUIDITY;
+  return 0n;
+};
+
 const provider = {
   chainId: 1,
+  readContract: mockReadContract,
   getClient: () => ({
-    readContract: async () => 0n,
+    readContract: async () => 0n, // 0 allowance → needs approval
   }),
 } as unknown as Provider;
 
@@ -52,8 +71,9 @@ describe("Uniswap V3 adapter", () => {
 
     const richProvider = {
       chainId: 1,
+      readContract: mockReadContract,
       getClient: () => ({
-        readContract: async () => 1000000n,
+        readContract: async () => 1000000n, // high allowance
       }),
     } as unknown as Provider;
 
@@ -231,5 +251,59 @@ describe("Uniswap V3 adapter", () => {
         ctx
       )
     ).rejects.toThrow("Unsupported amount type");
+  });
+
+  test("description includes expected output and slippage", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const result = await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "uniswap_v3",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: 1000000n as unknown as Expression,
+        mode: "exact_in",
+      },
+      ctx
+    );
+
+    const built = Array.isArray(result) ? result : [result];
+    const swapTx = built[built.length - 1];
+    expect(swapTx?.description).toContain("expected:");
+    expect(swapTx?.description).toContain("min output:");
+    expect(swapTx?.description).toContain("pool:");
+  });
+
+  test("wraps ETH and approves WETH for native ETH input", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const amount = 1000000000000000n; // 0.001 ETH
+
+    const result = await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "uniswap_v3",
+        assetIn: "ETH",
+        assetOut: "USDC",
+        amount: amount as unknown as Expression,
+        mode: "exact_in",
+      },
+      ctx
+    );
+
+    const built = Array.isArray(result) ? result : [result];
+    // Wrap ETH + approve WETH + swap = 3 transactions
+    expect(built).toHaveLength(3);
+    // First tx: wrap ETH → WETH (sends ETH value to WETH contract)
+    expect(built[0]?.description).toContain("Wrap");
+    expect(built[0]?.tx.value).toBe(amount);
+    // Second tx: approve WETH
+    expect(built[1]?.description).toContain("Approve WETH");
+    // Third tx: the swap (value should be 0 since we use WETH now)
+    expect(built[2]?.description).toContain("Uniswap V3 swap");
+    expect(built[2]?.tx.value).toBe(0n);
   });
 });

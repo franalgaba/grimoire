@@ -43,6 +43,7 @@ packages/
 │   └── src/
 │       ├── aave-v3.ts
 │       ├── uniswap-v3.ts
+│       ├── uniswap-v4.ts
 │       ├── morpho-blue.ts
 │       ├── hyperliquid.ts
 │       ├── across.ts
@@ -142,13 +143,36 @@ Key files:
 Core is SDK-free. Protocol integrations live in `@grimoire/venues` and are injected at execution time.
 
 Supported adapters:
-- `aave_v3` (AaveKit)
-- `uniswap_v3`
-- `morpho_blue`
-- `hyperliquid` (offchain)
-- `across` (bridge)
+- `aave_v3` (AaveKit) — lending/borrowing on Ethereum + Base
+- `uniswap_v3` — swaps via SwapRouter02
+- `uniswap_v4` — swaps via Universal Router + Permit2
+- `morpho_blue` — isolated lending markets
+- `hyperliquid` (offchain) — spot + perps via API
+- `across` (bridge) — cross-chain bridging
 
 Adapters can return multi-transaction plans to handle approvals. Offchain venues implement `executeAction`.
+
+### Aave V3 Amount Format
+
+The `@aave/client` SDK uses human-readable BigDecimal amounts, not raw token units:
+- **supply/borrow**: `value: "0.1"` (human-readable)
+- **withdraw/repay**: `value: { exact: "100000" }` (raw units in `exact` wrapper)
+
+The adapter handles this conversion internally using token decimals (USDC=6, WETH=18, etc.).
+
+### Morpho Blue Default Markets
+
+The default adapter ships with well-known Base (chain 8453) markets:
+- **cbBTC/USDC** (86% LLTV, ~$1.26B supply)
+- **WETH/USDC** (86% LLTV, ~$48.7M supply)
+
+When no collateral is specified in a spell, the first matching market by loan token is selected. To target a specific market, specify the collateral token in the action.
+
+### Across Bridge Minimums
+
+Across enforces minimum bridge amounts per token. For test spells:
+- **USDC**: minimum ~$1.00 (1000000 raw). Use >= $1.00 to avoid "amount too low relative to fees".
+- **WETH**: minimum ~0.002 ETH. Use >= 0.002 to clear fee thresholds.
 
 ## State Persistence
 
@@ -211,7 +235,7 @@ store.close();
 Action constraints are resolved at runtime and attached to `Action.constraints` for adapter use.
 
 - `maxSlippageBps`, `minOutput`, `maxInput`, `deadline`
-- Used by Uniswap V3 swaps and Across bridging
+- Used by Uniswap V3/V4 swaps and Across bridging
 
 ## Bridge Actions
 
@@ -243,6 +267,27 @@ bun run typecheck    # TypeScript type checking
 bun test packages/core/src/compiler/grimoire/  # Test grimoire module
 bun test --coverage packages/core/             # Coverage for core package
 ```
+
+### Onchain Test Suite
+
+```bash
+# Simulate only (no wallet needed):
+./scripts/run-onchain-tests.sh
+
+# Dry-run (builds txs, estimates gas, does NOT send):
+./scripts/run-onchain-tests.sh --dry-run
+
+# Live execution on Base:
+CHAIN=8453 ./scripts/run-onchain-tests.sh --execute
+
+# Resume from a specific phase after failure:
+./scripts/run-onchain-tests.sh --execute --start-phase 4
+
+# Recovery mode — return stranded funds to Base:
+./scripts/run-onchain-tests.sh --recover
+```
+
+Phases: 0 (compile) → 1 (simulate pure) → 2 (simulate features) → 3 (cast features) → 4 (cast venues) → 5 (multi-chain). Phase 5 writes checkpoints to `.grimoire/test-suite/checkpoint` and skips completed sub-steps on resume. Phase 5 is automatically skipped if earlier phases have failures.
 
 ### Compile All Spells
 

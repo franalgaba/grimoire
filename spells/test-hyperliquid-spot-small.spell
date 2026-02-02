@@ -1,0 +1,18 @@
+# Test: Small spot trade on Hyperliquid (offchain venue)
+
+spell TestHyperliquidSpotSmall
+
+  version: "1.0.0"
+  description: "Small spot trade on Hyperliquid — tests offchain venue"
+  assets: [USDC, ETH]
+
+  params:
+    size: 1
+    price: 3000
+
+  venues:
+    hyperliquid: @hyperliquid
+
+  on manual:
+    hyperliquid.swap(ETH, USDC, params.size)
+    emit trade_done(venue="hyperliquid", size=params.size)

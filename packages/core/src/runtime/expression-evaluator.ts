@@ -444,7 +444,7 @@ async function evaluateCallAsync(
 export function createEvalContext(execCtx: ExecutionContext): EvalContext {
   const params = new Map<string, unknown>();
   for (const param of execCtx.spell.params) {
-    params.set(param.name, param.default);
+    params.set(param.name, execCtx.bindings.get(param.name) ?? param.default);
   }
 
   return {

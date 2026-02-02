@@ -19,7 +19,11 @@ import {
   createWalletClient,
   publicActions,
 } from "viem";
-import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
+import {
+  mnemonicToAccount,
+  privateKeyToAccount,
+  generatePrivateKey as viemGeneratePrivateKey,
+} from "viem/accounts";
 import { arbitrum, base, mainnet, optimism, polygon, sepolia } from "viem/chains";
 import type { Address } from "../types/primitives.js";
 import type { KeyConfig, TransactionReceipt, TransactionRequest, Wallet } from "./types.js";
@@ -32,6 +36,16 @@ export class KeyLoadError extends Error {
   }
 }
 
+/** HyperEVM chain definition */
+const hyperEVM: Chain = {
+  id: 999,
+  name: "HyperEVM",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: {
+    default: { http: ["https://rpc.hyperliquid.xyz/evm"] },
+  },
+};
+
 /** Map chain IDs to viem chain objects */
 const VIEM_CHAINS: Record<number, Chain> = {
   1: mainnet,
@@ -39,6 +53,7 @@ const VIEM_CHAINS: Record<number, Chain> = {
   137: polygon,
   42161: arbitrum,
   8453: base,
+  999: hyperEVM,
   11155111: sepolia,
 };
 
@@ -315,6 +330,24 @@ class ViemWallet implements Wallet {
       nonce: tx.nonce,
     } as WalletSendTransactionRequest;
   }
+}
+
+/**
+ * Generate a new random private key
+ */
+export function generatePrivateKey(): `0x${string}` {
+  return viemGeneratePrivateKey();
+}
+
+/**
+ * Encrypt a private key into a keystore JSON string
+ */
+export async function createKeystore(privateKey: `0x${string}`, password: string): Promise<string> {
+  if (!password) {
+    throw new KeyLoadError("Keystore password must not be empty");
+  }
+  const wallet = new EthersWallet(privateKey);
+  return await wallet.encrypt(password);
 }
 
 /**

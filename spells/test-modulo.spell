@@ -1,0 +1,21 @@
+# Test: Modulo operator — remainder arithmetic
+
+spell TestModulo
+
+  version: "1.0.0"
+  description: "Test modulo operator and even/odd detection"
+  assets: []
+
+  params:
+    value: 17
+    divisor: 5
+
+  on manual:
+    remainder = params.value % params.divisor
+    is_even = params.value % 2
+    emit modulo_result(value=params.value, divisor=params.divisor, remainder=remainder, mod2=is_even)
+
+    if params.value % 2 == 0:
+      emit parity(type="even")
+    else:
+      emit parity(type="odd")

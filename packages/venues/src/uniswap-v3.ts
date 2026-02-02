@@ -1,17 +1,28 @@
 import type { Address } from "@grimoire/core";
 import type { VenueAdapter } from "@grimoire/core";
-import { Token } from "@uniswap/sdk-core";
-import { encodeFunctionData, parseAbi } from "viem";
+import tokenList from "@uniswap/default-token-list";
+import { CurrencyAmount, Percent, Token, TradeType } from "@uniswap/sdk-core";
+import {
+  type FeeAmount,
+  Pool,
+  Route,
+  SwapRouter,
+  Trade,
+  computePoolAddress,
+} from "@uniswap/v3-sdk";
+import { type Abi, encodeFunctionData, parseAbi } from "viem";
 import { buildApprovalIfNeeded } from "./erc20.js";
 
 export interface UniswapV3AdapterConfig {
   routers: Record<number, Address>;
+  factories?: Record<number, Address>;
   defaultFee?: number;
   deadlineSeconds?: number;
   slippageBps?: number;
 }
 
-export const DEFAULT_SWAP_ROUTER = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45" as Address;
+/** Original V3 SwapRouter — matches the SDK's SwapRouter.swapCallParameters() encoding */
+export const DEFAULT_SWAP_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564" as Address;
 
 export const DEFAULT_ROUTERS: Record<number, Address> = {
   1: DEFAULT_SWAP_ROUTER,
@@ -23,14 +34,28 @@ export const DEFAULT_ROUTERS: Record<number, Address> = {
 
 export const defaultUniswapV3Routers = DEFAULT_ROUTERS;
 
-const SWAP_ROUTER_ABI = parseAbi([
-  "function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 deadline,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96)) payable returns (uint256 amountOut)",
-  "function exactOutputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 deadline,uint256 amountOut,uint256 amountInMaximum,uint160 sqrtPriceLimitX96)) payable returns (uint256 amountIn)",
+const DEFAULT_FACTORY = "0x1F98431c8aD98523631AE4a59f267346ea31F984" as Address;
+
+const DEFAULT_FACTORIES: Record<number, Address> = {
+  1: DEFAULT_FACTORY,
+  10: DEFAULT_FACTORY,
+  137: DEFAULT_FACTORY,
+  42161: DEFAULT_FACTORY,
+  8453: "0x33128a8fC17869897dcE68Ed026d694621f6FDfD" as Address,
+};
+
+const POOL_ABI = parseAbi([
+  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
+  "function liquidity() view returns (uint128)",
 ]);
+
+const WETH_ABI = parseAbi(["function deposit() payable"]);
 
 export function createUniswapV3Adapter(
   config: UniswapV3AdapterConfig = { routers: DEFAULT_ROUTERS }
 ): VenueAdapter {
+  const factories = config.factories ?? DEFAULT_FACTORIES;
+
   return {
     meta: {
       name: "uniswap_v3",
@@ -48,70 +73,163 @@ export function createUniswapV3Adapter(
         throw new Error(`No Uniswap router configured for chain ${ctx.chainId}`);
       }
 
+      const factory = factories[ctx.chainId] ?? DEFAULT_FACTORY;
+      const isNativeEth = action.assetIn?.toUpperCase() === "ETH";
       const tokenIn = resolveToken(action.assetIn, ctx.chainId);
       const tokenOut = resolveToken(action.assetOut, ctx.chainId);
-
-      const fee = config.defaultFee ?? 3000;
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + (config.deadlineSeconds ?? 1200));
-      const recipient = (ctx.vault ?? ctx.walletAddress) as Address;
+      const fee = (config.defaultFee ?? 3000) as FeeAmount;
       const amount = toBigInt(action.amount);
-      const slippageBps = action.constraints?.maxSlippageBps ?? config.slippageBps;
+      const recipient = (ctx.vault ?? ctx.walletAddress) as string;
 
-      const minOutput =
-        action.constraints?.minOutput ??
-        (slippageBps !== undefined ? applyBps(amount, 10_000 - slippageBps) : 0n);
-      const maxInput =
-        action.constraints?.maxInput ??
-        (slippageBps !== undefined ? applyBps(amount, 10_000 + slippageBps) : amount);
-
-      const args = {
-        tokenIn: tokenIn.address as Address,
-        tokenOut: tokenOut.address as Address,
+      // Compute pool address using the SDK
+      const poolAddress = computePoolAddress({
+        factoryAddress: factory,
+        tokenA: tokenIn,
+        tokenB: tokenOut,
         fee,
-        recipient,
-        deadline,
-        amountIn: amount,
-        amountOutMinimum: minOutput,
-        sqrtPriceLimitX96: 0n,
-      };
-
-      const data =
-        action.mode === "exact_out"
-          ? encodeFunctionData({
-              abi: SWAP_ROUTER_ABI,
-              functionName: "exactOutputSingle",
-              args: [
-                {
-                  ...args,
-                  amountOut: amount,
-                  amountInMaximum: maxInput,
-                },
-              ],
-            })
-          : encodeFunctionData({
-              abi: SWAP_ROUTER_ABI,
-              functionName: "exactInputSingle",
-              args: [args],
-            });
-
-      const approvalTxs = await buildApprovalIfNeeded({
-        ctx,
-        token: tokenIn.address as Address,
-        spender: router,
-        amount,
-        action,
-        description: `Approve ${action.assetIn} for Uniswap V3`,
       });
 
+      // Fetch on-chain pool state (slot0 + liquidity) for quoting
+      let sqrtPriceX96: bigint;
+      let tick: number;
+      let liquidity: bigint;
+      try {
+        const [slot0Result, liquidityResult] = await Promise.all([
+          ctx.provider.readContract<
+            readonly [bigint, number, number, number, number, number, boolean]
+          >({
+            address: poolAddress as Address,
+            abi: POOL_ABI as unknown as Abi,
+            functionName: "slot0",
+          }),
+          ctx.provider.readContract<bigint>({
+            address: poolAddress as Address,
+            abi: POOL_ABI as unknown as Abi,
+            functionName: "liquidity",
+          }),
+        ]);
+        sqrtPriceX96 = slot0Result[0];
+        tick = Number(slot0Result[1]);
+        liquidity = liquidityResult;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `Failed to fetch pool state for ${action.assetIn}/${action.assetOut} (pool ${poolAddress}): ${msg}`
+        );
+      }
+
+      // Construct Pool from on-chain state
+      const pool = new Pool(
+        tokenIn,
+        tokenOut,
+        fee,
+        sqrtPriceX96.toString(),
+        liquidity.toString(),
+        tick
+      );
+
+      // Build trade using SDK (same pattern as docs.uniswap.org/sdk/v3/guides/swaps/trading)
+      const isExactOut = action.mode === "exact_out";
+      const swapRoute = new Route([pool], tokenIn, tokenOut);
+
+      let trade: Trade<Token, Token, TradeType>;
+      if (isExactOut) {
+        const outputAmount = CurrencyAmount.fromRawAmount(tokenOut, amount.toString());
+        const price = pool.priceOf(tokenOut);
+        const estimatedInput = price.quote(outputAmount);
+        trade = Trade.createUncheckedTrade({
+          route: swapRoute,
+          inputAmount: CurrencyAmount.fromRawAmount(tokenIn, estimatedInput.quotient.toString()),
+          outputAmount,
+          tradeType: TradeType.EXACT_OUTPUT,
+        });
+      } else {
+        const inputAmount = CurrencyAmount.fromRawAmount(tokenIn, amount.toString());
+        const price = pool.priceOf(tokenIn);
+        const estimatedOutput = price.quote(inputAmount);
+        trade = Trade.createUncheckedTrade({
+          route: swapRoute,
+          inputAmount,
+          outputAmount: CurrencyAmount.fromRawAmount(tokenOut, estimatedOutput.quotient.toString()),
+          tradeType: TradeType.EXACT_INPUT,
+        });
+      }
+
+      // Generate calldata using SDK's SwapRouter (targets original V3 SwapRouter)
+      const slippageBps = action.constraints?.maxSlippageBps ?? config.slippageBps ?? 50;
+      const slippageTolerance = new Percent(slippageBps, 10_000);
+      const deadline = Math.floor(Date.now() / 1000) + (config.deadlineSeconds ?? 1200);
+
+      const { calldata, value: txValue } = SwapRouter.swapCallParameters([trade], {
+        slippageTolerance,
+        recipient,
+        deadline,
+      });
+
+      // Build pre-swap transactions
+      const preTxs = [];
+
+      if (isNativeEth) {
+        // Step 1: Wrap ETH → WETH (call WETH.deposit() with value)
+        const wethAddress = tokenIn.address as Address;
+        const wrapData = encodeFunctionData({
+          abi: WETH_ABI,
+          functionName: "deposit",
+        });
+        preTxs.push({
+          tx: { to: wethAddress, data: wrapData, value: amount },
+          description: `Wrap ${amount.toString()} wei ETH → WETH`,
+          action,
+        });
+
+        // Step 2: Approve WETH to router
+        const wethApprovalTxs = await buildApprovalIfNeeded({
+          ctx,
+          token: wethAddress,
+          spender: router,
+          amount,
+          action,
+          description: "Approve WETH for Uniswap V3",
+        });
+        preTxs.push(...wethApprovalTxs);
+      } else {
+        // ERC20: just approve
+        const approvalTxs = await buildApprovalIfNeeded({
+          ctx,
+          token: tokenIn.address as Address,
+          spender: router,
+          amount,
+          action,
+          description: `Approve ${action.assetIn} for Uniswap V3`,
+        });
+        preTxs.push(...approvalTxs);
+      }
+
+      const shortAddr = (a: string) => `${a.slice(0, 6)}...${a.slice(-4)}`;
+      const expectedOutput = trade.outputAmount.toSignificant(6);
+      const minOut = trade.minimumAmountOut(slippageTolerance).toSignificant(6);
+      const descLines = [
+        `Uniswap V3 swap ${action.assetIn} → ${action.assetOut}`,
+        `  tokenIn:    ${action.assetIn} (${shortAddr(tokenIn.address)})`,
+        `  tokenOut:   ${action.assetOut} (${shortAddr(tokenOut.address)})`,
+        `  amount:     ${amount.toString()} wei`,
+        `  expected:   ~${expectedOutput} ${action.assetOut}`,
+        `  min output: ${minOut} ${action.assetOut} (${slippageBps / 100}% slippage)`,
+        `  fee tier:   ${fee / 10_000}%`,
+        `  pool:       ${shortAddr(poolAddress)}`,
+        `  router:     ${shortAddr(router)}`,
+        `  recipient:  ${shortAddr(recipient)}`,
+      ].join("\n");
+
       return [
-        ...approvalTxs,
+        ...preTxs,
         {
           tx: {
             to: router,
-            data,
-            value: 0n,
+            data: calldata as `0x${string}`,
+            value: BigInt(txValue),
           },
-          description: `Uniswap V3 swap ${action.assetIn} → ${action.assetOut}`,
+          description: descLines,
           action,
         },
       ];
@@ -121,30 +239,47 @@ export function createUniswapV3Adapter(
 
 export const uniswapV3Adapter = createUniswapV3Adapter();
 
-function resolveToken(asset: string, chainId: number): Token {
-  const address = resolveAssetAddress(asset);
-  const decimals = 18;
-  return new Token(chainId, address, decimals);
+/** WETH addresses per chain (native ETH wrapping — not in the Uniswap token list) */
+const WETH_BY_CHAIN: Record<number, Address> = {
+  1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
+  10: "0x4200000000000000000000000000000000000006" as Address,
+  137: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619" as Address,
+  8453: "0x4200000000000000000000000000000000000006" as Address,
+  42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" as Address,
+};
+
+/** Build a symbol+chain index from the Uniswap default token list */
+const tokenIndex = new Map<string, { address: string; decimals: number }>();
+for (const t of tokenList.tokens) {
+  tokenIndex.set(`${t.symbol.toUpperCase()}:${t.chainId}`, {
+    address: t.address,
+    decimals: t.decimals,
+  });
 }
 
-function resolveAssetAddress(asset: string): Address {
+function resolveToken(asset: string, chainId: number): Token {
   if (asset.startsWith("0x") && asset.length === 42) {
-    return asset as Address;
+    return new Token(chainId, asset, 18);
   }
 
-  const KNOWN_TOKENS: Record<string, Address> = {
-    USDC: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
-    USDT: "0xdAC17F958D2ee523a2206206994597C13D831ec7" as Address,
-    DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F" as Address,
-    WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
-  };
+  const symbol = asset.toUpperCase();
 
-  const address = KNOWN_TOKENS[asset.toUpperCase()];
-  if (!address) {
-    throw new Error(`Unknown asset: ${asset}. Provide address directly.`);
+  // ETH / WETH → use the chain-specific wrapped address
+  if (symbol === "ETH" || symbol === "WETH") {
+    const weth = WETH_BY_CHAIN[chainId];
+    if (!weth) {
+      throw new Error(`No WETH address for chain ${chainId}`);
+    }
+    return new Token(chainId, weth, 18, "WETH", "Wrapped Ether");
   }
 
-  return address;
+  // Look up from Uniswap default token list
+  const entry = tokenIndex.get(`${symbol}:${chainId}`);
+  if (entry) {
+    return new Token(chainId, entry.address, entry.decimals, symbol);
+  }
+
+  throw new Error(`Unknown asset: ${asset} on chain ${chainId}. Provide address directly.`);
 }
 
 function toBigInt(amount: unknown): bigint {
@@ -155,10 +290,6 @@ function toBigInt(amount: unknown): bigint {
     return BigInt(amount.value);
   }
   throw new Error("Unsupported amount type for swap");
-}
-
-function applyBps(amount: bigint, bps: number): bigint {
-  return (amount * BigInt(bps)) / 10_000n;
 }
 
 function isLiteralAmount(

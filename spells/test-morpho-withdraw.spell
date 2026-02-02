@@ -1,0 +1,17 @@
+# Test: Withdraw USDC from Morpho Blue
+
+spell TestMorphoWithdraw
+
+  version: "1.0.0"
+  description: "Withdraw USDC from Morpho Blue — tests lending withdrawal"
+  assets: [USDC]
+
+  params:
+    amount: 100000
+
+  venues:
+    morpho_blue: @morpho_blue
+
+  on manual:
+    morpho_blue.withdraw(USDC, params.amount)
+    emit withdraw_done(venue="morpho_blue", asset=USDC, amount=params.amount)

@@ -1,0 +1,18 @@
+# Test: Bridge USDC from Arbitrum back to Base via Across
+
+spell TestAcrossUsdcArbToBase
+
+  version: "1.0.0"
+  description: "Bridge USDC from Arbitrum back to Base via Across"
+  assets: [USDC]
+
+  params:
+    amount: 300000
+    destination_chain: 8453
+
+  venues:
+    across: @across
+
+  on manual:
+    across.bridge(USDC, params.amount, params.destination_chain)
+    emit bridged(asset=USDC, direction="arb_to_base", amount=params.amount)

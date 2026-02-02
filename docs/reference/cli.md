@@ -76,6 +76,8 @@ Options:
 - `--dry-run` — simulate without executing
 - `--key-env <name>` — env var containing private key (default: `PRIVATE_KEY`)
 - `--private-key <hex>` — private key directly (not recommended)
+- `--keystore <path>` — keystore file path (default: `~/.grimoire/keystore.json`)
+- `--password-env <name>` — env var containing keystore password (default: `KEYSTORE_PASSWORD`)
 - `--rpc-url <url>` — RPC URL (or set `RPC_URL` env var)
 - `--gas-multiplier <n>` — gas price multiplier (default: 1.1)
 - `--skip-confirm` — skip confirmation prompt
@@ -123,6 +125,28 @@ grimoire venues
 
 Options:
 - `--json`
+
+## grimoire wallet
+
+Manage wallet operations (wrap/unwrap ETH, generate keystore).
+
+```bash
+# Generate a new keystore
+grimoire wallet generate
+
+# Wrap ETH to WETH
+grimoire wallet wrap --amount 0.01 --chain 8453 --keystore ~/.grimoire/keystore.json --password-env KEYSTORE_PASSWORD
+
+# Unwrap WETH to ETH
+grimoire wallet unwrap --amount 0.01 --chain 8453 --keystore ~/.grimoire/keystore.json --password-env KEYSTORE_PASSWORD
+```
+
+Options:
+- `--amount <n>` — amount in ETH
+- `--chain <id>` — chain ID
+- `--keystore <path>` — keystore file path
+- `--password-env <name>` — env var containing keystore password
+- `--rpc-url <url>` — RPC URL
 
 ## Venue CLIs
 

@@ -136,7 +136,7 @@ grimoire/
 | Category | Protocols |
 |----------|-----------|
 | **Lending** | Aave V3, Morpho Blue |
-| **Swaps** | Uniswap V3 |
+| **Swaps** | Uniswap V3, Uniswap V4 |
 | **Perps** | Hyperliquid |
 | **Bridge** | Across |
 

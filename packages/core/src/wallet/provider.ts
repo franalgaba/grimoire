@@ -12,6 +12,16 @@ import { type Chain, arbitrum, base, mainnet, optimism, polygon, sepolia } from 
 import type { Address } from "../types/primitives.js";
 import type { GasEstimate, ProviderConfig } from "./types.js";
 
+/** HyperEVM chain definition */
+const hyperEVM: Chain = {
+  id: 999,
+  name: "HyperEVM",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: {
+    default: { http: ["https://rpc.hyperliquid.xyz/evm"] },
+  },
+};
+
 /** Map chain IDs to viem chain objects */
 const VIEM_CHAINS: Record<number, Chain> = {
   1: mainnet,
@@ -19,6 +29,7 @@ const VIEM_CHAINS: Record<number, Chain> = {
   137: polygon,
   42161: arbitrum,
   8453: base,
+  999: hyperEVM,
   11155111: sepolia,
 };
 
@@ -56,6 +67,12 @@ const DEFAULT_CONFIGS: Record<number, ProviderConfig> = {
     chainId: 8453,
     rpcUrl: "https://mainnet.base.org",
     fallbackUrls: ["https://base.llamarpc.com"],
+    timeout: 30000,
+    retries: 3,
+  },
+  999: {
+    chainId: 999,
+    rpcUrl: "https://rpc.hyperliquid.xyz/evm",
     timeout: 30000,
     retries: 3,
   },

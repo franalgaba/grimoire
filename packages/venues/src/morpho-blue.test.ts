@@ -236,7 +236,7 @@ describe("Morpho Blue adapter", () => {
     expect(built[0]?.description).toContain("Morpho Blue borrow");
   });
 
-  test("rejects ambiguous market with no collateral", async () => {
+  test("picks first market when multiple match and no collateral specified", async () => {
     const market2 = {
       ...market,
       id: "test2",
@@ -245,7 +245,7 @@ describe("Morpho Blue adapter", () => {
     const adapter = createMorphoBlueAdapter({ markets: [market, market2] });
     if (!adapter.buildAction) throw new Error("Missing buildAction");
 
-    // Multiple USDC markets, no collateral specified
+    // Multiple USDC markets, no collateral specified — picks first
     const action = {
       type: "borrow",
       venue: "morpho_blue",
@@ -253,7 +253,9 @@ describe("Morpho Blue adapter", () => {
       amount: amount1,
     } as unknown as Action;
 
-    await expect(adapter.buildAction(action, ctx)).rejects.toThrow("market not configured");
+    const result = await adapter.buildAction(action, ctx);
+    const built = Array.isArray(result) ? result : [result];
+    expect(built[0]?.description).toContain("Morpho Blue borrow");
   });
 
   test("rejects no matching loan token market", async () => {

@@ -84,6 +84,7 @@ export const KEYWORDS = new Set([
   "daily",
   "persistent",
   "ephemeral",
+  "with",
 ]);
 
 /** Multi-character operators */

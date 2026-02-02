@@ -1,0 +1,15 @@
+# Test: Daily trigger — executes once per day
+
+spell TestTriggerDaily
+
+  version: "1.0.0"
+  description: "Daily scheduled spell — tests daily trigger type"
+  assets: []
+
+  state:
+    persistent:
+      day_count: 0
+
+  on daily:
+    day_count = day_count + 1
+    emit daily_report(day=day_count)

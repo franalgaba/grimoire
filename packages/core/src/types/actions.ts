@@ -124,7 +124,7 @@ export interface TransferAction {
   type: "transfer";
   asset: AssetId;
   amount: ActionAmount;
-  to: Address;
+  to: Address | Expression;
 }
 
 /** Approve token spending */

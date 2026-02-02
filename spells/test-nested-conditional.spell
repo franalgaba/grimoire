@@ -1,0 +1,23 @@
+# Test: Nested conditionals — tests deep branching logic
+
+spell TestNestedConditional
+
+  version: "1.0.0"
+  description: "Nested if/else chains — tests deep conditional branching"
+  assets: [ETH, USDC]
+
+  params:
+    amount: 500000
+    tier: 2
+
+  on manual:
+    if params.tier > 2:
+      if params.amount > 1000000:
+        emit high_tier_large(tier=params.tier, amount=params.amount)
+      else:
+        emit high_tier_small(tier=params.tier, amount=params.amount)
+    else:
+      if params.amount > 1000000:
+        emit low_tier_large(tier=params.tier, amount=params.amount)
+      else:
+        emit low_tier_small(tier=params.tier, amount=params.amount)

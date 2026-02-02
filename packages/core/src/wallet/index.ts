@@ -16,7 +16,13 @@ export type {
   GasEstimate,
 } from "./types.js";
 
-export { CHAIN_CONFIGS, isTestnet, getChainName } from "./types.js";
+export {
+  CHAIN_CONFIGS,
+  isTestnet,
+  getChainName,
+  getNativeCurrencySymbol,
+  isNativeCurrency,
+} from "./types.js";
 
 // Keystore
 export {
@@ -25,6 +31,8 @@ export {
   createWalletFromMnemonic,
   createWalletFromConfig,
   getAddressFromConfig,
+  generatePrivateKey,
+  createKeystore,
   KeyLoadError,
 } from "./keystore.js";
 

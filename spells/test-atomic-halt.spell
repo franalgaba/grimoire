@@ -1,0 +1,16 @@
+spell TestAtomicHalt
+
+  version: "1.0.0"
+  description: "Test atomic block with halt onFailure mode"
+  assets: [USDC]
+
+  params:
+    amount: 100000
+
+  venues:
+    lending: @aave_v3
+
+  on manual:
+    atomic halt:
+      aave_v3.deposit(USDC, params.amount)
+    emit done(status="completed")

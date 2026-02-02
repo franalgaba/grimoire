@@ -4,7 +4,7 @@ import type { OffchainExecutionResult, VenueAdapter, VenueRegistry } from "../ve
 import { type Provider, formatGasCostUsd, formatWei } from "./provider.js";
 import { type BuiltTransaction, TransactionBuilder } from "./tx-builder.js";
 import type { TransactionReceipt, TransactionRequest, Wallet } from "./types.js";
-import { getChainName, isTestnet } from "./types.js";
+import { getChainName, getNativeCurrencySymbol, isTestnet } from "./types.js";
 
 /** Execution mode */
 export type ExecutionMode = "simulate" | "dry-run" | "execute";
@@ -256,7 +256,7 @@ export class Executor {
     return (
       result.transactions[result.transactions.length - 1] ?? {
         success: false,
-        error: "No transaction result",
+        error: result.error ?? "No transaction result",
         builtTx: { tx: {} as TransactionRequest, description: "", action },
       }
     );
@@ -384,9 +384,13 @@ export class Executor {
 
     lines.push("");
     lines.push(`Total estimated gas: ${totalGas.toString()}`);
-    lines.push(
-      `Total estimated cost: ${formatWei(totalCost)} ETH (~${formatGasCostUsd(totalGas, totalCost / totalGas)})`
-    );
+    if (totalGas > 0n) {
+      lines.push(
+        `Total estimated cost: ${formatWei(totalCost)} ${getNativeCurrencySymbol(this.provider.chainId)} (~${formatGasCostUsd(totalGas, totalCost / totalGas)})`
+      );
+    } else {
+      lines.push("Total estimated cost: unknown (no gas estimate)");
+    }
     lines.push("");
 
     if (!isTest) {

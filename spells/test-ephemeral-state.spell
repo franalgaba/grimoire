@@ -1,0 +1,23 @@
+# Test: Ephemeral state — resets each run, not persisted
+
+spell TestEphemeralState
+
+  version: "1.0.0"
+  description: "Test ephemeral vs persistent state behavior"
+  assets: []
+
+  params:
+    increment: 10
+
+  state:
+    persistent:
+      total_runs: 0
+    ephemeral:
+      temp_value: 0
+      run_sum: 0
+
+  on manual:
+    total_runs = total_runs + 1
+    temp_value = params.increment * 2
+    run_sum = run_sum + params.increment
+    emit state_check(persistent_runs=total_runs, ephemeral_temp=temp_value, ephemeral_sum=run_sum)

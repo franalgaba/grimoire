@@ -1,0 +1,17 @@
+# Test: Deposit USDC into Aave V3 on Base
+
+spell TestAaveDeposit
+
+  version: "1.0.0"
+  description: "Supply USDC to Aave V3 — tests lending deposit + approval flow"
+  assets: [USDC]
+
+  params:
+    amount: 100000
+
+  venues:
+    aave_v3: @aave_v3
+
+  on manual:
+    aave_v3.deposit(USDC, params.amount)
+    emit deposit_done(venue="aave_v3", asset=USDC, amount=params.amount)

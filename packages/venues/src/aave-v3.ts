@@ -15,6 +15,7 @@ export interface AaveV3AdapterConfig {
 
 const DEFAULT_MARKETS: Record<number, Address> = {
   1: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2" as Address,
+  8453: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5" as Address,
 };
 
 export function createAaveV3Adapter(
@@ -40,8 +41,10 @@ export function createAaveV3Adapter(
         throw new Error(`Unsupported Aave action: ${action.type}`);
       }
 
-      const assetAddress = resolveAssetAddress(action.asset);
-      const amount = toAmountString(action.amount);
+      const assetAddress = resolveAssetAddress(action.asset, ctx.chainId);
+      const decimals = resolveAssetDecimals(action.asset, ctx.chainId);
+      const humanAmount = toHumanAmount(action.amount, decimals);
+      const rawAmount = toRawAmountString(action.amount);
       const address = evmAddress(ctx.walletAddress);
       const marketAddress = evmAddress(market);
       const chain = chainId(ctx.chainId);
@@ -57,8 +60,8 @@ export function createAaveV3Adapter(
         case "lend": {
           const request = {
             ...requestBase,
-            supplier: address,
-            amount: { erc20: { currency: evmAddress(assetAddress), value: amount } },
+            sender: address,
+            amount: { erc20: { currency: evmAddress(assetAddress), value: humanAmount } },
           } as unknown as Parameters<typeof actions.supply>[1];
           result = await actions.supply(client, request);
           break;
@@ -66,8 +69,8 @@ export function createAaveV3Adapter(
         case "withdraw": {
           const request = {
             ...requestBase,
-            withdrawer: address,
-            amount: { erc20: { currency: evmAddress(assetAddress), value: amount } },
+            sender: address,
+            amount: { erc20: { currency: evmAddress(assetAddress), value: { exact: rawAmount } } },
             recipient: address,
           } as unknown as Parameters<typeof actions.withdraw>[1];
           result = await actions.withdraw(client, request);
@@ -76,8 +79,8 @@ export function createAaveV3Adapter(
         case "borrow": {
           const request = {
             ...requestBase,
-            borrower: address,
-            amount: { erc20: { currency: evmAddress(assetAddress), value: amount } },
+            sender: address,
+            amount: { erc20: { currency: evmAddress(assetAddress), value: humanAmount } },
             recipient: address,
           } as unknown as Parameters<typeof actions.borrow>[1];
           result = await actions.borrow(client, request);
@@ -86,8 +89,8 @@ export function createAaveV3Adapter(
         case "repay": {
           const request = {
             ...requestBase,
-            repayer: address,
-            amount: { erc20: { currency: evmAddress(assetAddress), value: amount } },
+            sender: address,
+            amount: { erc20: { currency: evmAddress(assetAddress), value: { exact: rawAmount } } },
           } as unknown as Parameters<typeof actions.repay>[1];
           result = await actions.repay(client, request);
           break;
@@ -171,6 +174,18 @@ function buildAaveTransactions(plan: AaveExecutionPlan, action: AaveAction): Bui
     ];
   }
 
+  if (plan.__typename === "InsufficientBalanceError") {
+    const err = plan as unknown as {
+      required?: { raw?: string; value?: string };
+      available?: { raw?: string; value?: string };
+    };
+    const required = err.required?.value ?? err.required?.raw ?? "unknown";
+    const available = err.available?.value ?? err.available?.raw ?? "unknown";
+    throw new Error(
+      `Aave V3 ${action.type}: insufficient balance (required: ${required}, available: ${available})`
+    );
+  }
+
   if (!isTransactionRequest(plan)) {
     throw new Error(`Unsupported Aave execution plan: ${plan.__typename}`);
   }
@@ -202,7 +217,7 @@ function toBigIntValue(value?: string | number | bigint): bigint {
   return 0n;
 }
 
-function resolveAssetAddress(asset?: string): Address {
+function resolveAssetAddress(asset?: string, chainId?: number): Address {
   if (!asset) {
     throw new Error("Asset is required for Aave action");
   }
@@ -210,22 +225,29 @@ function resolveAssetAddress(asset?: string): Address {
     return asset as Address;
   }
 
-  const KNOWN_TOKENS: Record<string, Address> = {
-    USDC: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
-    USDT: "0xdAC17F958D2ee523a2206206994597C13D831ec7" as Address,
-    DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F" as Address,
-    WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
+  const KNOWN_TOKENS: Record<number, Record<string, Address>> = {
+    1: {
+      USDC: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
+      USDT: "0xdAC17F958D2ee523a2206206994597C13D831ec7" as Address,
+      DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F" as Address,
+      WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
+    },
+    8453: {
+      USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address,
+      WETH: "0x4200000000000000000000000000000000000006" as Address,
+    },
   };
 
-  const address = KNOWN_TOKENS[asset.toUpperCase()];
+  const chainTokens = KNOWN_TOKENS[chainId ?? 1] ?? KNOWN_TOKENS[1];
+  const address = chainTokens?.[asset.toUpperCase()];
   if (!address) {
-    throw new Error(`Unknown asset: ${asset}. Provide address directly.`);
+    throw new Error(`Unknown asset: ${asset} on chain ${chainId ?? 1}. Provide address directly.`);
   }
 
   return address;
 }
 
-function toAmountString(amount: AaveAction["amount"]): string {
+function toRawAmountString(amount: AaveAction["amount"]): string {
   if (amount === "max") {
     throw new Error("Aave adapter requires explicit amount, not 'max'");
   }
@@ -236,4 +258,44 @@ function toAmountString(amount: AaveAction["amount"]): string {
     return String(amount.value);
   }
   throw new Error("Unsupported amount type for Aave action");
+}
+
+function resolveAssetDecimals(asset?: string, _chainId?: number): number {
+  const KNOWN_DECIMALS: Record<string, number> = {
+    USDC: 6,
+    USDT: 6,
+    DAI: 18,
+    WETH: 18,
+    ETH: 18,
+  };
+  if (asset && !asset.startsWith("0x")) {
+    const d = KNOWN_DECIMALS[asset.toUpperCase()];
+    if (d !== undefined) return d;
+  }
+  return 18; // default to 18 decimals
+}
+
+/**
+ * Convert a raw amount (e.g. 100000 for 0.1 USDC) to the human-readable
+ * BigDecimal string the Aave SDK expects (e.g. "0.1").
+ */
+function toHumanAmount(amount: AaveAction["amount"], decimals: number): string {
+  if (amount === "max") {
+    throw new Error("Aave adapter requires explicit amount, not 'max'");
+  }
+  let raw: bigint;
+  if (typeof amount === "bigint") raw = amount;
+  else if (typeof amount === "number") raw = BigInt(Math.floor(amount));
+  else if (typeof amount === "string") raw = BigInt(amount);
+  else if (typeof amount === "object" && amount?.kind === "literal") raw = BigInt(amount.value);
+  else throw new Error("Unsupported amount type for Aave action");
+
+  const divisor = 10n ** BigInt(decimals);
+  const whole = raw / divisor;
+  const frac = raw % divisor;
+
+  if (frac === 0n) return whole.toString();
+
+  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+  return `${whole}.${fracStr}`;
 }

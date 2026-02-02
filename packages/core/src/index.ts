@@ -43,6 +43,8 @@ export {
   createWalletFromMnemonic,
   createWalletFromConfig,
   getAddressFromConfig,
+  generatePrivateKey,
+  createKeystore,
   loadPrivateKey,
   KeyLoadError,
   Provider,
@@ -56,6 +58,8 @@ export {
   CHAIN_CONFIGS,
   isTestnet,
   getChainName,
+  getNativeCurrencySymbol,
+  isNativeCurrency,
 } from "./wallet/index.js";
 export type {
   KeySourceType,

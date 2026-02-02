@@ -1,0 +1,19 @@
+# Test: Atomic block — groups actions into single transaction batch
+
+spell TestAtomic
+
+  version: "1.0.0"
+  description: "Group deposit and swap atomically — tests atomic block"
+  assets: [ETH, USDC]
+
+  params:
+    swap_amount: 200000000000000
+
+  venues:
+    uniswap_v4: @uniswap_v4
+
+  on manual:
+    atomic:
+      uniswap_v4.swap(ETH, USDC, params.swap_amount)
+      emit swap_executed(amount=params.swap_amount)
+    emit atomic_complete(status="done")

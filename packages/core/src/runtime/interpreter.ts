@@ -117,6 +117,11 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
 
     // Execute steps in order (topological sort would be ideal, but for now sequential)
     for (const step of spell.steps) {
+      // Skip steps already executed by a parent (try/loop/conditional)
+      if (ctx.executedSteps.includes(step.id)) {
+        continue;
+      }
+
       // Check dependencies
       for (const depId of step.dependsOn) {
         if (!ctx.executedSteps.includes(depId)) {
@@ -126,6 +131,14 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
 
       // Execute step
       const result = await executeStep(step, ctx, ledger, stepMap, actionExecution);
+
+      // Mark all child steps of container steps (try/loop/conditional) as executed
+      // so the main loop doesn't re-execute them standalone
+      for (const childId of getChildStepIds(step)) {
+        if (!ctx.executedSteps.includes(childId)) {
+          markStepExecuted(ctx, childId);
+        }
+      }
 
       // Enrich step_failed ledger events with source location
       if (!result.success) {
@@ -362,6 +375,27 @@ async function executeStep(
         stepId: (step as Step).id,
         error: `Unknown step kind: ${(step as Step).kind}`,
       };
+  }
+}
+
+/**
+ * Collect all child step IDs from container steps (try, loop, conditional)
+ * so the main loop can skip them after the parent executes.
+ */
+function getChildStepIds(step: Step): string[] {
+  switch (step.kind) {
+    case "try":
+      return [
+        ...step.trySteps,
+        ...step.catchBlocks.flatMap((cb) => cb.steps ?? []),
+        ...(step.finallySteps ?? []),
+      ];
+    case "loop":
+      return step.bodySteps;
+    case "conditional":
+      return [...step.thenSteps, ...step.elseSteps];
+    default:
+      return [];
   }
 }
 

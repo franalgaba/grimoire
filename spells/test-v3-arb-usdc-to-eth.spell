@@ -1,0 +1,17 @@
+# Test: Swap USDC to ETH on Arbitrum via Uniswap V3
+
+spell TestV3ArbUsdcToEth
+
+  version: "1.0.0"
+  description: "Swap USDC to ETH on Arbitrum via Uniswap V3"
+  assets: [USDC, ETH]
+
+  params:
+    amount: 100000
+
+  venues:
+    uniswap_v3: @uniswap_v3
+
+  on manual:
+    uniswap_v3.swap(USDC, ETH, params.amount)
+    emit swap_done(chain="arbitrum", asset_in=USDC, asset_out=ETH)

@@ -1,0 +1,21 @@
+# Test: Conditional logic — swap only if amount exceeds threshold
+
+spell TestConditional
+
+  version: "1.0.0"
+  description: "Conditionally swap based on threshold — tests if/else branching"
+  assets: [ETH, USDC]
+
+  params:
+    amount: 200000000000000
+    threshold: 100000000000000
+
+  venues:
+    uniswap_v4: @uniswap_v4
+
+  on manual:
+    if params.amount > params.threshold:
+      uniswap_v4.swap(ETH, USDC, params.amount)
+      emit swap_executed(amount=params.amount)
+    else:
+      emit swap_skipped(amount=params.amount, reason="below_threshold")

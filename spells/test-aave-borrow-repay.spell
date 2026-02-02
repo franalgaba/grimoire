@@ -1,0 +1,25 @@
+# Test: Multi-step Aave V3 — deposit, borrow, repay
+
+spell TestAaveBorrowRepay
+
+  version: "1.0.0"
+  description: "Deposit USDC then borrow — tests multi-action Aave flow"
+  assets: [USDC]
+
+  params:
+    deposit_amount: 1000000
+    borrow_amount: 500000
+
+  state:
+    persistent:
+      deposits: 0
+
+  venues:
+    aave_v3: @aave_v3
+
+  on manual:
+    aave_v3.deposit(USDC, params.deposit_amount)
+    deposits = deposits + 1
+    emit deposited(amount=params.deposit_amount, deposits=deposits)
+    aave_v3.borrow(USDC, params.borrow_amount)
+    emit borrowed(amount=params.borrow_amount)

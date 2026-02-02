@@ -14,10 +14,12 @@ import type {
   BinaryExprNode,
   BinaryOperator,
   CallExprNode,
+  ConstraintClause,
   DescriptionSection,
   EmitNode,
   ExpressionNode,
   ForNode,
+  GuardItem,
   GuardsSection,
   HaltNode,
   IdentifierNode,
@@ -493,13 +495,51 @@ export class Parser {
     return { kind: "advisors", items: [] };
   }
 
-  /** Parse guards section */
+  /** Parse guards section: guards:\n    id: expression */
   private parseGuardsSection(): GuardsSection {
+    const startToken = this.current();
     this.expect("KEYWORD", "guards");
     this.expect("COLON");
     this.expectNewline();
-    // Simplified - guards can be inline
-    return { kind: "guards", items: [] };
+
+    const items: GuardItem[] = [];
+
+    if (this.check("INDENT")) {
+      this.advance(); // consume INDENT
+
+      while (!this.check("DEDENT") && !this.check("EOF")) {
+        this.skipNewlines();
+        if (this.check("DEDENT") || this.check("EOF")) break;
+
+        // Each line: id: expression
+        const id = this.current().value;
+        if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+          this.advance();
+        } else {
+          throw new ParseError(
+            `Expected guard identifier but got ${this.current().type} '${this.current().value}'`,
+            { location: this.current().location, source: this.source }
+          );
+        }
+        this.expect("COLON");
+        const check = this.parseExpression();
+        this.expectNewline();
+
+        items.push({
+          id,
+          check,
+          severity: "halt", // default
+        } as GuardItem);
+
+        this.skipNewlines();
+      }
+
+      if (this.check("DEDENT")) this.advance();
+    }
+
+    const node: GuardsSection = { kind: "guards", items };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   // ===========================================================================
@@ -624,7 +664,6 @@ export class Parser {
     // Expression statement (method call, etc.)
     const startToken = this.current();
     const expr = this.parseExpression();
-    this.expectNewline();
 
     // If it's a method call, convert to statement
     if (expr.kind === "call") {
@@ -637,10 +676,19 @@ export class Parser {
           method: prop.property,
           args: callExpr.args,
         };
+
+        // Check for constraint clause: ... with key=value
+        if (this.check("KEYWORD") && this.current().value === "with") {
+          node.constraints = this.parseConstraintClause();
+        }
+
+        this.expectNewline();
         node.span = this.makeSpan(startToken);
         return node;
       }
     }
+
+    this.expectNewline();
 
     // Treat as assignment with expression
     throw new ParseError("Unexpected expression statement", {
@@ -649,14 +697,20 @@ export class Parser {
     });
   }
 
-  /** Parse assignment: x = expr */
+  /** Parse assignment: x = expr [with key=value, ...] */
   private parseAssignment(): AssignmentNode {
     const startToken = this.current();
     const target = this.expect("IDENTIFIER").value;
     this.expect("ASSIGN");
     const value = this.parseExpression();
+
+    let constraints: ConstraintClause | undefined;
+    if (this.check("KEYWORD") && this.current().value === "with") {
+      constraints = this.parseConstraintClause();
+    }
+
     this.expectNewline();
-    const node: AssignmentNode = { kind: "assignment", target, value };
+    const node: AssignmentNode = { kind: "assignment", target, value, constraints };
     node.span = this.makeSpan(startToken);
     return node;
   }
@@ -722,16 +776,29 @@ export class Parser {
     return node;
   }
 
-  /** Parse atomic block */
+  /** Parse atomic block: atomic: / atomic skip: / atomic halt: / atomic revert: */
   private parseAtomicStatement(): AtomicNode {
     const startToken = this.current();
     this.expect("KEYWORD", "atomic");
+
+    let onFailure: AtomicNode["onFailure"];
+    // Check for failure mode: atomic skip: / atomic halt: / atomic revert:
+    // Note: "halt" is a keyword, "skip" and "revert" are identifiers
+    const failureModes = ["skip", "halt", "revert"];
+    if (
+      (this.check("IDENTIFIER") || this.check("KEYWORD")) &&
+      failureModes.includes(this.current().value)
+    ) {
+      onFailure = this.current().value as "skip" | "halt" | "revert";
+      this.advance();
+    }
+
     this.expect("COLON");
     this.expectNewline();
 
     const body = this.parseStatementBlock();
 
-    const node: AtomicNode = { kind: "atomic", body };
+    const node: AtomicNode = { kind: "atomic", body, onFailure };
     node.span = this.makeSpan(startToken);
     return node;
   }
@@ -786,6 +853,31 @@ export class Parser {
     const duration = Number.parseFloat(durationToken.value);
     this.expectNewline();
     const node: WaitNode = { kind: "wait", duration };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  /** Parse constraint clause: with key=value, key=value, ... */
+  private parseConstraintClause(): ConstraintClause {
+    const startToken = this.current();
+    this.expect("KEYWORD", "with");
+
+    const constraints: Array<{ key: string; value: ExpressionNode }> = [];
+
+    do {
+      const key = this.expect("IDENTIFIER").value;
+      this.expect("ASSIGN");
+      const value = this.parseExpression();
+      constraints.push({ key, value });
+    } while (
+      this.check("COMMA") &&
+      (() => {
+        this.advance();
+        return true;
+      })()
+    );
+
+    const node: ConstraintClause = { kind: "constraint_clause", constraints };
     node.span = this.makeSpan(startToken);
     return node;
   }

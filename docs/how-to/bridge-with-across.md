@@ -58,6 +58,17 @@ await execute({
 });
 ```
 
+## Minimum bridge amounts
+
+Across enforces per-token minimum bridge amounts to cover relayer fees. Amounts below these thresholds will fail with "Sent amount is too low relative to fees":
+
+| Token | Minimum | Raw (6 decimals) |
+|-------|---------|-------------------|
+| USDC | ~$1.00 | 1000000 |
+| WETH | ~0.002 ETH | 2000000000000000 |
+
+These are approximate and vary by route and network conditions. When in doubt, use larger amounts.
+
 ## See also
 
 - [Action constraints](../reference/action-constraints.md)

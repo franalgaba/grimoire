@@ -1,0 +1,17 @@
+# Test: Lend USDC to Morpho Blue
+
+spell TestMorphoLend
+
+  version: "1.0.0"
+  description: "Supply USDC to Morpho Blue — tests isolated lending market"
+  assets: [USDC]
+
+  params:
+    amount: 100000
+
+  venues:
+    morpho_blue: @morpho_blue
+
+  on manual:
+    morpho_blue.deposit(USDC, params.amount)
+    emit lend_done(venue="morpho_blue", asset=USDC, amount=params.amount)

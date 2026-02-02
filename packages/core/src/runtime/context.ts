@@ -56,6 +56,29 @@ export function createContext(options: CreateContextOptions): ExecutionContext {
     bindings.set(param.name, value);
   }
 
+  // Make asset symbols available as string bindings (e.g., ETH → "ETH")
+  // and the "assets" array itself for `for asset in assets:` loops
+  for (const asset of spell.assets) {
+    bindings.set(asset.symbol, asset.symbol);
+  }
+  bindings.set(
+    "assets",
+    spell.assets.map((a) => a.symbol)
+  );
+
+  // Make limits available as a "limits" object binding so `limits.x` property
+  // access works at runtime (limits are stored as params with "limit_" prefix)
+  const limitsObj: Record<string, unknown> = {};
+  for (const param of spell.params) {
+    if (param.name.startsWith("limit_")) {
+      const key = param.name.slice("limit_".length);
+      limitsObj[key] = params[param.name] ?? param.default;
+    }
+  }
+  if (Object.keys(limitsObj).length > 0) {
+    bindings.set("limits", limitsObj);
+  }
+
   return {
     spell,
     policy,

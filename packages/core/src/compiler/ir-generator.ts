@@ -210,6 +210,22 @@ export function generateIR(source: SpellSource): IRGeneratorResult {
     }
   }
 
+  // Auto-add "default" advisor if referenced by advisory steps but not declared
+  const advisorNames = new Set(advisors.map((a) => a.name));
+  const referencedAdvisors = new Set<string>();
+  for (const step of steps) {
+    if (step.kind === "advisory" && !advisorNames.has(step.advisor)) {
+      referencedAdvisors.add(step.advisor);
+    }
+  }
+  for (const name of referencedAdvisors) {
+    advisors.push({
+      name,
+      model: "sonnet",
+      scope: "read-only",
+    });
+  }
+
   if (errors.length > 0) {
     return { success: false, errors, warnings };
   }
@@ -500,6 +516,31 @@ function transformStep(
     };
   }
 
+  // Advisory step (AI consultation)
+  if ("advisory" in raw) {
+    const advisory = raw.advisory as Record<string, unknown>;
+    const prompt = advisory.prompt as string;
+    const advisor = (advisory.advisor as string) ?? "default";
+    const timeout = (advisory.timeout as number) ?? 30;
+    const fallbackValue = advisory.fallback ?? true;
+    const outputBinding = (advisory.output as string) ?? `${id}_result`;
+
+    return {
+      kind: "advisory",
+      id,
+      advisor,
+      prompt,
+      outputSchema: { type: "boolean" },
+      outputBinding,
+      timeout,
+      fallback:
+        typeof fallbackValue === "boolean"
+          ? { kind: "literal", value: fallbackValue, type: "bool" }
+          : parseExpression(String(fallbackValue)),
+      dependsOn: [],
+    };
+  }
+
   errors.push({ code: "UNKNOWN_STEP_TYPE", message: `Unknown step type for id '${id}'` });
   return null;
 }
@@ -596,13 +637,17 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
       } as Action;
     }
 
-    case "transfer":
+    case "transfer": {
+      const toValue = raw.to as string;
+      const isAddress =
+        typeof toValue === "string" && toValue.startsWith("0x") && toValue.length === 42;
       return {
         type: "transfer",
         asset: raw.asset as string,
         amount: parseExpressionSafe(raw.amount as string, errors),
-        to: raw.to as Address,
+        to: isAddress ? (toValue as Address) : parseExpressionSafe(toValue, errors),
       } as Action;
+    }
 
     default:
       errors.push({ code: "UNKNOWN_ACTION_TYPE", message: `Unknown action type '${type}'` });

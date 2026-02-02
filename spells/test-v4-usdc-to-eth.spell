@@ -1,0 +1,17 @@
+# Test: Swap USDC → ETH on Uniswap V4 (ERC20 input — tests Permit2 approval flow)
+
+spell TestV4UsdcToEth
+
+  version: "1.0.0"
+  description: "Swap USDC back to ETH on V4 — tests ERC20 Permit2 flow"
+  assets: [USDC, ETH]
+
+  params:
+    amount: 100000
+
+  venues:
+    uniswap_v4: @uniswap_v4
+
+  on manual:
+    uniswap_v4.swap(USDC, ETH, params.amount)
+    emit swap_done(asset_in=USDC, asset_out=ETH, amount=params.amount)

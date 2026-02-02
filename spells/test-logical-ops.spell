@@ -1,0 +1,27 @@
+# Test: Logical operators — and, or, not
+
+spell TestLogicalOps
+
+  version: "1.0.0"
+  description: "Test logical operators in conditions"
+  assets: [ETH, USDC]
+
+  params:
+    amount: 500000
+    min_amount: 100000
+    max_amount: 1000000
+    is_enabled: 1
+
+  on manual:
+    if params.amount > params.min_amount and params.amount < params.max_amount:
+      emit in_range(amount=params.amount)
+    else:
+      emit out_of_range(amount=params.amount)
+
+    if params.amount < params.min_amount or params.amount > params.max_amount:
+      emit bounds_violated(amount=params.amount)
+
+    if not params.is_enabled:
+      emit disabled()
+    else:
+      emit enabled()

@@ -1,0 +1,17 @@
+# Test: Halt execution — stops if safety condition fails
+
+spell TestHalt
+
+  version: "1.0.0"
+  description: "Halt execution when safety condition is violated"
+  assets: [ETH, USDC]
+
+  params:
+    amount: 200000000000000
+    max_amount: 100000000000000
+
+  on manual:
+    if params.amount > params.max_amount:
+      halt "Amount exceeds safety limit"
+    else:
+      emit safe_to_proceed(amount=params.amount)

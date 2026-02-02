@@ -11,6 +11,7 @@ import { encodeFunctionData, parseAbi } from "viem";
 import type { Action } from "../types/actions.js";
 import type { Address } from "../types/primitives.js";
 import type { Provider } from "./provider.js";
+import { getNativeCurrencySymbol, isNativeCurrency } from "./types.js";
 import type { GasEstimate, TransactionRequest } from "./types.js";
 
 /** Standard ERC20 ABI */
@@ -68,28 +69,37 @@ export class TransactionBuilder {
   }
 
   /**
-   * Build an ERC20 transfer transaction
+   * Build a transfer transaction (native ETH or ERC20)
    */
   async buildTransfer(action: Action): Promise<BuiltTransaction> {
     if (action.type !== "transfer") {
       throw new Error("Invalid action type for transfer");
     }
 
-    const tokenAddress = this.resolveAssetAddress(action.asset);
     const toAddress = action.to as Address;
     const amount = BigInt(action.amount?.toString() ?? "0");
+    const isNative = isNativeCurrency(action.asset ?? "", this.provider.chainId);
 
-    const data = encodeFunctionData({
-      abi: ERC20_ABI,
-      functionName: "transfer",
-      args: [toAddress as `0x${string}`, amount],
-    });
+    let tx: TransactionRequest;
 
-    const tx: TransactionRequest = {
-      to: tokenAddress,
-      data,
-      value: 0n,
-    };
+    if (isNative) {
+      tx = {
+        to: toAddress,
+        value: amount,
+      };
+    } else {
+      const tokenAddress = this.resolveAssetAddress(action.asset);
+      const data = encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: "transfer",
+        args: [toAddress as `0x${string}`, amount],
+      });
+      tx = {
+        to: tokenAddress,
+        data,
+        value: 0n,
+      };
+    }
 
     const gasEstimate = await this.provider.getGasEstimate({
       ...tx,
@@ -218,7 +228,7 @@ export class TransactionBuilder {
 
     const action: Action = {
       type: "transfer",
-      asset: "ETH",
+      asset: getNativeCurrencySymbol(this.provider.chainId),
       amount: { kind: "literal", value: 0n, type: "int" },
       to,
     };

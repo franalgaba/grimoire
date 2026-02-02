@@ -291,6 +291,7 @@ async function resolveAction(
       return {
         ...action,
         amount: await resolveAmount(action.amount, evalCtx),
+        to: await resolveAddress(action.to, evalCtx),
       } as Action;
 
     case "approve":
@@ -349,6 +350,21 @@ async function resolveChainId(
 
   const value = await evaluateAsync(toChain, evalCtx);
   return toNumber(value);
+}
+
+async function resolveAddress(
+  to: string | { kind: string },
+  evalCtx: ReturnType<typeof createEvalContext>
+): Promise<string> {
+  if (typeof to === "string") {
+    return to;
+  }
+
+  const value = await evaluateAsync(to as Parameters<typeof evaluateAsync>[0], evalCtx);
+  if (typeof value !== "string") {
+    throw new Error(`Expected address string, got ${typeof value}`);
+  }
+  return value;
 }
 
 async function resolveConstraints(

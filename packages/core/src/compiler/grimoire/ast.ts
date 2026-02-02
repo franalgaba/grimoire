@@ -200,11 +200,12 @@ export type StatementNode =
   | AdvisoryNode
   | PassNode;
 
-/** Assignment: x = expr */
+/** Assignment: x = expr [with key=value, ...] */
 export interface AssignmentNode extends ASTNode {
   kind: "assignment";
   target: string;
   value: ExpressionNode;
+  constraints?: ConstraintClause;
 }
 
 /** If statement: if cond: ... elif cond: ... else: ... */
@@ -232,13 +233,14 @@ export interface AtomicNode extends ASTNode {
   onFailure?: "revert" | "skip" | "halt";
 }
 
-/** Method call: venue.deposit(asset, amount) */
+/** Method call: venue.deposit(asset, amount) [with key=value, ...] */
 export interface MethodCallNode extends ASTNode {
   kind: "method_call";
   object: ExpressionNode;
   method: string;
   args: ExpressionNode[];
   outputBinding?: string;
+  constraints?: ConstraintClause;
 }
 
 /** Emit statement: emit event_name(key=value, ...) */
@@ -274,6 +276,12 @@ export interface AdvisoryNode extends ASTNode {
 /** Pass statement (no-op) */
 export interface PassNode extends ASTNode {
   kind: "pass";
+}
+
+/** Constraint clause: with slippage=50, deadline=300 */
+export interface ConstraintClause extends ASTNode {
+  kind: "constraint_clause";
+  constraints: Array<{ key: string; value: ExpressionNode }>;
 }
 
 // =============================================================================

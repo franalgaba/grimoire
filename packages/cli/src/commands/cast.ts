@@ -3,7 +3,11 @@
  * Executes a spell with optional live execution via private key
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import * as readline from "node:readline";
+import { Writable } from "node:stream";
 import {
   type Address,
   type ExecutionMode,
@@ -15,11 +19,17 @@ import {
   execute,
   formatWei,
   getChainName,
+  getNativeCurrencySymbol,
   isTestnet,
+  loadPrivateKey,
 } from "@grimoire/core";
+import type { VenueAdapter } from "@grimoire/core";
+import { adapters, createHyperliquidAdapter } from "@grimoire/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { withStatePersistence } from "./state-helpers.js";
+
+const DEFAULT_KEYSTORE_PATH = join(homedir(), ".grimoire", "keystore.json");
 
 interface CastOptions {
   params?: string;
@@ -30,6 +40,8 @@ interface CastOptions {
   privateKey?: string;
   keyEnv?: string;
   mnemonic?: string;
+  keystore?: string;
+  passwordEnv?: string;
   // Execution options
   rpcUrl?: string;
   gasMultiplier?: string;
@@ -73,7 +85,10 @@ export async function castCommand(spellPath: string, options: CastOptions): Prom
     spinner.succeed(chalk.green("Spell compiled successfully"));
 
     // Determine execution mode
-    const hasKey = !!(options.privateKey || options.keyEnv || options.mnemonic);
+    const hasExplicitKey = !!(options.privateKey || options.mnemonic || options.keystore);
+    const hasEnvKey = !!(options.keyEnv && process.env[options.keyEnv]);
+    const hasDefaultKeystore = !hasExplicitKey && !hasEnvKey && existsSync(DEFAULT_KEYSTORE_PATH);
+    const hasKey = hasExplicitKey || hasEnvKey || hasDefaultKeystore;
     const mode: ExecutionMode = options.dryRun ? "dry-run" : hasKey ? "execute" : "simulate";
 
     if (options.privateKey || options.mnemonic) {
@@ -143,14 +158,44 @@ async function executeWithWallet(
   let keyConfig: KeyConfig;
   if (options.privateKey) {
     keyConfig = { type: "raw", source: options.privateKey };
-  } else if (options.keyEnv) {
+  } else if (options.keyEnv && process.env[options.keyEnv]) {
     keyConfig = { type: "env", source: options.keyEnv };
   } else if (options.mnemonic) {
     keyConfig = { type: "mnemonic", source: options.mnemonic };
   } else {
-    spinner.fail(chalk.red("No private key provided"));
-    process.exit(1);
-    return;
+    // Resolve keystore: explicit --keystore or default path
+    const keystorePath = options.keystore ?? DEFAULT_KEYSTORE_PATH;
+    if (!existsSync(keystorePath)) {
+      spinner.fail(chalk.red(`No key provided and no keystore found at ${keystorePath}`));
+      console.log(chalk.dim("  Run 'grimoire wallet generate' to create one."));
+      process.exit(1);
+      return;
+    }
+
+    const password = await resolveKeystorePassword(options, spinner);
+    if (!password) {
+      return;
+    }
+
+    const keystoreJson = readFileSync(keystorePath, "utf-8");
+    keyConfig = { type: "keystore", source: keystoreJson, password };
+  }
+
+  // Wire Hyperliquid adapter with extracted private key
+  let configuredAdapters: VenueAdapter[] = adapters;
+  try {
+    const rawKey = loadPrivateKey(keyConfig);
+    configuredAdapters = adapters.map((a) => {
+      if (a.meta.name === "hyperliquid") {
+        return createHyperliquidAdapter({
+          privateKey: rawKey,
+          assetMap: { ETH: 4 },
+        });
+      }
+      return a;
+    });
+  } catch {
+    // If key extraction fails (e.g. mnemonic), keep default adapters
   }
 
   // Get RPC URL
@@ -167,10 +212,12 @@ async function executeWithWallet(
 
   // Check wallet balance
   const balance = await provider.getBalance(wallet.address);
-  console.log(`  ${chalk.dim("Balance:")} ${formatWei(balance)} ETH`);
+  console.log(
+    `  ${chalk.dim("Balance:")} ${formatWei(balance)} ${getNativeCurrencySymbol(chainId)}`
+  );
 
   if (balance === 0n) {
-    console.log(chalk.yellow("  ⚠️  Wallet has no ETH for gas"));
+    console.log(chalk.yellow(`  ⚠️  Wallet has no ${getNativeCurrencySymbol(chainId)} for gas`));
   }
 
   // Vault address (use wallet address if not provided)
@@ -218,6 +265,7 @@ async function executeWithWallet(
           console.log(chalk.dim(`  ${message}`));
         },
         skipTestnetConfirmation: options.skipConfirm ?? false,
+        adapters: configuredAdapters,
       });
     }
   );
@@ -275,6 +323,7 @@ async function executeSimulation(
         params,
         persistentState,
         simulate: true,
+        adapters,
       });
     }
   );
@@ -319,6 +368,59 @@ function showFinalState(finalState: Record<string, unknown>): void {
       console.log(`  ${chalk.dim(key)}: ${JSON.stringify(value)}`);
     }
   }
+}
+
+/**
+ * Resolve keystore password from env, interactive prompt, or error
+ */
+async function resolveKeystorePassword(
+  options: CastOptions,
+  spinner: ReturnType<typeof ora>
+): Promise<string | null> {
+  const envName = options.passwordEnv ?? "KEYSTORE_PASSWORD";
+  const envValue = process.env[envName];
+
+  if (envValue) {
+    return envValue;
+  }
+
+  if (process.stdin.isTTY) {
+    spinner.stop();
+    const password = await promptPassword("Keystore password: ");
+    spinner.start("Setting up wallet...");
+    return password;
+  }
+
+  spinner.fail(chalk.red(`No password available. Set ${envName} or run interactively.`));
+  process.exit(1);
+  return null;
+}
+
+/**
+ * Prompt for a password interactively (hides input)
+ */
+async function promptPassword(message: string): Promise<string> {
+  return new Promise((resolve) => {
+    process.stdout.write(message);
+
+    const silentOutput = new Writable({
+      write(_chunk, _encoding, cb) {
+        cb();
+      },
+    });
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: silentOutput,
+      terminal: true,
+    });
+
+    rl.question("", (answer) => {
+      rl.close();
+      process.stdout.write("\n");
+      resolve(answer);
+    });
+  });
 }
 
 /**

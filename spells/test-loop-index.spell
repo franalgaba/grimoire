@@ -1,0 +1,21 @@
+# Test: Loop with computed values per iteration
+
+spell TestLoopIndex
+
+  version: "1.0.0"
+  description: "Loop with accumulator — tests stateful loop execution"
+  assets: [USDC, ETH, WETH]
+
+  params:
+    base_amount: 100
+
+  state:
+    persistent:
+      total_processed: 0
+
+  on manual:
+    for asset in assets:
+      amount = params.base_amount * 2
+      total_processed = total_processed + amount
+      emit processed(asset=asset, amount=amount, running_total=total_processed)
+    emit loop_complete(total=total_processed)

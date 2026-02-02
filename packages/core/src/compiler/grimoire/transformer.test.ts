@@ -673,4 +673,151 @@ describe("Transformer", () => {
       expect(result.trigger).toBeDefined();
     });
   });
+
+  describe("guards transformation", () => {
+    test("transforms guards section into source.guards", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  guards:
+    max_amount: params.amount < 1000000
+    positive: params.amount > 0
+
+  on manual:
+    pass
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      expect(result.guards).toBeDefined();
+      expect(result.guards?.length).toBe(2);
+      expect(result.guards?.[0]?.id).toBe("max_amount");
+      expect(result.guards?.[0]?.check).toContain("params.amount");
+      expect(result.guards?.[0]?.severity).toBe("halt");
+      expect(result.guards?.[1]?.id).toBe("positive");
+    });
+  });
+
+  describe("output binding transformation", () => {
+    test("transforms assignment with method call to action step with output", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    result = venue.swap(USDC, ETH, 100)
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const actionStep = findStep(result.steps, "action");
+      expect(actionStep).toBeDefined();
+      expect(actionStep?.output).toBe("result");
+      expect(getAction(actionStep)?.type).toBe("swap");
+    });
+
+    test("plain function call assignment stays as compute step", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    result = max(a, b)
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const computeStep = findStep(result.steps, "compute");
+      expect(computeStep).toBeDefined();
+      expect(getCompute(computeStep)?.result).toContain("max");
+    });
+  });
+
+  describe("constraints transformation", () => {
+    test("transforms with clause on method call to step.constraints", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    venue.swap(USDC, ETH, 1000) with slippage=50, deadline=300
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const actionStep = findStep(result.steps, "action");
+      expect(actionStep).toBeDefined();
+      const constraints = actionStep?.constraints as Record<string, unknown> | undefined;
+      expect(constraints).toBeDefined();
+      expect(constraints?.max_slippage).toBe(50);
+      expect(constraints?.deadline).toBe(300);
+    });
+
+    test("transforms with clause on assignment with method call", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    result = venue.swap(USDC, ETH, 1000) with slippage=50
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const actionStep = findStep(result.steps, "action");
+      expect(actionStep).toBeDefined();
+      expect(actionStep?.output).toBe("result");
+      const constraints = actionStep?.constraints as Record<string, unknown> | undefined;
+      expect(constraints?.max_slippage).toBe(50);
+    });
+  });
+
+  describe("atomic onFailure transformation", () => {
+    test("transforms atomic skip: to try step with skip catch action", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    atomic skip:
+      x = 1
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const tryStep = findStep(result.steps, "try");
+      expect(tryStep).toBeDefined();
+      const catchBlocks = tryStep?.catch as Array<{ error: string; action: string }> | undefined;
+      expect(catchBlocks?.[0]?.action).toBe("skip");
+    });
+
+    test("transforms atomic halt: to try step with halt catch action", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    atomic halt:
+      x = 1
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const tryStep = findStep(result.steps, "try");
+      expect(tryStep).toBeDefined();
+      const catchBlocks = tryStep?.catch as Array<{ error: string; action: string }> | undefined;
+      expect(catchBlocks?.[0]?.action).toBe("halt");
+    });
+
+    test("transforms plain atomic: to try step with revert (default)", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    atomic:
+      x = 1
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const tryStep = findStep(result.steps, "try");
+      expect(tryStep).toBeDefined();
+      const catchBlocks = tryStep?.catch as Array<{ error: string; action: string }> | undefined;
+      expect(catchBlocks?.[0]?.action).toBe("revert");
+    });
+  });
 });

@@ -1,0 +1,17 @@
+# Test: Swap ETH → USDC on Uniswap V3 (tests WETH wrapping + approval)
+
+spell TestV3EthToUsdc
+
+  version: "1.0.0"
+  description: "Swap ETH to USDC on V3 — tests WETH wrapping flow"
+  assets: [ETH, USDC]
+
+  params:
+    amount: 100000000000000
+
+  venues:
+    uniswap_v3: @uniswap_v3
+
+  on manual:
+    uniswap_v3.swap(ETH, USDC, params.amount)
+    emit swap_done(asset_in=ETH, asset_out=USDC, amount=params.amount)

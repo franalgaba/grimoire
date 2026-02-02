@@ -1,0 +1,19 @@
+spell TestOutputBindingConditional
+
+  version: "1.0.0"
+  description: "Test output binding inside a conditional"
+  assets: [USDC, ETH]
+
+  params:
+    amount: 100000
+    threshold: 50000
+
+  venues:
+    dex: @uniswap_v3
+
+  on manual:
+    if params.amount > params.threshold:
+      result = uniswap_v3.swap(USDC, ETH, params.amount)
+      emit swapped(output=result)
+    else:
+      emit skipped(reason="below threshold")

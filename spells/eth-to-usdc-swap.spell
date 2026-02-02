@@ -1,0 +1,17 @@
+# Swap ETH for USDC on Uniswap V3
+
+spell EthToUsdcSwap
+
+  version: "1.0.0"
+  description: "Swap ETH for USDC on Uniswap V3"
+  assets: [ETH, USDC]
+
+  params:
+    amount: 1000000000000000
+
+  venues:
+    uniswap_v3: @uniswap_v3
+
+  on manual:
+    uniswap_v3.swap(ETH, USDC, params.amount)
+    emit swap_done(asset_in=ETH, asset_out=USDC, amount=params.amount)

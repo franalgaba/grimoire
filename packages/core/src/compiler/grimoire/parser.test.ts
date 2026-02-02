@@ -8,10 +8,13 @@ import type {
   ArrayLiteralNode,
   AssetsSection,
   AssignmentNode,
+  AtomicNode,
   BinaryExprNode,
   CallExprNode,
   ForNode,
+  GuardsSection,
   IfNode,
+  MethodCallNode,
   ParamsSection,
   PercentageExpr,
   StateSection,
@@ -600,6 +603,175 @@ describe("Parser", () => {
       // Check for loop in body
       const forLoop = ast.triggers[0]?.body.find((s) => s.kind === "for");
       expect(forLoop).toBeDefined();
+    });
+  });
+
+  describe("atomic onFailure", () => {
+    test("parses atomic skip:", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    atomic skip:
+      pass
+`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as AtomicNode;
+      expect(stmt.kind).toBe("atomic");
+      expect(stmt.onFailure).toBe("skip");
+    });
+
+    test("parses atomic halt:", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    atomic halt:
+      pass
+`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as AtomicNode;
+      expect(stmt.kind).toBe("atomic");
+      expect(stmt.onFailure).toBe("halt");
+    });
+
+    test("parses atomic revert:", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    atomic revert:
+      pass
+`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as AtomicNode;
+      expect(stmt.kind).toBe("atomic");
+      expect(stmt.onFailure).toBe("revert");
+    });
+
+    test("plain atomic: leaves onFailure undefined", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    atomic:
+      pass
+`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as AtomicNode;
+      expect(stmt.kind).toBe("atomic");
+      expect(stmt.onFailure).toBeUndefined();
+    });
+  });
+
+  describe("guards section", () => {
+    test("parses guards with expression checks", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  guards:
+    max_amount: params.amount < 1000000
+    positive_amount: params.amount > 0
+
+  on manual:
+    pass
+`;
+      const ast = parse(source);
+      const guardsSection = ast.sections.find((s): s is GuardsSection => s.kind === "guards");
+      expect(guardsSection).toBeDefined();
+      expect(guardsSection?.items.length).toBe(2);
+      expect(guardsSection?.items[0]?.id).toBe("max_amount");
+      expect(guardsSection?.items[0]?.severity).toBe("halt");
+      expect(guardsSection?.items[1]?.id).toBe("positive_amount");
+    });
+
+    test("parses empty guards section", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+  guards:
+
+  on manual:
+    pass
+`;
+      const ast = parse(source);
+      const guardsSection = ast.sections.find((s): s is GuardsSection => s.kind === "guards");
+      expect(guardsSection).toBeDefined();
+      expect(guardsSection?.items.length).toBe(0);
+    });
+  });
+
+  describe("constraint clause", () => {
+    test("parses with clause on method call", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    venue.swap(USDC, ETH, 1000) with slippage=50, deadline=300
+`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
+      expect(stmt.kind).toBe("method_call");
+      expect(stmt.constraints).toBeDefined();
+      expect(stmt.constraints?.constraints.length).toBe(2);
+      expect(stmt.constraints?.constraints[0]?.key).toBe("slippage");
+      expect(stmt.constraints?.constraints[1]?.key).toBe("deadline");
+    });
+
+    test("parses with clause on assignment", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    result = venue.swap(USDC, ETH, 1000) with slippage=50
+`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
+      expect(stmt.kind).toBe("assignment");
+      expect(stmt.constraints).toBeDefined();
+      expect(stmt.constraints?.constraints.length).toBe(1);
+      expect(stmt.constraints?.constraints[0]?.key).toBe("slippage");
+    });
+
+    test("method call without with clause has no constraints", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    venue.swap(USDC, ETH, 1000)
+`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
+      expect(stmt.kind).toBe("method_call");
+      expect(stmt.constraints).toBeUndefined();
+    });
+  });
+
+  describe("output binding", () => {
+    test("parses assignment with method call RHS", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    result = venue.swap(USDC, ETH, 100)
+`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
+      expect(stmt.kind).toBe("assignment");
+      expect(stmt.target).toBe("result");
+      expect(stmt.value.kind).toBe("call");
+      if (stmt.value.kind === "call") {
+        expect((stmt.value as CallExprNode).callee.kind).toBe("property_access");
+      }
     });
   });
 });

@@ -48,7 +48,7 @@ describe("Compute Step", () => {
 
     const result = await executeComputeStep(step, ctx, ledger);
     expect(result.success).toBe(true);
-    expect(ctx.bindings.get("x")).toBe(2);
+    expect(ctx.bindings.get("x")).toBe(3);
     expect(ctx.bindings.get("y")).toBe(4n);
   });
 

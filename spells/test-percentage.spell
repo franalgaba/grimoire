@@ -1,0 +1,18 @@
+# Test: Percentage literals — 50% becomes 0.5
+
+spell TestPercentage
+
+  version: "1.0.0"
+  description: "Test percentage literal parsing and arithmetic"
+  assets: []
+
+  params:
+    total: 1000000
+    allocation_pct: 25%
+    fee_pct: 0.3%
+
+  on manual:
+    allocated = params.total * params.allocation_pct
+    fee = params.total * params.fee_pct
+    remaining = params.total - allocated - fee
+    emit allocation(total=params.total, allocated=allocated, fee=fee, remaining=remaining)

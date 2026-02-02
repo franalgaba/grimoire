@@ -12,8 +12,8 @@ export interface HyperliquidAdapterConfig {
 
 const HYPERLIQUID_META: VenueAdapter["meta"] = {
   name: "hyperliquid",
-  supportedChains: [0],
-  actions: ["swap"],
+  supportedChains: [0, 999],
+  actions: ["swap", "withdraw"],
   description: "Hyperliquid spot & perps adapter",
   executionType: "offchain",
 };
@@ -26,6 +26,13 @@ export function createHyperliquidAdapter(config: HyperliquidAdapterConfig): Venu
   return {
     meta: HYPERLIQUID_META,
     async buildAction(action, _ctx) {
+      if (isWithdrawAction(action)) {
+        return {
+          tx: { to: zeroAddress, data: "0x", value: 0n },
+          description: `Hyperliquid withdraw ${action.amount} USDC`,
+          action,
+        };
+      }
       const order = normalizeOrder(action);
       return {
         tx: {
@@ -37,7 +44,24 @@ export function createHyperliquidAdapter(config: HyperliquidAdapterConfig): Venu
         action,
       };
     },
-    async executeAction(action, _ctx: VenueAdapterContext) {
+    async executeAction(action, ctx: VenueAdapterContext) {
+      if (isWithdrawAction(action)) {
+        const amount = String(
+          typeof action.amount === "object" &&
+            action.amount !== null &&
+            "value" in (action.amount as object)
+            ? (action.amount as { value: unknown }).value
+            : action.amount
+        );
+        const destination = (action.to ?? ctx.walletAddress) as `0x${string}`;
+        const result = await exchange.withdraw3({ destination, amount });
+        return {
+          id: JSON.stringify(result),
+          status: "submitted",
+          raw: result,
+        };
+      }
+
       const order = normalizeOrder(action);
       const asset = config.assetMap[order.coin];
       if (asset === undefined) {
@@ -112,6 +136,22 @@ type NormalizedOrder = {
   reduceOnly?: boolean;
   orderType?: HyperliquidOrderType;
 };
+
+interface WithdrawAction {
+  type: "withdraw";
+  asset?: string;
+  amount: unknown;
+  to?: string;
+}
+
+function isWithdrawAction(action: unknown): action is WithdrawAction {
+  return (
+    !!action &&
+    typeof action === "object" &&
+    "type" in action &&
+    (action as { type: unknown }).type === "withdraw"
+  );
+}
 
 function normalizeOrder(action: unknown): NormalizedOrder {
   if (!action || typeof action !== "object") {

@@ -1,0 +1,15 @@
+spell TestOutputBindingConstraints
+
+  version: "1.0.0"
+  description: "Test output binding combined with action constraints"
+  assets: [USDC, ETH]
+
+  params:
+    amount: 100000
+
+  venues:
+    dex: @uniswap_v3
+
+  on manual:
+    result = uniswap_v3.swap(USDC, ETH, params.amount) with slippage=50
+    emit swapped(output=result)

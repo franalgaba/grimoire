@@ -4,8 +4,11 @@
 
 import { describe, expect, test } from "bun:test";
 import type { Expression } from "../types/expressions.js";
+import type { SpellIR } from "../types/ir.js";
+import type { Address } from "../types/primitives.js";
+import { createContext } from "./context.js";
 import type { EvalContext } from "./expression-evaluator.js";
-import { evaluate, evaluateAsync } from "./expression-evaluator.js";
+import { createEvalContext, evaluate, evaluateAsync } from "./expression-evaluator.js";
 
 const baseCtx: EvalContext = {
   params: new Map<string, unknown>([["x", 10]]),
@@ -269,6 +272,40 @@ describe("Expression Evaluator", () => {
     );
     expect(() => evaluate({ kind: "item" }, ctx)).toThrow("item");
     expect(() => evaluate({ kind: "index" }, ctx)).toThrow("index");
+  });
+
+  test("createEvalContext uses runtime param values over defaults", () => {
+    const spell: SpellIR = {
+      id: "spell",
+      version: "1.0.0",
+      meta: { name: "spell", created: Date.now(), hash: "hash" },
+      aliases: [],
+      assets: [],
+      skills: [],
+      advisors: [],
+      params: [
+        { name: "amount", type: "number", default: 100 },
+        { name: "threshold", type: "number", default: 0.5 },
+      ],
+      state: { persistent: {}, ephemeral: {} },
+      steps: [],
+      guards: [],
+      triggers: [{ type: "manual" }],
+    };
+
+    const ctx = createContext({
+      spell,
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+      params: { amount: 999 },
+    });
+
+    const evalCtx = createEvalContext(ctx);
+
+    // Runtime value should override default
+    expect(evalCtx.params.get("amount")).toBe(999);
+    // Param not passed at runtime should fall back to default
+    expect(evalCtx.params.get("threshold")).toBe(0.5);
   });
 
   test("throws when async helpers missing", async () => {

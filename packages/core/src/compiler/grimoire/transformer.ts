@@ -11,6 +11,7 @@ import type {
   EmitNode,
   ExpressionNode,
   ForNode,
+  GuardsSection,
   HaltNode,
   IdentifierNode,
   IfNode,
@@ -132,6 +133,17 @@ export class Transformer {
         }
         break;
       }
+
+      case "guards": {
+        const guardsSection = section as GuardsSection;
+        source.guards = guardsSection.items.map((item) => ({
+          id: item.id,
+          check: this.exprToString(item.check),
+          severity: item.severity ?? "halt",
+          message: item.message,
+        }));
+        break;
+      }
     }
   }
 
@@ -214,8 +226,28 @@ export class Transformer {
     }
   }
 
-  /** Transform assignment to compute step */
+  /** Transform assignment to compute step, or action step if RHS is a venue method call */
   private transformAssignment(stmt: AssignmentNode): Array<Record<string, unknown>> {
+    // Check if RHS is a method call (venue action with output binding)
+    if (stmt.value.kind === "call") {
+      const callExpr = stmt.value as CallExprNode;
+      if (callExpr.callee.kind === "property_access") {
+        const prop = callExpr.callee as PropertyAccessNode;
+        const methodCall: MethodCallNode = {
+          kind: "method_call",
+          object: prop.object,
+          method: prop.property,
+          args: callExpr.args,
+          outputBinding: stmt.target,
+        };
+        if (stmt.constraints) {
+          methodCall.constraints = stmt.constraints;
+        }
+        return this.transformMethodCall(methodCall);
+      }
+    }
+
+    // Default: compute step
     const id = this.nextStepId("compute");
     return [
       {
@@ -261,16 +293,50 @@ export class Transformer {
     } else {
       // Regular conditional
       const thenSteps = this.transformStatements(stmt.thenBody);
-      const elseSteps = this.transformStatements(stmt.elseBody);
 
-      steps.push({
-        id,
-        if: this.exprToString(stmt.condition),
-        then: thenSteps.map((s) => s.id as string),
-        else: elseSteps.map((s) => s.id as string),
-      });
+      if (stmt.elifs && stmt.elifs.length > 0) {
+        // Build elif chain as nested conditionals (from last to first)
+        let elseChainSteps = this.transformStatements(stmt.elseBody);
+        let elseChainIds = elseChainSteps.map((s) => s.id as string);
 
-      steps.push(...thenSteps, ...elseSteps);
+        for (let i = stmt.elifs.length - 1; i >= 0; i--) {
+          const elif = stmt.elifs[i];
+          if (!elif) continue;
+          const elifId = this.nextStepId("cond");
+          const elifThenSteps = this.transformStatements(elif.body);
+
+          const elifCond: Record<string, unknown> = {
+            id: elifId,
+            if: this.exprToString(elif.condition),
+            then: elifThenSteps.map((s) => s.id as string),
+            else: elseChainIds,
+          };
+
+          elseChainSteps = [elifCond, ...elifThenSteps, ...elseChainSteps];
+          elseChainIds = [elifId];
+        }
+
+        steps.push({
+          id,
+          if: this.exprToString(stmt.condition),
+          then: thenSteps.map((s) => s.id as string),
+          else: elseChainIds,
+        });
+
+        steps.push(...thenSteps, ...elseChainSteps);
+      } else {
+        // Simple if/else (no elif)
+        const elseSteps = this.transformStatements(stmt.elseBody);
+
+        steps.push({
+          id,
+          if: this.exprToString(stmt.condition),
+          then: thenSteps.map((s) => s.id as string),
+          else: elseSteps.map((s) => s.id as string),
+        });
+
+        steps.push(...thenSteps, ...elseSteps);
+      }
     }
 
     return steps;
@@ -353,7 +419,13 @@ export class Transformer {
     }
 
     // Map arguments based on action type
-    if (actionType === "lend" || actionType === "withdraw") {
+    if (
+      actionType === "lend" ||
+      actionType === "withdraw" ||
+      actionType === "repay" ||
+      actionType === "stake" ||
+      actionType === "unstake"
+    ) {
       const assetArg = stmt.args[0];
       const amountArg = stmt.args[1];
       if (assetArg) {
@@ -361,6 +433,24 @@ export class Transformer {
       }
       if (amountArg) {
         action.amount = this.exprToString(amountArg);
+      }
+    } else if (actionType === "borrow") {
+      const assetArg = stmt.args[0];
+      const amountArg = stmt.args[1];
+      const collateralArg = stmt.args[2];
+      if (assetArg) {
+        action.asset = this.exprToString(assetArg);
+      }
+      if (amountArg) {
+        action.amount = this.exprToString(amountArg);
+      }
+      if (collateralArg) {
+        action.collateral = this.exprToString(collateralArg);
+      }
+    } else if (actionType === "claim") {
+      const assetArg = stmt.args[0];
+      if (assetArg) {
+        action.asset = this.exprToString(assetArg);
       }
     } else if (actionType === "bridge") {
       const assetArg = stmt.args[0];
@@ -386,6 +476,19 @@ export class Transformer {
       if (amountArg) {
         action.amount = this.exprToString(amountArg);
       }
+    } else if (actionType === "transfer") {
+      const assetArg = stmt.args[0];
+      const amountArg = stmt.args[1];
+      const toArg = stmt.args[2];
+      if (assetArg) {
+        action.asset = this.exprToString(assetArg);
+      }
+      if (amountArg) {
+        action.amount = this.exprToString(amountArg);
+      }
+      if (toArg) {
+        action.to = this.exprToString(toArg);
+      }
     } else if (actionType === "query") {
       // Query operations become compute steps
       return [
@@ -410,6 +513,15 @@ export class Transformer {
 
     if (stmt.outputBinding) {
       step.output = stmt.outputBinding;
+    }
+
+    if (stmt.constraints) {
+      const constraints: Record<string, unknown> = {};
+      for (const { key, value } of stmt.constraints.constraints) {
+        const constraintKey = key === "slippage" ? "max_slippage" : key;
+        constraints[constraintKey] = this.exprToValue(value);
+      }
+      step.constraints = constraints;
     }
 
     return [step];

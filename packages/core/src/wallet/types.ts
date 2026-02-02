@@ -141,6 +141,10 @@ export const CHAIN_CONFIGS: Record<number, ProviderConfig> = {
     rpcUrl: "https://mainnet.base.org",
     fallbackUrls: ["https://base.llamarpc.com"],
   },
+  999: {
+    chainId: 999,
+    rpcUrl: "https://rpc.hyperliquid.xyz/evm",
+  },
   // Testnets
   11155111: {
     chainId: 11155111,
@@ -163,6 +167,7 @@ export function getChainName(chainId: number): string {
     137: "Polygon",
     42161: "Arbitrum One",
     8453: "Base",
+    999: "HyperEVM",
     11155111: "Sepolia",
     5: "Goerli",
     80001: "Mumbai",
@@ -170,4 +175,27 @@ export function getChainName(chainId: number): string {
     84531: "Base Goerli",
   };
   return names[chainId] ?? `Chain ${chainId}`;
+}
+
+/** Get the native currency symbol for a chain */
+export function getNativeCurrencySymbol(chainId: number): string {
+  const symbols: Record<number, string> = {
+    1: "ETH",
+    10: "ETH",
+    137: "POL",
+    42161: "ETH",
+    8453: "ETH",
+    999: "ETH",
+    11155111: "ETH",
+    5: "ETH",
+    80001: "POL",
+    421613: "ETH",
+    84531: "ETH",
+  };
+  return symbols[chainId] ?? "ETH";
+}
+
+/** Check if an asset is the native currency for a given chain */
+export function isNativeCurrency(asset: string, chainId: number): boolean {
+  return asset.toUpperCase() === getNativeCurrencySymbol(chainId).toUpperCase();
 }

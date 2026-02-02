@@ -1,0 +1,16 @@
+# Test: Ternary expressions — condition ? then : else
+
+spell TestTernary
+
+  version: "1.0.0"
+  description: "Test ternary conditional expressions"
+  assets: []
+
+  params:
+    amount: 500
+    threshold: 1000
+
+  on manual:
+    label = params.amount > params.threshold ? 1 : 0
+    capped = params.amount > params.threshold ? params.threshold : params.amount
+    emit result(label=label, capped=capped)

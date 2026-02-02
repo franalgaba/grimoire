@@ -1,0 +1,20 @@
+# Test: Small long ETH perp on Hyperliquid
+
+spell TestHyperliquidLongSmall
+
+  version: "1.0.0"
+  description: "Open a small leveraged long ETH perp on Hyperliquid"
+  assets: [USDC, ETH]
+
+  params:
+    position_size: 10
+    leverage: 2
+    entry_price: 3000
+
+  venues:
+    hyperliquid: @hyperliquid
+
+  on manual:
+    notional = params.position_size
+    hyperliquid.swap(ETH, USDC, notional)
+    emit long_opened(asset="ETH", notional=notional, leverage=params.leverage)

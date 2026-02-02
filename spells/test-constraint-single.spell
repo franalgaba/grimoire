@@ -1,0 +1,14 @@
+spell TestConstraintSingle
+
+  version: "1.0.0"
+  description: "Test single constraint on action"
+  assets: [USDC, ETH]
+
+  params:
+    amount: 100000
+
+  venues:
+    dex: @uniswap_v3
+
+  on manual:
+    uniswap_v3.swap(USDC, ETH, params.amount) with slippage=25

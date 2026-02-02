@@ -130,9 +130,25 @@ export function createAcrossAdapter(
   };
 }
 
+const DEFAULT_ASSETS: Record<string, Record<number, Address>> = {
+  USDC: {
+    1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
+    8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address,
+    10: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85" as Address,
+    42161: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as Address,
+    1337: "0x6d1e7cde53a9467b783991afd8af56d4a99b3a56" as Address,
+  },
+  WETH: {
+    1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
+    8453: "0x4200000000000000000000000000000000000006" as Address,
+    10: "0x4200000000000000000000000000000000000006" as Address,
+    42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" as Address,
+  },
+};
+
 export const acrossAdapter = createAcrossAdapter({
   integratorId: DEFAULT_INTEGRATOR_ID,
-  assets: {},
+  assets: DEFAULT_ASSETS,
 });
 
 function resolveAssetAddress(

@@ -3,7 +3,13 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { CHAIN_CONFIGS, getChainName, isTestnet } from "./types.js";
+import {
+  CHAIN_CONFIGS,
+  getChainName,
+  getNativeCurrencySymbol,
+  isNativeCurrency,
+  isTestnet,
+} from "./types.js";
 
 describe("Wallet Types", () => {
   describe("CHAIN_CONFIGS", () => {
@@ -78,6 +84,65 @@ describe("Wallet Types", () => {
 
     test("returns fallback for unknown chain", () => {
       expect(getChainName(999999)).toBe("Chain 999999");
+    });
+  });
+
+  describe("getNativeCurrencySymbol", () => {
+    test("returns ETH for mainnet", () => {
+      expect(getNativeCurrencySymbol(1)).toBe("ETH");
+    });
+
+    test("returns ETH for Arbitrum", () => {
+      expect(getNativeCurrencySymbol(42161)).toBe("ETH");
+    });
+
+    test("returns ETH for Base", () => {
+      expect(getNativeCurrencySymbol(8453)).toBe("ETH");
+    });
+
+    test("returns ETH for Optimism", () => {
+      expect(getNativeCurrencySymbol(10)).toBe("ETH");
+    });
+
+    test("returns ETH for HyperEVM", () => {
+      expect(getNativeCurrencySymbol(999)).toBe("ETH");
+    });
+
+    test("returns POL for Polygon", () => {
+      expect(getNativeCurrencySymbol(137)).toBe("POL");
+    });
+
+    test("returns POL for Mumbai", () => {
+      expect(getNativeCurrencySymbol(80001)).toBe("POL");
+    });
+
+    test("returns ETH as fallback for unknown chains", () => {
+      expect(getNativeCurrencySymbol(999999)).toBe("ETH");
+    });
+  });
+
+  describe("isNativeCurrency", () => {
+    test("ETH is native on mainnet", () => {
+      expect(isNativeCurrency("ETH", 1)).toBe(true);
+    });
+
+    test("ETH is not native on Polygon", () => {
+      expect(isNativeCurrency("ETH", 137)).toBe(false);
+    });
+
+    test("POL is native on Polygon", () => {
+      expect(isNativeCurrency("POL", 137)).toBe(true);
+    });
+
+    test("is case insensitive", () => {
+      expect(isNativeCurrency("eth", 1)).toBe(true);
+      expect(isNativeCurrency("Eth", 1)).toBe(true);
+      expect(isNativeCurrency("pol", 137)).toBe(true);
+    });
+
+    test("USDC is not native on any chain", () => {
+      expect(isNativeCurrency("USDC", 1)).toBe(false);
+      expect(isNativeCurrency("USDC", 137)).toBe(false);
     });
   });
 });

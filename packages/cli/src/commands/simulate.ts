@@ -4,6 +4,7 @@
  */
 
 import { type Address, compileFile, execute } from "@grimoire/core";
+import { adapters } from "@grimoire/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { withStatePersistence } from "./state-helpers.js";
@@ -60,6 +61,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
           params,
           persistentState,
           simulate: true,
+          adapters,
         });
       }
     );

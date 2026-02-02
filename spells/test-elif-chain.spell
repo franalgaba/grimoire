@@ -1,0 +1,22 @@
+# Test: elif chains — multi-way branching
+
+spell TestElifChain
+
+  version: "1.0.0"
+  description: "Multi-way conditional with elif — tests elif compilation"
+  assets: []
+
+  params:
+    score: 75
+
+  on manual:
+    if params.score > 90:
+      emit grade(letter="A", score=params.score)
+    elif params.score > 80:
+      emit grade(letter="B", score=params.score)
+    elif params.score > 70:
+      emit grade(letter="C", score=params.score)
+    elif params.score > 60:
+      emit grade(letter="D", score=params.score)
+    else:
+      emit grade(letter="F", score=params.score)

@@ -1,0 +1,24 @@
+# Test: Multi-step spell — swap then compute metrics
+
+spell TestMultiStep
+
+  version: "1.0.0"
+  description: "Swap ETH to USDC then compute and emit metrics"
+  assets: [ETH, USDC]
+
+  params:
+    swap_amount: 200000000000000
+    target_usdc: 1000000
+
+  state:
+    persistent:
+      swaps_executed: 0
+
+  venues:
+    uniswap_v4: @uniswap_v4
+
+  on manual:
+    uniswap_v4.swap(ETH, USDC, params.swap_amount)
+    swaps_executed = swaps_executed + 1
+    pct_of_target = params.swap_amount * 100 / params.target_usdc
+    emit swap_completed(swap_number=swaps_executed, amount=params.swap_amount, pct_of_target=pct_of_target)

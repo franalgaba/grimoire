@@ -9,8 +9,10 @@ import { join } from "node:path";
 import { Wallet as EthersWallet } from "ethers";
 import {
   KeyLoadError,
+  createKeystore,
   createWallet,
   createWalletFromConfig,
+  generatePrivateKey,
   getAddressFromConfig,
   loadPrivateKey,
 } from "./keystore.js";
@@ -261,6 +263,47 @@ describe("Keystore", () => {
       });
 
       expect(address).toMatch(/^0x[a-fA-F0-9]{40}$/);
+    });
+  });
+
+  describe("generatePrivateKey", () => {
+    test("returns valid 66-char hex string with 0x prefix", () => {
+      const key = generatePrivateKey();
+      expect(key).toMatch(/^0x[0-9a-fA-F]{64}$/);
+      expect(key.length).toBe(66);
+    });
+
+    test("produces unique keys across calls", () => {
+      const key1 = generatePrivateKey();
+      const key2 = generatePrivateKey();
+      expect(key1).not.toBe(key2);
+    });
+  });
+
+  describe("createKeystore", () => {
+    test("returns valid JSON string", async () => {
+      const keystoreJson = await createKeystore(TEST_PRIVATE_KEY, "test-password");
+      const parsed = JSON.parse(keystoreJson);
+      expect(parsed).toBeDefined();
+      expect(parsed.Crypto ?? parsed.crypto).toBeDefined();
+    });
+
+    test("round-trip: generate → encrypt → decrypt → same key", async () => {
+      const key = generatePrivateKey();
+      const password = "round-trip-test";
+      const keystoreJson = await createKeystore(key, password);
+
+      const decrypted = loadPrivateKey({
+        type: "keystore",
+        source: keystoreJson,
+        password,
+      });
+
+      expect(decrypted).toBe(key);
+    });
+
+    test("rejects empty password", async () => {
+      await expect(createKeystore(TEST_PRIVATE_KEY, "")).rejects.toThrow(KeyLoadError);
     });
   });
 });

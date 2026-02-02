@@ -1,0 +1,16 @@
+# Test: Loop over assets and emit — tests for-loop iteration
+
+spell TestLoopSwap
+
+  version: "1.0.0"
+  description: "Loop over asset list and emit events — tests for-loop execution"
+  assets: [USDC, ETH, WETH]
+
+  state:
+    persistent:
+      assets_processed: 0
+
+  on manual:
+    for asset in assets:
+      assets_processed = assets_processed + 1
+      emit asset_checked(asset=asset, index=assets_processed)

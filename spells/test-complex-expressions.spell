@@ -1,0 +1,19 @@
+# Test: Complex expressions — chained arithmetic and property access
+
+spell TestComplexExpressions
+
+  version: "1.0.0"
+  description: "Test complex expression evaluation with chained operations"
+  assets: []
+
+  params:
+    principal: 10000
+    rate: 5
+    periods: 12
+
+  on manual:
+    monthly_rate = params.rate / 100 / params.periods
+    simple_interest = params.principal * params.rate / 100
+    total_with_interest = params.principal + simple_interest
+    per_period = total_with_interest / params.periods
+    emit calculation(principal=params.principal, interest=simple_interest, total=total_with_interest, per_period=per_period, monthly_rate=monthly_rate)
