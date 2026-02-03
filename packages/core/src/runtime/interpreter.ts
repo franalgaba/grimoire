@@ -4,7 +4,7 @@
  */
 
 import type { ExecutionContext, ExecutionResult, StepResult } from "../types/execution.js";
-import type { Guard, GuardDef, SpellIR } from "../types/ir.js";
+import type { AdvisorDef, Guard, GuardDef, SpellIR } from "../types/ir.js";
 import type { PolicySet } from "../types/policy.js";
 import type { Address, ChainId } from "../types/primitives.js";
 import type { Step } from "../types/steps.js";
@@ -17,17 +17,22 @@ import {
   InMemoryLedger,
   createContext,
   getPersistentStateObject,
+  incrementAdvisoryCalls,
   markStepExecuted,
 } from "./context.js";
 import { type EvalContext, createEvalContext, evaluateAsync } from "./expression-evaluator.js";
+import { resolveAdvisorSkill } from "./skills/registry.js";
 
 // Step executors
 import { type ActionExecutionOptions, executeActionStep } from "./steps/action.js";
+import { executeAdvisoryStep } from "./steps/advisory.js";
 import { executeComputeStep } from "./steps/compute.js";
 import { executeConditionalStep } from "./steps/conditional.js";
 import { executeEmitStep } from "./steps/emit.js";
 import { executeHaltStep } from "./steps/halt.js";
 import { executeLoopStep } from "./steps/loop.js";
+import { executeParallelStep } from "./steps/parallel.js";
+import { executePipelineStep } from "./steps/pipeline.js";
 import { executeTryStep } from "./steps/try.js";
 import { executeWaitStep } from "./steps/wait.js";
 
@@ -67,6 +72,8 @@ export interface ExecuteOptions {
   adapters?: VenueAdapter[];
   /** Policy set with risk controls (circuit breakers, etc.) */
   policy?: PolicySet;
+  /** Advisor skill search directories */
+  advisorSkillsDirs?: string[];
 }
 
 /**
@@ -93,6 +100,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     params,
     persistentState,
   });
+  ctx.advisorTooling = buildAdvisorTooling(spell.advisors, options.advisorSkillsDirs);
 
   // Create ledger
   const ledger = new InMemoryLedger(ctx.runId, spell.id);
@@ -287,6 +295,42 @@ function createActionExecutionOptions(
   return { mode, executor };
 }
 
+function buildAdvisorTooling(
+  advisors: AdvisorDef[],
+  searchDirs?: string[]
+): ExecutionContext["advisorTooling"] {
+  if (!advisors.length) return undefined;
+
+  const tooling: Record<string, { skills: string[]; allowedTools: string[]; mcp?: string[] }> = {};
+  const dirs = (searchDirs ?? []).filter((dir) => dir.length > 0);
+
+  for (const advisor of advisors) {
+    const skills = advisor.skills ? [...advisor.skills] : [];
+    const allowedTools = new Set(advisor.allowedTools ?? []);
+
+    if (skills.length > 0 && dirs.length > 0) {
+      for (const skillName of skills) {
+        const meta = resolveAdvisorSkill(skillName, dirs);
+        if (meta?.allowedTools?.length) {
+          for (const tool of meta.allowedTools) {
+            allowedTools.add(tool);
+          }
+        }
+      }
+    }
+
+    if (skills.length > 0 || allowedTools.size > 0 || advisor.mcp?.length) {
+      tooling[advisor.name] = {
+        skills,
+        allowedTools: Array.from(allowedTools),
+        mcp: advisor.mcp,
+      };
+    }
+  }
+
+  return Object.keys(tooling).length > 0 ? tooling : undefined;
+}
+
 /**
  * Execute a single step
  */
@@ -354,20 +398,13 @@ async function executeStep(
       return executeTryStep(step, ctx, ledger, executeStepById);
 
     case "parallel":
+      return executeParallelStep(step, ctx, ledger, executeStepById);
+
     case "pipeline":
+      return executePipelineStep(step, ctx, ledger, executeStepById);
+
     case "advisory":
-      // TODO: Implement these step types
-      ledger.emit({ type: "step_started", stepId: step.id, kind: step.kind });
-      ledger.emit({
-        type: "step_completed",
-        stepId: step.id,
-        result: { notImplemented: true },
-      });
-      return {
-        success: true,
-        stepId: step.id,
-        output: { notImplemented: true },
-      };
+      return executeAdvisoryStep(step, ctx, ledger);
 
     default:
       return {
@@ -394,6 +431,10 @@ function getChildStepIds(step: Step): string[] {
       return step.bodySteps;
     case "conditional":
       return [...step.thenSteps, ...step.elseSteps];
+    case "parallel":
+      return step.branches.flatMap((b) => b.steps);
+    case "pipeline":
+      return step.stages.filter((s) => "step" in s).map((s) => (s as { step: string }).step);
     default:
       return [];
   }
@@ -410,9 +451,44 @@ async function checkGuards(
   const evalCtx = createEvalContext(ctx);
 
   for (const guard of guards) {
-    // Skip advisory guards for now
     if ("advisor" in guard) {
-      ledger.emit({ type: "guard_passed", guardId: guard.id });
+      const tooling = ctx.advisorTooling?.[guard.advisor];
+      const skills = tooling?.skills?.length ? tooling.skills : undefined;
+      const allowedTools = tooling?.allowedTools?.length ? tooling.allowedTools : undefined;
+
+      incrementAdvisoryCalls(ctx);
+      ledger.emit({
+        type: "advisory_started",
+        advisor: guard.advisor,
+        prompt: guard.check,
+        skills,
+        allowedTools,
+      });
+
+      const decision = guard.fallback ?? true;
+
+      ledger.emit({
+        type: "advisory_completed",
+        advisor: guard.advisor,
+        output: decision,
+      });
+
+      if (decision) {
+        ledger.emit({ type: "guard_passed", guardId: guard.id });
+      } else {
+        const severity = guard.severity === "pause" ? "pause" : "warn";
+        const message = `Advisory guard '${guard.id}' returned false`;
+        ledger.emit({
+          type: "guard_failed",
+          guardId: guard.id,
+          severity,
+          message,
+        });
+
+        if (severity === "pause") {
+          return { success: false, error: message, severity };
+        }
+      }
       continue;
     }
 

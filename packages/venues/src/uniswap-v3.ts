@@ -156,7 +156,19 @@ export function createUniswapV3Adapter(
       }
 
       // Generate calldata using SDK's SwapRouter (targets original V3 SwapRouter)
-      const slippageBps = action.constraints?.maxSlippageBps ?? config.slippageBps ?? 50;
+      const defaultSlippageBps = action.constraints?.maxSlippageBps ?? config.slippageBps ?? 50;
+      const expectedOut = BigInt(trade.outputAmount.quotient.toString());
+      const expectedIn = BigInt(trade.inputAmount.quotient.toString());
+      const explicitMinOut = action.constraints?.minOutput;
+      const explicitMaxIn = action.constraints?.maxInput;
+      let slippageBps = defaultSlippageBps;
+
+      if (!isExactOut && explicitMinOut !== undefined) {
+        slippageBps = computeSlippageBpsFromMinOut(expectedOut, explicitMinOut);
+      } else if (isExactOut && explicitMaxIn !== undefined) {
+        slippageBps = computeSlippageBpsFromMaxIn(expectedIn, explicitMaxIn);
+      }
+
       const slippageTolerance = new Percent(slippageBps, 10_000);
       const deadline = Math.floor(Date.now() / 1000) + (config.deadlineSeconds ?? 1200);
 
@@ -168,6 +180,11 @@ export function createUniswapV3Adapter(
 
       // Build pre-swap transactions
       const preTxs = [];
+      const maxInputAmount =
+        isExactOut && explicitMaxIn === undefined
+          ? BigInt(trade.maximumAmountIn(slippageTolerance).quotient.toString())
+          : undefined;
+      const approvalAmount = isExactOut ? (explicitMaxIn ?? maxInputAmount ?? amount) : amount;
 
       if (isNativeEth) {
         // Step 1: Wrap ETH → WETH (call WETH.deposit() with value)
@@ -177,8 +194,8 @@ export function createUniswapV3Adapter(
           functionName: "deposit",
         });
         preTxs.push({
-          tx: { to: wethAddress, data: wrapData, value: amount },
-          description: `Wrap ${amount.toString()} wei ETH → WETH`,
+          tx: { to: wethAddress, data: wrapData, value: approvalAmount },
+          description: `Wrap ${approvalAmount.toString()} wei ETH → WETH`,
           action,
         });
 
@@ -187,7 +204,7 @@ export function createUniswapV3Adapter(
           ctx,
           token: wethAddress,
           spender: router,
-          amount,
+          amount: approvalAmount,
           action,
           description: "Approve WETH for Uniswap V3",
         });
@@ -198,7 +215,7 @@ export function createUniswapV3Adapter(
           ctx,
           token: tokenIn.address as Address,
           spender: router,
-          amount,
+          amount: approvalAmount,
           action,
           description: `Approve ${action.assetIn} for Uniswap V3`,
         });
@@ -207,7 +224,11 @@ export function createUniswapV3Adapter(
 
       const shortAddr = (a: string) => `${a.slice(0, 6)}...${a.slice(-4)}`;
       const expectedOutput = trade.outputAmount.toSignificant(6);
-      const minOut = trade.minimumAmountOut(slippageTolerance).toSignificant(6);
+      const minOutAmount =
+        explicitMinOut !== undefined
+          ? CurrencyAmount.fromRawAmount(tokenOut, explicitMinOut.toString())
+          : trade.minimumAmountOut(slippageTolerance);
+      const minOut = minOutAmount.toSignificant(6);
       const descLines = [
         `Uniswap V3 swap ${action.assetIn} → ${action.assetOut}`,
         `  tokenIn:    ${action.assetIn} (${shortAddr(tokenIn.address)})`,
@@ -290,6 +311,30 @@ function toBigInt(amount: unknown): bigint {
     return BigInt(amount.value);
   }
   throw new Error("Unsupported amount type for swap");
+}
+
+function computeSlippageBpsFromMinOut(expectedOut: bigint, minOut: bigint): number {
+  if (expectedOut <= 0n) {
+    throw new Error("Cannot compute slippage from zero expected output");
+  }
+  if (minOut > expectedOut) {
+    throw new Error("min_output exceeds expected output");
+  }
+  const diff = expectedOut - minOut;
+  const bps = (diff * 10_000n) / expectedOut;
+  return Number(bps);
+}
+
+function computeSlippageBpsFromMaxIn(expectedIn: bigint, maxIn: bigint): number {
+  if (expectedIn <= 0n) {
+    throw new Error("Cannot compute slippage from zero expected input");
+  }
+  if (maxIn < expectedIn) {
+    throw new Error("max_input is below expected input");
+  }
+  const diff = maxIn - expectedIn;
+  const bps = (diff * 10_000n) / expectedIn;
+  return Number(bps);
 }
 
 function isLiteralAmount(

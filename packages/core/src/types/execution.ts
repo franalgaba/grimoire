@@ -2,7 +2,7 @@
  * Execution context and result types
  */
 
-import type { Action } from "./actions.js";
+import type { Action, ActionConstraintsResolved } from "./actions.js";
 import type { SpellIR } from "./ir.js";
 import type { PolicySet } from "./policy.js";
 import type { Address, ChainId, Timestamp, VenueAlias } from "./primitives.js";
@@ -14,6 +14,14 @@ export interface ExecutionContext {
   // Strategy
   spell: SpellIR;
   policy?: PolicySet;
+  advisorTooling?: Record<
+    string,
+    {
+      skills: string[];
+      allowedTools: string[];
+      mcp?: string[];
+    }
+  >;
 
   // Run identity
   runId: string;
@@ -120,6 +128,9 @@ export type LedgerEvent =
   | AdvisoryCompletedEvent
   | AdvisoryFailedEvent
   | AdvisoryRateLimitedEvent
+  // Custom events
+  | EventEmittedEvent
+  | ConstraintEvaluatedEvent
   // Errors
   | ErrorCaughtEvent
   | RetryAttemptedEvent
@@ -260,6 +271,10 @@ interface AdvisoryStartedEvent {
   type: "advisory_started";
   advisor: string;
   prompt: string;
+  skills?: string[];
+  allowedTools?: string[];
+  mcp?: string[];
+  schema?: AdvisorySchemaEvent;
 }
 
 interface AdvisoryCompletedEvent {
@@ -278,6 +293,19 @@ interface AdvisoryFailedEvent {
 interface AdvisoryRateLimitedEvent {
   type: "advisory_rate_limited";
   advisor: string;
+}
+
+interface EventEmittedEvent {
+  type: "event_emitted";
+  stepId: string;
+  event: string;
+  data: Record<string, unknown>;
+}
+
+interface ConstraintEvaluatedEvent {
+  type: "constraint_evaluated";
+  stepId: string;
+  constraints: ActionConstraintsResolved;
 }
 
 // Error events
@@ -326,4 +354,16 @@ export interface LedgerEntry {
   runId: string;
   spellId: string;
   event: LedgerEvent;
+}
+
+export interface AdvisorySchemaEvent {
+  type: "boolean" | "number" | "enum" | "string" | "object" | "array";
+  values?: string[];
+  min?: number;
+  max?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  fields?: Record<string, AdvisorySchemaEvent>;
+  items?: AdvisorySchemaEvent;
 }

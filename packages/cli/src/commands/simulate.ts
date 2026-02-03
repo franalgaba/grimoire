@@ -7,12 +7,14 @@ import { type Address, compileFile, execute } from "@grimoire/core";
 import { adapters } from "@grimoire/venues";
 import chalk from "chalk";
 import ora from "ora";
+import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";
 import { withStatePersistence } from "./state-helpers.js";
 
 interface SimulateOptions {
   params?: string;
   vault?: string;
   chain?: string;
+  advisorSkillsDir?: string | string[];
   stateDir?: string;
   noState?: boolean;
 }
@@ -49,6 +51,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
     const vault = (options.vault ?? "0x0000000000000000000000000000000000000000") as Address;
     const chain = Number.parseInt(options.chain ?? "1", 10);
     const spell = compileResult.ir;
+    const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir);
 
     const result = await withStatePersistence(
       spell.id,
@@ -62,6 +65,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
           persistentState,
           simulate: true,
           adapters,
+          advisorSkillsDirs,
         });
       }
     );

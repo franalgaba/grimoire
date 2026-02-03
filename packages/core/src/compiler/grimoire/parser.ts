@@ -3,8 +3,11 @@
  */
 
 import type {
+  AdviseNode,
+  AdvisorItem,
   AdvisorsSection,
   AdvisoryExpr,
+  AdvisoryOutputSchemaNode,
   ArrayAccessNode,
   ArrayLiteralNode,
   AssetItem,
@@ -13,9 +16,12 @@ import type {
   AtomicNode,
   BinaryExprNode,
   BinaryOperator,
+  BlockDef,
   CallExprNode,
+  CatchNode,
   ConstraintClause,
   DescriptionSection,
+  DoNode,
   EmitNode,
   ExpressionNode,
   ForNode,
@@ -24,17 +30,26 @@ import type {
   HaltNode,
   IdentifierNode,
   IfNode,
+  ImportNode,
   LimitItem,
   LimitsSection,
   LiteralNode,
   MethodCallNode,
   ObjectLiteralNode,
+  ParallelBranchNode,
+  ParallelJoinNode,
+  ParallelNode,
   ParamItem,
   ParamsSection,
   PassNode,
   PercentageExpr,
+  PipelineNode,
+  PipelineStageNode,
   PropertyAccessNode,
+  RepeatNode,
+  RetrySpec,
   SectionNode,
+  SkillItem,
   SkillsSection,
   SpellAST,
   StateItem,
@@ -42,7 +57,10 @@ import type {
   StatementNode,
   TriggerHandler,
   TriggerType,
+  TryNode,
   UnaryExprNode,
+  UnitLiteralNode,
+  UntilNode,
   VenueGroup,
   VenueRef,
   VenueRefExpr,
@@ -173,6 +191,8 @@ export class Parser {
     // Parse sections and triggers
     const sections: SectionNode[] = [];
     const triggers: TriggerHandler[] = [];
+    const imports: ImportNode[] = [];
+    const blocks: BlockDef[] = [];
 
     // Expect INDENT for spell body
     if (!this.check("INDENT")) {
@@ -187,8 +207,12 @@ export class Parser {
       this.skipNewlines();
       if (this.check("DEDENT") || this.check("EOF")) break;
 
-      // Check for trigger: on <trigger>:
-      if (this.check("KEYWORD", "on")) {
+      // Check for import or block or trigger
+      if (this.check("KEYWORD", "import")) {
+        imports.push(this.parseImport());
+      } else if (this.check("KEYWORD", "block")) {
+        blocks.push(this.parseBlock());
+      } else if (this.check("KEYWORD", "on")) {
         triggers.push(this.parseTriggerHandler());
       } else {
         sections.push(this.parseSection());
@@ -207,12 +231,68 @@ export class Parser {
       name,
       sections,
       triggers,
+      imports,
+      blocks,
     };
   }
 
   // ===========================================================================
   // SECTION PARSING
   // ===========================================================================
+
+  /** Parse import declaration: import "path" */
+  private parseImport(): ImportNode {
+    const startToken = this.current();
+    this.expect("KEYWORD", "import");
+    const pathToken = this.expect("STRING");
+    let alias: string | undefined;
+    if (
+      this.check("KEYWORD", "as") ||
+      (this.check("IDENTIFIER") && this.current().value === "as")
+    ) {
+      this.advance();
+      if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+        alias = this.advance().value;
+      } else {
+        throw new ParseError("Expected alias name after 'as'", {
+          location: this.current().location,
+          source: this.source,
+        });
+      }
+    }
+    this.expectNewline();
+    const node: ImportNode = { kind: "import", path: pathToken.value, alias };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  /** Parse block definition: block name(arg, ...): */
+  private parseBlock(): BlockDef {
+    const startToken = this.current();
+    this.expect("KEYWORD", "block");
+    const name = this.expect("IDENTIFIER").value;
+    const params: string[] = [];
+
+    if (this.check("LPAREN")) {
+      this.advance();
+      while (!this.check("RPAREN")) {
+        const param = this.expect("IDENTIFIER").value;
+        params.push(param);
+        if (this.check("COMMA")) {
+          this.advance();
+        }
+      }
+      this.expect("RPAREN");
+    }
+
+    this.expect("COLON");
+    this.expectNewline();
+    const body = this.parseStatementBlock();
+
+    const node: BlockDef = { kind: "block", name, params, body };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
 
   /** Parse a section (version, assets, params, etc.) */
   private parseSection(): SectionNode {
@@ -302,6 +382,50 @@ export class Parser {
     });
   }
 
+  /** Parse list of strings/identifiers (e.g., [a, "b"]) */
+  private parseStringList(): string[] {
+    const items: string[] = [];
+    if (this.check("LBRACKET")) {
+      this.advance();
+      while (!this.check("RBRACKET")) {
+        if (this.check("STRING")) {
+          items.push(this.advance().value);
+        } else if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+          items.push(this.advance().value);
+        } else if (this.check("VENUE_REF")) {
+          items.push(this.advance().value);
+        } else {
+          throw new ParseError("Expected list item", {
+            location: this.current().location,
+            source: this.source,
+          });
+        }
+        if (this.check("COMMA")) this.advance();
+      }
+      this.expect("RBRACKET");
+      return items;
+    }
+
+    // Single item
+    if (this.check("STRING")) {
+      items.push(this.advance().value);
+      return items;
+    }
+    if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+      items.push(this.advance().value);
+      return items;
+    }
+    if (this.check("VENUE_REF")) {
+      items.push(this.advance().value);
+      return items;
+    }
+
+    throw new ParseError("Expected list", {
+      location: this.current().location,
+      source: this.source,
+    });
+  }
+
   /** Parse assets: [USDC, USDT] or assets block */
   private parseAssetsSection(): AssetsSection {
     this.expect("KEYWORD", "assets");
@@ -322,8 +446,69 @@ export class Parser {
       this.expect("RBRACKET");
       this.expectNewline();
     } else {
-      // Block form (not currently supported in the new syntax, but could be added)
+      // Block form
       this.expectNewline();
+      if (this.check("INDENT")) {
+        this.advance();
+        while (!this.check("DEDENT") && !this.check("EOF")) {
+          this.skipNewlines();
+          if (this.check("DEDENT") || this.check("EOF")) break;
+
+          const symbol = this.expect("IDENTIFIER").value;
+          const asset: AssetItem = { symbol };
+          this.expect("COLON");
+
+          if (this.check("NEWLINE")) {
+            this.expectNewline();
+            if (!this.check("INDENT")) {
+              throw new ParseError("Expected indented asset block", {
+                location: this.current().location,
+                source: this.source,
+              });
+            }
+            this.advance();
+            while (!this.check("DEDENT") && !this.check("EOF")) {
+              this.skipNewlines();
+              if (this.check("DEDENT") || this.check("EOF")) break;
+
+              const key = this.expect("IDENTIFIER").value;
+              this.expect("COLON");
+              if (key === "chain") {
+                const val = this.expect("NUMBER").value;
+                asset.chain = Number.parseInt(val, 10);
+                this.expectNewline();
+              } else if (key === "address") {
+                if (this.check("ADDRESS")) {
+                  asset.address = this.advance().value;
+                } else if (this.check("STRING")) {
+                  asset.address = this.advance().value;
+                } else {
+                  throw new ParseError("Expected address value", {
+                    location: this.current().location,
+                    source: this.source,
+                  });
+                }
+                this.expectNewline();
+              } else if (key === "decimals") {
+                const val = this.expect("NUMBER").value;
+                asset.decimals = Number.parseInt(val, 10);
+                this.expectNewline();
+              } else {
+                this.parseExpression();
+                this.expectNewline();
+              }
+            }
+            if (this.check("DEDENT")) this.advance();
+          } else {
+            // Inline asset defaults: assets: SYMBOL: <ignored>
+            this.parseExpression();
+            this.expectNewline();
+          }
+
+          items.push(asset);
+        }
+        if (this.check("DEDENT")) this.advance();
+      }
     }
 
     return { kind: "assets", items };
@@ -345,9 +530,84 @@ export class Parser {
 
         const name = this.expect("IDENTIFIER").value;
         this.expect("COLON");
-        const value = this.parseExpression();
-        items.push({ name, value });
-        this.expectNewline();
+        const item: ParamItem = { name };
+
+        // Block form: param:
+        if (this.check("NEWLINE")) {
+          this.expectNewline();
+          if (!this.check("INDENT")) {
+            throw new ParseError("Expected indented param block", {
+              location: this.current().location,
+              source: this.source,
+            });
+          }
+          this.advance();
+
+          while (!this.check("DEDENT") && !this.check("EOF")) {
+            this.skipNewlines();
+            if (this.check("DEDENT") || this.check("EOF")) break;
+
+            const keyToken = this.current();
+            if (!(this.check("IDENTIFIER") || this.check("KEYWORD"))) {
+              throw new ParseError(
+                `Expected param field but got ${this.current().type} '${this.current().value}'`,
+                { location: this.current().location, source: this.source }
+              );
+            }
+            const key = keyToken.value;
+            this.advance();
+            this.expect("COLON");
+
+            if (key === "type") {
+              if (this.check("STRING")) {
+                item.type = this.advance().value as ParamItem["type"];
+              } else if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+                item.type = this.advance().value as ParamItem["type"];
+              } else {
+                throw new ParseError("Expected param type value", {
+                  location: keyToken.location,
+                  source: this.source,
+                });
+              }
+              this.expectNewline();
+            } else if (key === "asset") {
+              if (this.check("STRING")) {
+                item.asset = this.advance().value;
+              } else if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+                item.asset = this.advance().value;
+              } else {
+                throw new ParseError("Expected asset identifier", {
+                  location: keyToken.location,
+                  source: this.source,
+                });
+              }
+              this.expectNewline();
+            } else if (key === "default") {
+              item.value = this.parseExpression();
+              this.expectNewline();
+            } else if (key === "min") {
+              const val = this.expect("NUMBER").value;
+              item.min = Number.parseFloat(val);
+              this.expectNewline();
+            } else if (key === "max") {
+              const val = this.expect("NUMBER").value;
+              item.max = Number.parseFloat(val);
+              this.expectNewline();
+            } else {
+              // Unknown field - parse and ignore
+              this.parseExpression();
+              this.expectNewline();
+            }
+          }
+
+          if (this.check("DEDENT")) this.advance();
+        } else {
+          // Inline form: name: value
+          item.value = this.parseExpression();
+          this.expectNewline();
+        }
+
+        items.push(item);
         this.skipNewlines();
       }
       if (this.check("DEDENT")) this.advance();
@@ -479,20 +739,259 @@ export class Parser {
 
   /** Parse skills section */
   private parseSkillsSection(): SkillsSection {
+    const startToken = this.current();
     this.expect("KEYWORD", "skills");
     this.expect("COLON");
     this.expectNewline();
-    // Simplified - not commonly used in new syntax
-    return { kind: "skills", items: [] };
+
+    const items: SkillItem[] = [];
+
+    if (this.check("INDENT")) {
+      this.advance();
+      while (!this.check("DEDENT") && !this.check("EOF")) {
+        this.skipNewlines();
+        if (this.check("DEDENT") || this.check("EOF")) break;
+
+        const name = this.expect("IDENTIFIER").value;
+        this.expect("COLON");
+        this.expectNewline();
+
+        let type: SkillItem["type"] | undefined;
+        const adapters: string[] = [];
+        let defaultMaxSlippage: ExpressionNode | undefined;
+
+        if (this.check("INDENT")) {
+          this.advance();
+          while (!this.check("DEDENT") && !this.check("EOF")) {
+            this.skipNewlines();
+            if (this.check("DEDENT") || this.check("EOF")) break;
+
+            const keyToken = this.current();
+            if (!(this.check("IDENTIFIER") || this.check("KEYWORD"))) {
+              throw new ParseError(
+                `Expected skill field but got ${this.current().type} '${this.current().value}'`,
+                { location: this.current().location, source: this.source }
+              );
+            }
+            const key = keyToken.value;
+            this.advance();
+            this.expect("COLON");
+
+            if (key === "type") {
+              // Accept identifier or string
+              if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+                type = this.advance().value as SkillItem["type"];
+              } else if (this.check("STRING")) {
+                type = this.advance().value as SkillItem["type"];
+              } else {
+                throw new ParseError("Expected skill type value", {
+                  location: this.current().location,
+                  source: this.source,
+                });
+              }
+              this.expectNewline();
+            } else if (key === "adapters") {
+              if (this.check("LBRACKET")) {
+                this.advance();
+                while (!this.check("RBRACKET")) {
+                  if (this.check("VENUE_REF")) {
+                    adapters.push(this.advance().value);
+                  } else if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+                    adapters.push(this.advance().value);
+                  } else if (this.check("STRING")) {
+                    adapters.push(this.advance().value);
+                  } else {
+                    throw new ParseError("Expected adapter name", {
+                      location: this.current().location,
+                      source: this.source,
+                    });
+                  }
+                  if (this.check("COMMA")) this.advance();
+                }
+                this.expect("RBRACKET");
+              } else {
+                // Single adapter
+                if (this.check("VENUE_REF")) {
+                  adapters.push(this.advance().value);
+                } else if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+                  adapters.push(this.advance().value);
+                } else if (this.check("STRING")) {
+                  adapters.push(this.advance().value);
+                } else {
+                  throw new ParseError("Expected adapter name", {
+                    location: this.current().location,
+                    source: this.source,
+                  });
+                }
+              }
+              this.expectNewline();
+            } else if (key === "default_constraints") {
+              this.expectNewline();
+              if (this.check("INDENT")) {
+                this.advance();
+                while (!this.check("DEDENT") && !this.check("EOF")) {
+                  this.skipNewlines();
+                  if (this.check("DEDENT") || this.check("EOF")) break;
+                  const dcKey = this.expect("IDENTIFIER").value;
+                  this.expect("COLON");
+                  const value = this.parseExpression();
+                  if (dcKey === "max_slippage") {
+                    defaultMaxSlippage = value;
+                  }
+                  this.expectNewline();
+                }
+                if (this.check("DEDENT")) this.advance();
+              }
+            } else {
+              // Unknown field, parse and ignore
+              this.parseExpression();
+              this.expectNewline();
+            }
+          }
+          if (this.check("DEDENT")) this.advance();
+        }
+
+        if (!type) {
+          throw new ParseError(`Skill '${name}' missing type`, {
+            location: this.current().location,
+            source: this.source,
+          });
+        }
+
+        items.push({
+          name,
+          type,
+          adapters,
+          defaultConstraints: defaultMaxSlippage ? { maxSlippage: defaultMaxSlippage } : undefined,
+        } as SkillItem);
+
+        this.skipNewlines();
+      }
+      if (this.check("DEDENT")) this.advance();
+    }
+
+    const node: SkillsSection = { kind: "skills", items };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   /** Parse advisors section */
   private parseAdvisorsSection(): AdvisorsSection {
+    const startToken = this.current();
     this.expect("KEYWORD", "advisors");
     this.expect("COLON");
     this.expectNewline();
-    // Simplified - advisors are typically inline in new syntax
-    return { kind: "advisors", items: [] };
+
+    const items: AdvisorsSection["items"] = [];
+
+    if (this.check("INDENT")) {
+      this.advance();
+      while (!this.check("DEDENT") && !this.check("EOF")) {
+        this.skipNewlines();
+        if (this.check("DEDENT") || this.check("EOF")) break;
+
+        const name = this.expect("IDENTIFIER").value;
+        this.expect("COLON");
+        this.expectNewline();
+
+        const advisor: AdvisorItem = {
+          name,
+          model: "sonnet",
+        } as AdvisorItem;
+
+        if (this.check("INDENT")) {
+          this.advance();
+          while (!this.check("DEDENT") && !this.check("EOF")) {
+            this.skipNewlines();
+            if (this.check("DEDENT") || this.check("EOF")) break;
+
+            const keyToken = this.current();
+            if (!(this.check("IDENTIFIER") || this.check("KEYWORD"))) {
+              throw new ParseError(
+                `Expected advisor field but got ${this.current().type} '${this.current().value}'`,
+                { location: this.current().location, source: this.source }
+              );
+            }
+            const key = keyToken.value;
+            this.advance();
+            this.expect("COLON");
+
+            if (key === "model") {
+              if (this.check("STRING")) {
+                advisor.model = this.advance().value as AdvisorItem["model"];
+              } else if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+                advisor.model = this.advance().value as AdvisorItem["model"];
+              } else {
+                throw new ParseError("Expected model value", {
+                  location: this.current().location,
+                  source: this.source,
+                });
+              }
+              this.expectNewline();
+            } else if (key === "system" || key === "system_prompt") {
+              const value = this.expect("STRING").value;
+              advisor.systemPrompt = value;
+              this.expectNewline();
+            } else if (key === "skills") {
+              advisor.skills = this.parseStringList();
+              this.expectNewline();
+            } else if (key === "allowed_tools") {
+              advisor.allowedTools = this.parseStringList();
+              this.expectNewline();
+            } else if (key === "mcp") {
+              advisor.mcp = this.parseStringList();
+              this.expectNewline();
+            } else if (key === "timeout") {
+              const value = this.expect("NUMBER").value;
+              advisor.timeout = Number.parseFloat(value);
+              this.expectNewline();
+            } else if (key === "fallback") {
+              if (this.check("BOOLEAN")) {
+                advisor.fallback = this.advance().value === "true";
+              } else {
+                throw new ParseError("Expected boolean fallback", {
+                  location: this.current().location,
+                  source: this.source,
+                });
+              }
+              this.expectNewline();
+            } else if (key === "rate_limit") {
+              this.expectNewline();
+              if (this.check("INDENT")) {
+                this.advance();
+                while (!this.check("DEDENT") && !this.check("EOF")) {
+                  this.skipNewlines();
+                  if (this.check("DEDENT") || this.check("EOF")) break;
+                  const rlKey = this.expect("IDENTIFIER").value;
+                  this.expect("COLON");
+                  const value = this.expect("NUMBER").value;
+                  if (rlKey === "max_per_run") {
+                    advisor.maxPerRun = Number.parseFloat(value);
+                  } else if (rlKey === "max_per_hour") {
+                    advisor.maxPerHour = Number.parseFloat(value);
+                  }
+                  this.expectNewline();
+                }
+                if (this.check("DEDENT")) this.advance();
+              }
+            } else {
+              // Unknown field - parse and ignore
+              this.parseExpression();
+              this.expectNewline();
+            }
+          }
+          if (this.check("DEDENT")) this.advance();
+        }
+
+        items.push(advisor);
+        this.skipNewlines();
+      }
+      if (this.check("DEDENT")) this.advance();
+    }
+
+    const node: AdvisorsSection = { kind: "advisors", items };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   /** Parse guards section: guards:\n    id: expression */
@@ -523,12 +1022,32 @@ export class Parser {
         }
         this.expect("COLON");
         const check = this.parseExpression();
+
+        let severity: GuardItem["severity"] = "halt";
+        let message: string | undefined;
+        let fallback: boolean | undefined;
+
+        if (this.check("KEYWORD", "with")) {
+          const meta = this.parseConstraintClause();
+          for (const { key, value } of meta.constraints) {
+            if (key === "severity" && value.kind === "literal") {
+              severity = String((value as LiteralNode).value) as GuardItem["severity"];
+            } else if (key === "message" && value.kind === "literal") {
+              message = String((value as LiteralNode).value);
+            } else if (key === "fallback" && value.kind === "literal") {
+              fallback = Boolean((value as LiteralNode).value);
+            }
+          }
+        }
+
         this.expectNewline();
 
         items.push({
           id,
           check,
-          severity: "halt", // default
+          severity,
+          message,
+          fallback,
         } as GuardItem);
 
         this.skipNewlines();
@@ -578,6 +1097,43 @@ export class Parser {
         case "daily":
           this.advance();
           return { kind: "daily" };
+        case "condition": {
+          this.advance();
+          const expression = this.parseExpression();
+          let pollInterval: number | undefined;
+          if (
+            this.check("KEYWORD", "every") ||
+            (this.check("IDENTIFIER") && this.current().value === "every")
+          ) {
+            this.advance();
+            const durationToken = this.expect("NUMBER");
+            pollInterval = Number.parseFloat(durationToken.value);
+          }
+          return { kind: "condition", expression, pollInterval };
+        }
+        case "event": {
+          this.advance();
+          let eventName = "";
+          if (this.check("STRING")) {
+            eventName = this.advance().value;
+          } else if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+            eventName = this.advance().value;
+          } else {
+            throw new ParseError("Expected event name", {
+              location: this.current().location,
+              source: this.source,
+            });
+          }
+          let filter: ExpressionNode | undefined;
+          if (
+            this.check("KEYWORD", "where") ||
+            (this.check("IDENTIFIER") && this.current().value === "where")
+          ) {
+            this.advance();
+            filter = this.parseExpression();
+          }
+          return { kind: "event", event: eventName, filter };
+        }
       }
     }
 
@@ -633,6 +1189,16 @@ export class Parser {
           return this.parseIfStatement();
         case "for":
           return this.parseForStatement();
+        case "repeat":
+          return this.parseRepeatStatement();
+        case "loop":
+          return this.parseUntilStatement();
+        case "try":
+          return this.parseTryStatement();
+        case "parallel":
+          return this.parseParallelStatement();
+        case "do":
+          return this.parseDoStatement();
         case "atomic":
           return this.parseAtomicStatement();
         case "emit":
@@ -665,6 +1231,12 @@ export class Parser {
     const startToken = this.current();
     const expr = this.parseExpression();
 
+    // Pipeline expression statement
+    if (this.check("OPERATOR") && this.current().value === "|") {
+      const node = this.parsePipeline(expr, undefined, startToken);
+      return node;
+    }
+
     // If it's a method call, convert to statement
     if (expr.kind === "call") {
       const callExpr = expr as CallExprNode;
@@ -676,6 +1248,11 @@ export class Parser {
           method: prop.property,
           args: callExpr.args,
         };
+
+        // Check for using clause: ... using skill
+        if (this.check("KEYWORD") && this.current().value === "using") {
+          node.skill = this.parseUsingClause();
+        }
 
         // Check for constraint clause: ... with key=value
         if (this.check("KEYWORD") && this.current().value === "with") {
@@ -698,11 +1275,28 @@ export class Parser {
   }
 
   /** Parse assignment: x = expr [with key=value, ...] */
-  private parseAssignment(): AssignmentNode {
+  private parseAssignment(): StatementNode {
     const startToken = this.current();
     const target = this.expect("IDENTIFIER").value;
     this.expect("ASSIGN");
+    // Special case: advise statement
+    if (this.check("KEYWORD", "advise")) {
+      const node = this.parseAdviseStatement(target, startToken);
+      return node;
+    }
+
     const value = this.parseExpression();
+
+    // Pipeline assignment
+    if (this.check("OPERATOR") && this.current().value === "|") {
+      const node = this.parsePipeline(value, target, startToken);
+      return node;
+    }
+
+    let skill: string | undefined;
+    if (this.check("KEYWORD") && this.current().value === "using") {
+      skill = this.parseUsingClause();
+    }
 
     let constraints: ConstraintClause | undefined;
     if (this.check("KEYWORD") && this.current().value === "with") {
@@ -710,7 +1304,598 @@ export class Parser {
     }
 
     this.expectNewline();
-    const node: AssignmentNode = { kind: "assignment", target, value, constraints };
+    const node: AssignmentNode = { kind: "assignment", target, value, constraints, skill };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  /** Parse advise statement (assignment form) */
+  private parseAdviseStatement(target: string, startToken: Token): AdviseNode {
+    this.expect("KEYWORD", "advise");
+    const advisor = this.expect("IDENTIFIER").value;
+    this.expect("COLON");
+    const prompt = this.expect("STRING").value;
+    this.expectNewline();
+
+    let outputSchema: AdvisoryOutputSchemaNode | undefined;
+    let timeout: number | undefined;
+    let fallback: ExpressionNode | undefined;
+
+    if (this.check("INDENT")) {
+      this.advance();
+      while (!this.check("DEDENT") && !this.check("EOF")) {
+        this.skipNewlines();
+        if (this.check("DEDENT") || this.check("EOF")) break;
+
+        const keyToken = this.current();
+        if (!(this.check("IDENTIFIER") || this.check("KEYWORD"))) {
+          throw new ParseError(
+            `Expected advise field but got ${this.current().type} '${this.current().value}'`,
+            { location: this.current().location, source: this.source }
+          );
+        }
+        const key = keyToken.value;
+        this.advance();
+        this.expect("COLON");
+
+        if (key === "output") {
+          outputSchema = this.parseOutputSchemaBlock(keyToken);
+        } else if (key === "timeout") {
+          const value = this.expect("NUMBER").value;
+          timeout = Number.parseFloat(value);
+          this.expectNewline();
+        } else if (key === "fallback") {
+          fallback = this.parseExpression();
+          this.expectNewline();
+        } else {
+          this.parseExpression();
+          this.expectNewline();
+        }
+      }
+      if (this.check("DEDENT")) this.advance();
+    }
+
+    if (!outputSchema || timeout === undefined || fallback === undefined) {
+      throw new ParseError("Advise statement requires output, timeout, and fallback", {
+        location: startToken.location,
+        source: this.source,
+      });
+    }
+
+    const node: AdviseNode = {
+      kind: "advise",
+      target,
+      advisor,
+      prompt,
+      outputSchema,
+      timeout,
+      fallback,
+    };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  private parseOutputSchemaBlock(keyToken: Token): AdvisoryOutputSchemaNode {
+    if (!this.check("NEWLINE")) {
+      // Allow inline type: output: boolean
+      const inlineType = this.parseSchemaType();
+      this.expectNewline();
+      return { kind: "advisory_output_schema", type: inlineType };
+    }
+
+    this.expectNewline();
+    if (!this.check("INDENT")) {
+      throw new ParseError("Expected indented output block", {
+        location: keyToken.location,
+        source: this.source,
+      });
+    }
+    this.advance();
+    return this.parseSchemaObject(keyToken);
+  }
+
+  private parseSchemaAfterColon(keyToken: Token): AdvisoryOutputSchemaNode {
+    if (this.check("NEWLINE")) {
+      this.expectNewline();
+      if (!this.check("INDENT")) {
+        throw new ParseError("Expected indented schema block", {
+          location: keyToken.location,
+          source: this.source,
+        });
+      }
+      this.advance();
+      return this.parseSchemaObject(keyToken);
+    }
+
+    const inlineType = this.parseSchemaType();
+    this.expectNewline();
+    return { kind: "advisory_output_schema", type: inlineType };
+  }
+
+  private parseSchemaObject(keyToken: Token): AdvisoryOutputSchemaNode {
+    let outType: AdvisoryOutputSchemaNode["type"] | undefined;
+    let values: string[] | undefined;
+    let min: number | undefined;
+    let max: number | undefined;
+    let minLength: number | undefined;
+    let maxLength: number | undefined;
+    let pattern: string | undefined;
+    let fields: Record<string, AdvisoryOutputSchemaNode> | undefined;
+    let items: AdvisoryOutputSchemaNode | undefined;
+
+    while (!this.check("DEDENT") && !this.check("EOF")) {
+      this.skipNewlines();
+      if (this.check("DEDENT") || this.check("EOF")) break;
+      if (!(this.check("IDENTIFIER") || this.check("KEYWORD"))) {
+        throw new ParseError(
+          `Expected output schema field but got ${this.current().type} '${this.current().value}'`,
+          { location: this.current().location, source: this.source }
+        );
+      }
+      const outKey = this.current().value;
+      this.advance();
+      this.expect("COLON");
+      if (outKey === "type") {
+        outType = this.parseSchemaType();
+        this.expectNewline();
+      } else if (outKey === "values") {
+        values = this.parseStringList();
+        this.expectNewline();
+      } else if (outKey === "min") {
+        const val = this.expect("NUMBER").value;
+        min = Number.parseFloat(val);
+        this.expectNewline();
+      } else if (outKey === "max") {
+        const val = this.expect("NUMBER").value;
+        max = Number.parseFloat(val);
+        this.expectNewline();
+      } else if (outKey === "min_length") {
+        const val = this.expect("NUMBER").value;
+        minLength = Number.parseFloat(val);
+        this.expectNewline();
+      } else if (outKey === "max_length") {
+        const val = this.expect("NUMBER").value;
+        maxLength = Number.parseFloat(val);
+        this.expectNewline();
+      } else if (outKey === "pattern") {
+        pattern = this.expect("STRING").value;
+        this.expectNewline();
+      } else if (outKey === "fields") {
+        fields = this.parseSchemaFields(keyToken);
+      } else if (outKey === "items") {
+        items = this.parseSchemaAfterColon(keyToken);
+      } else {
+        this.parseExpression();
+        this.expectNewline();
+      }
+    }
+
+    if (this.check("DEDENT")) this.advance();
+
+    if (!outType) {
+      throw new ParseError("Advisory output type is required", {
+        location: keyToken.location,
+        source: this.source,
+      });
+    }
+
+    return {
+      kind: "advisory_output_schema",
+      type: outType,
+      values,
+      min,
+      max,
+      minLength,
+      maxLength,
+      pattern,
+      fields,
+      items,
+    };
+  }
+
+  private parseSchemaFields(keyToken: Token): Record<string, AdvisoryOutputSchemaNode> {
+    this.expectNewline();
+    if (!this.check("INDENT")) {
+      throw new ParseError("Expected indented fields block", {
+        location: keyToken.location,
+        source: this.source,
+      });
+    }
+    this.advance();
+
+    const fields: Record<string, AdvisoryOutputSchemaNode> = {};
+    while (!this.check("DEDENT") && !this.check("EOF")) {
+      this.skipNewlines();
+      if (this.check("DEDENT") || this.check("EOF")) break;
+      const fieldName = this.expect("IDENTIFIER").value;
+      this.expect("COLON");
+      fields[fieldName] = this.parseSchemaAfterColon(keyToken);
+    }
+
+    if (this.check("DEDENT")) this.advance();
+    return fields;
+  }
+
+  private parseSchemaType(): AdvisoryOutputSchemaNode["type"] {
+    if (this.check("STRING")) {
+      return this.advance().value as AdvisoryOutputSchemaNode["type"];
+    }
+    if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+      return this.advance().value as AdvisoryOutputSchemaNode["type"];
+    }
+    throw new ParseError("Expected output schema type", {
+      location: this.current().location,
+      source: this.source,
+    });
+  }
+
+  /** Parse using clause: using skill_name */
+  private parseUsingClause(): string {
+    this.expect("KEYWORD", "using");
+    if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+      return this.advance().value;
+    }
+    if (this.check("STRING")) {
+      return this.advance().value;
+    }
+    throw new ParseError("Expected skill name after 'using'", {
+      location: this.current().location,
+      source: this.source,
+    });
+  }
+
+  /** Parse repeat statement */
+  private parseRepeatStatement(): RepeatNode {
+    const startToken = this.current();
+    this.expect("KEYWORD", "repeat");
+    const countToken = this.expect("NUMBER");
+    const count: ExpressionNode = {
+      kind: "literal",
+      value: countToken.value.includes(".")
+        ? Number.parseFloat(countToken.value)
+        : Number.parseInt(countToken.value, 10),
+      literalType: "number",
+    } as LiteralNode;
+    this.expect("COLON");
+    this.expectNewline();
+    const body = this.parseStatementBlock();
+    const node: RepeatNode = { kind: "repeat", count, body };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  /** Parse loop-until statement */
+  private parseUntilStatement(): UntilNode {
+    const startToken = this.current();
+    this.expect("KEYWORD", "loop");
+    this.expect("KEYWORD", "until");
+    const condition = this.parseExpression();
+
+    let maxIterations: number | undefined;
+    if (this.check("KEYWORD", "max")) {
+      this.advance();
+      const maxToken = this.expect("NUMBER");
+      maxIterations = Number.parseFloat(maxToken.value);
+    }
+
+    this.expect("COLON");
+    this.expectNewline();
+    const body = this.parseStatementBlock();
+    const node: UntilNode = { kind: "until", condition, maxIterations, body };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  /** Parse try/catch/finally */
+  private parseTryStatement(): TryNode {
+    const startToken = this.current();
+    this.expect("KEYWORD", "try");
+    this.expect("COLON");
+    this.expectNewline();
+    const tryBody = this.parseStatementBlock();
+
+    const catches: CatchNode[] = [];
+    while (this.check("KEYWORD", "catch")) {
+      catches.push(this.parseCatchBlock());
+    }
+
+    let finallyBody: StatementNode[] | undefined;
+    if (this.check("KEYWORD", "finally")) {
+      this.advance();
+      this.expect("COLON");
+      this.expectNewline();
+      finallyBody = this.parseStatementBlock();
+    }
+
+    const node: TryNode = { kind: "try", tryBody, catches, finallyBody };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  /** Parse catch block */
+  private parseCatchBlock(): CatchNode {
+    const startToken = this.current();
+    this.expect("KEYWORD", "catch");
+
+    let error = "*";
+    if (this.check("OPERATOR") && this.current().value === "*") {
+      this.advance();
+    } else if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+      error = this.advance().value;
+    }
+
+    this.expect("COLON");
+    this.expectNewline();
+
+    const body: StatementNode[] = [];
+    let action: CatchNode["action"];
+    let retry: RetrySpec | undefined;
+
+    if (this.check("INDENT")) {
+      this.advance();
+      while (!this.check("DEDENT") && !this.check("EOF")) {
+        this.skipNewlines();
+        if (this.check("DEDENT") || this.check("EOF")) break;
+
+        if (
+          (this.check("IDENTIFIER") || this.check("KEYWORD")) &&
+          this.current().value === "action"
+        ) {
+          this.advance();
+          this.expect("COLON");
+          if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+            action = this.advance().value as CatchNode["action"];
+          } else if (this.check("STRING")) {
+            action = this.advance().value as CatchNode["action"];
+          }
+          this.expectNewline();
+          continue;
+        }
+
+        if (
+          (this.check("IDENTIFIER") || this.check("KEYWORD")) &&
+          this.current().value === "retry"
+        ) {
+          this.advance();
+          this.expect("COLON");
+          this.expectNewline();
+          retry = this.parseRetrySpec();
+          continue;
+        }
+
+        body.push(this.parseStatement());
+        this.skipNewlines();
+      }
+      if (this.check("DEDENT")) this.advance();
+    }
+
+    const node: CatchNode = { kind: "catch", error, action, retry, body };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  /** Parse retry spec block */
+  private parseRetrySpec(): RetrySpec {
+    const startToken = this.current();
+    let maxAttempts = 3;
+    let backoff: RetrySpec["backoff"] = "none";
+    let backoffBase: number | undefined;
+    let maxBackoff: number | undefined;
+
+    if (this.check("INDENT")) {
+      this.advance();
+      while (!this.check("DEDENT") && !this.check("EOF")) {
+        this.skipNewlines();
+        if (this.check("DEDENT") || this.check("EOF")) break;
+        const key = this.expect("IDENTIFIER").value;
+        this.expect("COLON");
+        if (key === "max_attempts") {
+          maxAttempts = Number.parseFloat(this.expect("NUMBER").value);
+        } else if (key === "backoff") {
+          if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+            backoff = this.advance().value as RetrySpec["backoff"];
+          } else if (this.check("STRING")) {
+            backoff = this.advance().value as RetrySpec["backoff"];
+          }
+        } else if (key === "backoff_base") {
+          backoffBase = Number.parseFloat(this.expect("NUMBER").value);
+        } else if (key === "max_backoff") {
+          maxBackoff = Number.parseFloat(this.expect("NUMBER").value);
+        } else {
+          this.parseExpression();
+        }
+        this.expectNewline();
+      }
+      if (this.check("DEDENT")) this.advance();
+    }
+
+    const node: RetrySpec = {
+      kind: "retry",
+      maxAttempts,
+      backoff,
+      backoffBase,
+      maxBackoff,
+    };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  /** Parse parallel statement */
+  private parseParallelStatement(): ParallelNode {
+    const startToken = this.current();
+    this.expect("KEYWORD", "parallel");
+
+    let join: ParallelJoinNode | undefined;
+    let onFail: ParallelNode["onFail"] | undefined;
+
+    // Optional header config before colon: join=..., on_fail=...
+    while (!this.check("COLON") && !this.check("NEWLINE") && !this.check("EOF")) {
+      if (!(this.check("IDENTIFIER") || this.check("KEYWORD"))) break;
+      const key = this.advance().value;
+      if (!this.check("ASSIGN")) break;
+      this.advance();
+
+      if (key === "join") {
+        let joinType = "all";
+        if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+          joinType = this.advance().value;
+        } else if (this.check("STRING")) {
+          joinType = this.advance().value;
+        }
+        join = {
+          kind: "parallel_join",
+          type: joinType as ParallelJoinNode["type"],
+        };
+      } else if (key === "on_fail") {
+        if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+          onFail = this.advance().value as ParallelNode["onFail"];
+        } else if (this.check("STRING")) {
+          onFail = this.advance().value as ParallelNode["onFail"];
+        }
+      } else if (key === "metric") {
+        if (!join) {
+          join = { kind: "parallel_join", type: "best" };
+        }
+        join.metric = this.parseExpression();
+      } else if (key === "order") {
+        if (!join) {
+          join = { kind: "parallel_join", type: "best" };
+        }
+        if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+          join.order = this.advance().value as ParallelJoinNode["order"];
+        }
+      } else if (key === "count") {
+        if (!join) {
+          join = { kind: "parallel_join", type: "any" };
+        }
+        if (this.check("NUMBER")) {
+          join.count = Number.parseFloat(this.advance().value);
+        }
+      } else {
+        // Unknown header option, skip value
+        this.parseExpression();
+      }
+    }
+
+    this.expect("COLON");
+    this.expectNewline();
+
+    const branches: ParallelBranchNode[] = [];
+    if (this.check("INDENT")) {
+      this.advance();
+      while (!this.check("DEDENT") && !this.check("EOF")) {
+        this.skipNewlines();
+        if (this.check("DEDENT") || this.check("EOF")) break;
+
+        const name = this.expect("IDENTIFIER").value;
+        this.expect("COLON");
+        this.expectNewline();
+        const body = this.parseStatementBlock();
+        branches.push({ kind: "parallel_branch", name, body });
+        this.skipNewlines();
+      }
+      if (this.check("DEDENT")) this.advance();
+    }
+
+    const node: ParallelNode = { kind: "parallel", join, onFail, branches };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  /** Parse pipeline after source expression */
+  private parsePipeline(
+    source: ExpressionNode,
+    outputBinding: string | undefined,
+    startToken: Token
+  ): PipelineNode {
+    const stages: PipelineStageNode[] = [];
+
+    while (this.check("OPERATOR") && this.current().value === "|") {
+      this.advance(); // consume |
+
+      const opToken = this.expect("IDENTIFIER");
+      const op = opToken.value as PipelineStageNode["op"];
+
+      let initial: ExpressionNode | undefined;
+      let count: number | undefined;
+      let order: "asc" | "desc" | undefined;
+      let by: ExpressionNode | undefined;
+
+      // Optional args
+      if (op === "reduce" && this.check("LPAREN")) {
+        this.advance();
+        initial = this.parseExpression();
+        this.expect("RPAREN");
+      } else if ((op === "take" || op === "skip") && this.check("NUMBER")) {
+        count = Number.parseFloat(this.advance().value);
+      } else if (op === "sort") {
+        if (this.check("IDENTIFIER") && this.current().value === "by") {
+          this.advance();
+          by = this.parseExpression();
+        }
+        if (this.check("IDENTIFIER") && this.current().value === "order") {
+          this.advance();
+          if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+            order = this.advance().value as "asc" | "desc";
+          }
+        }
+      }
+
+      this.expect("COLON");
+      this.expectNewline();
+      const body = this.parseStatementBlock();
+      if (
+        body.length === 0 &&
+        (op === "map" || op === "filter" || op === "reduce" || op === "pmap")
+      ) {
+        throw new ParseError(`Pipeline stage '${op}' requires a body`, {
+          location: opToken.location,
+          source: this.source,
+        });
+      }
+
+      const stageStep = (body[0] ?? ({ kind: "pass" } as PassNode)) as StatementNode;
+
+      stages.push({
+        kind: "pipeline_stage",
+        op,
+        step: stageStep,
+        initial,
+        count,
+        order,
+        by,
+      });
+    }
+
+    const node: PipelineNode = { kind: "pipeline", source, stages, outputBinding };
+    node.span = this.makeSpan(startToken);
+    return node;
+  }
+
+  /** Parse do statement (block invocation) */
+  private parseDoStatement(): DoNode {
+    const startToken = this.current();
+    this.expect("KEYWORD", "do");
+    const nameParts: string[] = [];
+    nameParts.push(this.expect("IDENTIFIER").value);
+    while (this.check("DOT")) {
+      this.advance();
+      nameParts.push(this.expect("IDENTIFIER").value);
+    }
+    const name = nameParts.join(".");
+    const args: ExpressionNode[] = [];
+
+    if (this.check("LPAREN")) {
+      this.advance();
+      while (!this.check("RPAREN")) {
+        args.push(this.parseExpression());
+        if (this.check("COMMA")) this.advance();
+      }
+      this.expect("RPAREN");
+    }
+
+    this.expectNewline();
+    const node: DoNode = { kind: "do", name, args };
     node.span = this.makeSpan(startToken);
     return node;
   }
@@ -724,7 +1909,14 @@ export class Parser {
     let condition: ExpressionNode;
     if (this.check("ADVISORY")) {
       const prompt = this.advance().value;
-      condition = { kind: "advisory_expr", prompt } as AdvisoryExpr;
+      let advisor: string | undefined;
+      if (this.check("KEYWORD", "via")) {
+        this.advance();
+        if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+          advisor = this.advance().value;
+        }
+      }
+      condition = { kind: "advisory_expr", prompt, advisor } as AdvisoryExpr;
     } else {
       condition = this.parseExpression();
     }
@@ -814,7 +2006,15 @@ export class Parser {
     if (this.check("LPAREN")) {
       this.advance();
       while (!this.check("RPAREN")) {
-        const key = this.expect("IDENTIFIER").value;
+        let key: string;
+        if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+          key = this.advance().value;
+        } else {
+          throw new ParseError(
+            `Expected identifier in emit but got ${this.current().type} '${this.current().value}'`,
+            { location: this.current().location, source: this.source }
+          );
+        }
         this.expect("ASSIGN");
         const value = this.parseExpression();
         data.push({ key, value });
@@ -1070,6 +2270,10 @@ export class Parser {
       const value = token.value.includes(".")
         ? Number.parseFloat(token.value)
         : Number.parseInt(token.value, 10);
+      if (this.check("IDENTIFIER")) {
+        const unit = this.advance().value;
+        return { kind: "unit_literal", value, unit } as UnitLiteralNode;
+      }
       return { kind: "literal", value, literalType: "number" } as LiteralNode;
     }
 
@@ -1110,7 +2314,14 @@ export class Parser {
     // Advisory: **text**
     if (token.type === "ADVISORY") {
       this.advance();
-      return { kind: "advisory_expr", prompt: token.value } as AdvisoryExpr;
+      let advisor: string | undefined;
+      if (this.check("KEYWORD", "via")) {
+        this.advance();
+        if (this.check("IDENTIFIER") || this.check("KEYWORD")) {
+          advisor = this.advance().value;
+        }
+      }
+      return { kind: "advisory_expr", prompt: token.value, advisor } as AdvisoryExpr;
     }
 
     // Array literal: [a, b, c]
@@ -1170,6 +2381,7 @@ export class Parser {
       "skills",
       "advisors",
       "guards",
+      "block",
     ]);
     if (
       token.type === "IDENTIFIER" ||

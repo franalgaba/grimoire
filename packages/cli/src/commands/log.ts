@@ -97,6 +97,12 @@ export async function logCommand(
         case "action_reverted":
           details = chalk.red(`tx=${entry.event.txHash} reason=${entry.event.reason}`);
           break;
+        case "event_emitted":
+          details = chalk.dim(`event=${entry.event.event}`);
+          break;
+        case "constraint_evaluated":
+          details = chalk.dim(`step=${entry.event.stepId}`);
+          break;
         default:
           details = chalk.dim(JSON.stringify(entry.event));
       }

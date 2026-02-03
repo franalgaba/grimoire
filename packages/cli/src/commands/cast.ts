@@ -27,6 +27,7 @@ import type { VenueAdapter } from "@grimoire/core";
 import { adapters, createHyperliquidAdapter } from "@grimoire/venues";
 import chalk from "chalk";
 import ora from "ora";
+import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";
 import { withStatePersistence } from "./state-helpers.js";
 
 const DEFAULT_KEYSTORE_PATH = join(homedir(), ".grimoire", "keystore.json");
@@ -36,6 +37,7 @@ interface CastOptions {
   vault?: string;
   chain?: string;
   dryRun?: boolean;
+  advisorSkillsDir?: string | string[];
   // Key options
   privateKey?: string;
   keyEnv?: string;
@@ -127,7 +129,7 @@ export async function castCommand(spellPath: string, options: CastOptions): Prom
     console.log(`  ${chalk.dim("Testnet:")} ${isTest ? "Yes" : "No"}`);
 
     // If we have a key, set up wallet execution
-    if (hasKey && mode === "execute") {
+    if (hasKey && mode !== "simulate") {
       await executeWithWallet(spell, params, options, chainId, isTest);
     } else {
       // Simulation mode (existing behavior)
@@ -233,6 +235,7 @@ async function executeWithWallet(
 
   const executionMode: ExecutionMode = options.dryRun ? "dry-run" : "execute";
   const gasMultiplier = options.gasMultiplier ? Number.parseFloat(options.gasMultiplier) : 1.1;
+  const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir);
 
   const confirmCallback =
     options.skipConfirm || isTest
@@ -266,6 +269,7 @@ async function executeWithWallet(
         },
         skipTestnetConfirmation: options.skipConfirm ?? false,
         adapters: configuredAdapters,
+        advisorSkillsDirs,
       });
     }
   );
@@ -311,6 +315,7 @@ async function executeSimulation(
   const spinner = ora("Running simulation...").start();
 
   const vault = (options.vault ?? "0x0000000000000000000000000000000000000000") as Address;
+  const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir);
 
   const result = await withStatePersistence(
     spell.id,
@@ -324,6 +329,7 @@ async function executeSimulation(
         persistentState,
         simulate: true,
         adapters,
+        advisorSkillsDirs,
       });
     }
   );

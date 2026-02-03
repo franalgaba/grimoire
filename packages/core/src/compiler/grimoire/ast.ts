@@ -23,6 +23,8 @@ export interface SpellAST extends ASTNode {
   name: string;
   sections: SectionNode[];
   triggers: TriggerHandler[];
+  imports: ImportNode[];
+  blocks: BlockDef[];
 }
 
 // =============================================================================
@@ -75,8 +77,9 @@ export interface ParamsSection extends ASTNode {
 
 export interface ParamItem extends ASTNode {
   name: string;
-  value: ExpressionNode;
-  type?: "number" | "bool" | "address" | "asset" | "string";
+  value?: ExpressionNode;
+  type?: "number" | "bool" | "address" | "asset" | "string" | "amount" | "bps" | "duration";
+  asset?: string;
   min?: number;
   max?: number;
 }
@@ -133,7 +136,9 @@ export interface SkillItem extends ASTNode {
   name: string;
   type: "swap" | "yield" | "lending" | "staking" | "bridge";
   adapters: string[];
-  maxSlippage?: number;
+  defaultConstraints?: {
+    maxSlippage?: ExpressionNode;
+  };
 }
 
 /** Advisors section */
@@ -146,6 +151,11 @@ export interface AdvisorItem extends ASTNode {
   name: string;
   model: "haiku" | "sonnet" | "opus";
   systemPrompt?: string;
+  skills?: string[];
+  allowedTools?: string[];
+  mcp?: string[];
+  timeout?: number;
+  fallback?: boolean;
   maxPerRun?: number;
   maxPerHour?: number;
 }
@@ -174,7 +184,8 @@ export type TriggerType =
   | { kind: "schedule"; cron: string }
   | { kind: "hourly" }
   | { kind: "daily" }
-  | { kind: "condition"; expression: ExpressionNode; pollInterval?: number };
+  | { kind: "condition"; expression: ExpressionNode; pollInterval?: number }
+  | { kind: "event"; event: string; filter?: ExpressionNode };
 
 /** Trigger handler: on manual: / on hourly: etc */
 export interface TriggerHandler extends ASTNode {
@@ -190,8 +201,15 @@ export interface TriggerHandler extends ASTNode {
 /** Statement node types */
 export type StatementNode =
   | AssignmentNode
+  | DoNode
   | IfNode
   | ForNode
+  | RepeatNode
+  | UntilNode
+  | TryNode
+  | ParallelNode
+  | PipelineNode
+  | AdviseNode
   | AtomicNode
   | MethodCallNode
   | EmitNode
@@ -200,12 +218,138 @@ export type StatementNode =
   | AdvisoryNode
   | PassNode;
 
+/** Import declaration */
+export interface ImportNode extends ASTNode {
+  kind: "import";
+  path: string;
+  alias?: string;
+}
+
+/** Block definition */
+export interface BlockDef extends ASTNode {
+  kind: "block";
+  name: string;
+  params: string[];
+  body: StatementNode[];
+}
+
+/** Do (block invocation) */
+export interface DoNode extends ASTNode {
+  kind: "do";
+  name: string;
+  args: ExpressionNode[];
+}
+
+/** Repeat loop: repeat N: ... */
+export interface RepeatNode extends ASTNode {
+  kind: "repeat";
+  count: ExpressionNode;
+  body: StatementNode[];
+}
+
+/** Until loop: loop until <expr> max N: ... */
+export interface UntilNode extends ASTNode {
+  kind: "until";
+  condition: ExpressionNode;
+  maxIterations?: number;
+  body: StatementNode[];
+}
+
+/** Try/catch/finally */
+export interface TryNode extends ASTNode {
+  kind: "try";
+  tryBody: StatementNode[];
+  catches: CatchNode[];
+  finallyBody?: StatementNode[];
+}
+
+export interface CatchNode extends ASTNode {
+  kind: "catch";
+  error: string;
+  action?: "skip" | "halt" | "revert";
+  retry?: RetrySpec;
+  body: StatementNode[];
+}
+
+export interface RetrySpec extends ASTNode {
+  kind: "retry";
+  maxAttempts: number;
+  backoff: "none" | "linear" | "exponential";
+  backoffBase?: number;
+  maxBackoff?: number;
+}
+
+/** Parallel execution */
+export interface ParallelNode extends ASTNode {
+  kind: "parallel";
+  join?: ParallelJoinNode;
+  onFail?: "abort" | "continue";
+  branches: ParallelBranchNode[];
+}
+
+export interface ParallelBranchNode extends ASTNode {
+  kind: "parallel_branch";
+  name: string;
+  body: StatementNode[];
+}
+
+export interface ParallelJoinNode extends ASTNode {
+  kind: "parallel_join";
+  type: "all" | "first" | "best" | "any" | "majority";
+  metric?: ExpressionNode;
+  order?: "max" | "min";
+  count?: number;
+}
+
+/** Pipeline operations */
+export interface PipelineNode extends ASTNode {
+  kind: "pipeline";
+  source: ExpressionNode;
+  stages: PipelineStageNode[];
+  outputBinding?: string;
+}
+
+export interface PipelineStageNode extends ASTNode {
+  kind: "pipeline_stage";
+  op: "map" | "filter" | "reduce" | "where" | "take" | "skip" | "sort" | "pmap";
+  step: StatementNode;
+  initial?: ExpressionNode;
+  count?: number;
+  order?: "asc" | "desc";
+  by?: ExpressionNode;
+}
+
+/** Advisory call statement: x = advise advisor: "prompt" ... */
+export interface AdviseNode extends ASTNode {
+  kind: "advise";
+  target: string;
+  advisor: string;
+  prompt: string;
+  outputSchema: AdvisoryOutputSchemaNode;
+  timeout: number;
+  fallback: ExpressionNode;
+}
+
+export interface AdvisoryOutputSchemaNode extends ASTNode {
+  kind: "advisory_output_schema";
+  type: "boolean" | "number" | "enum" | "string" | "object" | "array";
+  values?: string[];
+  min?: number;
+  max?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  fields?: Record<string, AdvisoryOutputSchemaNode>;
+  items?: AdvisoryOutputSchemaNode;
+}
+
 /** Assignment: x = expr [with key=value, ...] */
 export interface AssignmentNode extends ASTNode {
   kind: "assignment";
   target: string;
   value: ExpressionNode;
   constraints?: ConstraintClause;
+  skill?: string;
 }
 
 /** If statement: if cond: ... elif cond: ... else: ... */
@@ -241,6 +385,7 @@ export interface MethodCallNode extends ASTNode {
   args: ExpressionNode[];
   outputBinding?: string;
   constraints?: ConstraintClause;
+  skill?: string;
 }
 
 /** Emit statement: emit event_name(key=value, ...) */
@@ -291,6 +436,7 @@ export interface ConstraintClause extends ASTNode {
 /** Expression node types */
 export type ExpressionNode =
   | LiteralNode
+  | UnitLiteralNode
   | IdentifierNode
   | VenueRefExpr
   | AdvisoryExpr
@@ -309,6 +455,13 @@ export interface LiteralNode extends ASTNode {
   kind: "literal";
   value: string | number | boolean;
   literalType: "string" | "number" | "boolean" | "address";
+}
+
+/** Unit literal: 1.5 USDC, 50 bps */
+export interface UnitLiteralNode extends ASTNode {
+  kind: "unit_literal";
+  value: number;
+  unit: string;
 }
 
 /** Identifier reference */

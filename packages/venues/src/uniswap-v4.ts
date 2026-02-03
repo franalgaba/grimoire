@@ -231,12 +231,13 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
 
       const amount = toBigInt(action.amount);
       const isExactOut = action.mode === "exact_out";
-      const slippageBps = action.constraints?.maxSlippageBps ?? config.slippageBps ?? 50;
+      const defaultSlippageBps = action.constraints?.maxSlippageBps ?? config.slippageBps ?? 50;
 
       // Quote expected output/input via on-chain Quoter
       const quoter = quoters[ctx.chainId];
       let expectedAmount = amount; // fallback if no quoter
 
+      let hasQuote = false;
       if (quoter) {
         try {
           const quoteParams = {
@@ -263,6 +264,7 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
             });
             expectedAmount = result[0]; // amountOut expected
           }
+          hasQuote = true;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           throw new Error(
@@ -272,15 +274,39 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
         }
       }
 
+      const explicitMinOut = action.constraints?.minOutput;
+      const explicitMaxIn = action.constraints?.maxInput;
+      let slippageBps = defaultSlippageBps;
+
+      if (!isExactOut && explicitMinOut !== undefined && hasQuote) {
+        slippageBps = computeSlippageBpsFromMinOut(expectedAmount, explicitMinOut);
+      } else if (isExactOut && explicitMaxIn !== undefined && hasQuote) {
+        slippageBps = computeSlippageBpsFromMaxIn(expectedAmount, explicitMaxIn);
+      }
+
       // Calculate amounts with slippage
       let amountOutMinimum: bigint;
       let settleAmount: bigint;
 
       if (isExactOut) {
         amountOutMinimum = amount;
-        settleAmount = expectedAmount + (expectedAmount * BigInt(slippageBps)) / 10000n;
+        if (explicitMaxIn !== undefined) {
+          if (hasQuote && explicitMaxIn < expectedAmount) {
+            throw new Error("max_input is below expected input");
+          }
+          settleAmount = explicitMaxIn;
+        } else {
+          settleAmount = expectedAmount + (expectedAmount * BigInt(slippageBps)) / 10000n;
+        }
       } else {
-        amountOutMinimum = expectedAmount - (expectedAmount * BigInt(slippageBps)) / 10000n;
+        if (explicitMinOut !== undefined) {
+          if (hasQuote && explicitMinOut > expectedAmount) {
+            throw new Error("min_output exceeds expected output");
+          }
+          amountOutMinimum = explicitMinOut;
+        } else {
+          amountOutMinimum = expectedAmount - (expectedAmount * BigInt(slippageBps)) / 10000n;
+        }
         settleAmount = amount;
       }
 
@@ -348,6 +374,9 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
         `  amount:      ${amount.toString()} wei`,
         `  expected:    ~${expectedAmount.toString()} wei`,
         `  min output:  ${amountOutMinimum.toString()} wei (${slippageBps / 100}% slippage)`,
+        ...(isExactOut && explicitMaxIn !== undefined
+          ? [`  max input:  ${explicitMaxIn.toString()} wei`]
+          : []),
         `  fee tier:    ${fee / 10_000}%`,
         `  tickSpacing: ${tickSpacing}`,
         `  router:      ${shortAddr(router)}`,
@@ -372,6 +401,30 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
 export const uniswapV4Adapter = createUniswapV4Adapter();
 
 // ─── V4 Swap Encoding ────────────────────────────────────────────────────────
+
+function computeSlippageBpsFromMinOut(expectedOut: bigint, minOut: bigint): number {
+  if (expectedOut <= 0n) {
+    throw new Error("Cannot compute slippage from zero expected output");
+  }
+  if (minOut > expectedOut) {
+    throw new Error("min_output exceeds expected output");
+  }
+  const diff = expectedOut - minOut;
+  const bps = (diff * 10_000n) / expectedOut;
+  return Number(bps);
+}
+
+function computeSlippageBpsFromMaxIn(expectedIn: bigint, maxIn: bigint): number {
+  if (expectedIn <= 0n) {
+    throw new Error("Cannot compute slippage from zero expected input");
+  }
+  if (maxIn < expectedIn) {
+    throw new Error("max_input is below expected input");
+  }
+  const diff = maxIn - expectedIn;
+  const bps = (diff * 10_000n) / expectedIn;
+  return Number(bps);
+}
 
 function encodeV4SwapInput(params: {
   poolKey: PoolKey;

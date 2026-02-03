@@ -20,6 +20,11 @@ export interface AdvisorDef {
   model: "haiku" | "sonnet" | "opus";
   scope: "read-only"; // Always read-only, enforced
   systemPrompt?: string;
+  skills?: string[];
+  allowedTools?: string[];
+  mcp?: string[];
+  defaultTimeout?: number;
+  defaultFallback?: boolean;
   rateLimit?: {
     maxCallsPerRun: number;
     maxCallsPerHour: number;
@@ -146,7 +151,8 @@ export interface SpellSource {
     | unknown // Simple form: just default value
     | {
         // Extended form
-        type?: "number" | "bool" | "address" | "asset" | "string";
+        type?: "number" | "bool" | "address" | "asset" | "string" | "amount" | "bps" | "duration";
+        asset?: string;
         default?: unknown;
         min?: number;
         max?: number;
@@ -184,6 +190,11 @@ export interface SpellSource {
       model: string;
       scope?: string;
       system_prompt?: string;
+      skills?: string[];
+      allowed_tools?: string[];
+      mcp?: string[];
+      timeout?: number;
+      fallback?: boolean;
       rate_limit?: {
         max_per_run?: number;
         max_per_hour?: number;
@@ -195,6 +206,7 @@ export interface SpellSource {
     | { manual: true }
     | { schedule: string }
     | { condition: string; poll_interval: number }
+    | { event: string; filter?: string }
     | { any: Array<Record<string, unknown>> };
 
   steps?: Array<Record<string, unknown>>;

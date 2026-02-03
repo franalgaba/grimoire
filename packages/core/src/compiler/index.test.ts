@@ -51,6 +51,47 @@ describe("Compiler index", () => {
     }
   });
 
+  test("compileFile resolves imports with alias", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "grimoire-imports-"));
+    const blocksPath = join(dir, "blocks.spell");
+    const mainPath = join(dir, "main.spell");
+
+    writeFileSync(
+      blocksPath,
+      `spell Blocks
+
+  version: "1.0.0"
+
+  block add(a, b):
+    emit added(sum=a + b)
+`,
+      "utf-8"
+    );
+
+    writeFileSync(
+      mainPath,
+      `spell Main
+
+  version: "1.0.0"
+
+  import "blocks.spell" as lib
+
+  on manual:
+    do lib.add(1, 2)
+`,
+      "utf-8"
+    );
+
+    try {
+      const compiled = await compileFile(mainPath);
+      expect(compiled.success).toBe(true);
+      const hasEmit = compiled.ir?.steps.some((s) => s.kind === "emit");
+      expect(hasEmit).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("compiles atomic block to TryStep IR", () => {
     const source = `spell AtomicTest
 

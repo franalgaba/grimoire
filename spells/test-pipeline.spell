@@ -1,0 +1,20 @@
+# Test: Pipeline stages (sort, take, filter, map, reduce)
+
+spell TestPipeline
+
+  version: "1.0.0"
+  description: "Pipeline stages transform an array"
+  assets: [ETH, USDC, DAI, WETH]
+
+  on manual:
+    result = assets | sort by index order asc:
+      pass
+    | take 3:
+      pass
+    | filter:
+      keep = item != "USDC"
+    | map:
+      mapped = index + 1
+    | reduce(0):
+      sum = acc + item
+    emit pipeline_done(result=result)

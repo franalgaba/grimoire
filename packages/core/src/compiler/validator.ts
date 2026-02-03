@@ -4,7 +4,13 @@
  */
 
 import type { Expression } from "../types/expressions.js";
-import type { CompilationError, CompilationWarning, GuardDef, SpellIR } from "../types/ir.js";
+import type {
+  CompilationError,
+  CompilationWarning,
+  GuardDef,
+  SkillDef,
+  SpellIR,
+} from "../types/ir.js";
 import type { AdvisoryStep, LoopStep, Step } from "../types/steps.js";
 
 export interface ValidationResult {
@@ -27,6 +33,7 @@ export function validateIR(ir: SpellIR): ValidationResult {
   const stepIds = new Set(ir.steps.map((s) => s.id));
   const advisorNames = new Set(ir.advisors.map((a) => a.name));
   const skillNames = new Set(ir.skills.map((s) => s.name));
+  const skillsByName = new Map<string, SkillDef>(ir.skills.map((s) => [s.name, s]));
 
   // Validate steps
   for (const step of ir.steps) {
@@ -39,6 +46,7 @@ export function validateIR(ir: SpellIR): ValidationResult {
         stepIds,
         advisorNames,
         skillNames,
+        skillsByName,
         persistentState: new Set(Object.keys(ir.state.persistent)),
         ephemeralState: new Set(Object.keys(ir.state.ephemeral)),
       },
@@ -56,6 +64,7 @@ export function validateIR(ir: SpellIR): ValidationResult {
         assetSymbols,
         paramNames,
         advisorNames,
+        skillsByName,
         persistentState: new Set(Object.keys(ir.state.persistent)),
         ephemeralState: new Set(Object.keys(ir.state.ephemeral)),
       },
@@ -133,6 +142,7 @@ interface ValidationContext {
   stepIds: Set<string>;
   advisorNames: Set<string>;
   skillNames: Set<string>;
+  skillsByName: Map<string, SkillDef>;
   persistentState: Set<string>;
   ephemeralState: Set<string>;
 }
@@ -166,10 +176,29 @@ function validateStep(
     case "action":
       // Validate venue reference
       if ("venue" in step.action && step.action.venue) {
-        if (!ctx.venueAliases.has(step.action.venue)) {
-          errors.push({
-            code: "UNKNOWN_VENUE",
-            message: `Step '${step.id}' references unknown venue '${step.action.venue}'`,
+        const venue = step.action.venue;
+        const explicitSkill = step.skill ? ctx.skillsByName.get(step.skill) : undefined;
+        const inferredSkill = !explicitSkill ? ctx.skillsByName.get(venue) : undefined;
+        const skill = explicitSkill ?? inferredSkill;
+        const canAutoSelect =
+          !!skill && skill.adapters.some((adapter) => ctx.venueAliases.has(adapter));
+
+        if (!ctx.venueAliases.has(venue)) {
+          if (canAutoSelect) {
+            warnings.push({
+              code: "AUTO_VENUE",
+              message: `Step '${step.id}' will auto-select a venue from skill '${skill?.name ?? "unknown"}'`,
+            });
+          } else {
+            errors.push({
+              code: "UNKNOWN_VENUE",
+              message: `Step '${step.id}' references unknown venue '${venue}'`,
+            });
+          }
+        } else if (inferredSkill && canAutoSelect && !explicitSkill) {
+          warnings.push({
+            code: "SKILL_VENUE_AMBIGUOUS",
+            message: `Step '${step.id}' uses '${venue}' which matches both a venue alias and a skill; skill routing will take precedence`,
           });
         }
       }
@@ -267,7 +296,7 @@ function validateStep(
         if (stage.op === "sort") {
           validateExpression(stage.by, ctx, errors, `pipeline '${step.id}'`);
         }
-        if (stage.op === "map" || stage.op === "filter") {
+        if (stage.op === "map" || stage.op === "filter" || stage.op === "reduce") {
           if (!ctx.stepIds.has(stage.step)) {
             errors.push({
               code: "UNKNOWN_STEP_REFERENCE",

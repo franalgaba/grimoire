@@ -17,6 +17,7 @@ const DEFAULT_MARKETS: Record<number, Address> = {
   1: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2" as Address,
   8453: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5" as Address,
 };
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 
 export function createAaveV3Adapter(
   config: AaveV3AdapterConfig = { markets: DEFAULT_MARKETS }
@@ -106,6 +107,17 @@ export function createAaveV3Adapter(
       }
 
       const plan = extractExecutionPlan(planResult);
+      const allowInsufficientBalance = ctx.mode === "dry-run" || ctx.mode === "simulate";
+      if (
+        allowInsufficientBalance &&
+        plan &&
+        typeof plan === "object" &&
+        "__typename" in plan &&
+        plan.__typename === "InsufficientBalanceError"
+      ) {
+        return [buildInsufficientBalancePlaceholder(plan, action, ctx.mode)];
+      }
+
       return buildAaveTransactions(plan, action);
     },
   };
@@ -191,6 +203,32 @@ function buildAaveTransactions(plan: AaveExecutionPlan, action: AaveAction): Bui
   }
 
   return [toBuiltTx(plan, action, `Aave V3 ${action.type} ${action.asset}`)];
+}
+
+function buildInsufficientBalancePlaceholder(
+  plan: AaveExecutionPlan,
+  action: AaveAction,
+  mode?: "simulate" | "dry-run" | "execute"
+): BuiltTransaction {
+  const err = plan as unknown as {
+    required?: { raw?: string; value?: string };
+    available?: { raw?: string; value?: string };
+  };
+  const required = err.required?.value ?? err.required?.raw;
+  const available = err.available?.value ?? err.available?.raw;
+  const balanceInfo =
+    required && available ? ` (required: ${required}, available: ${available})` : "";
+  const modeLabel = mode ? ` ${mode}` : "";
+
+  return {
+    tx: {
+      to: ZERO_ADDRESS,
+      data: "0x",
+      value: 0n,
+    },
+    description: `Aave V3 ${action.type} ${action.asset}${modeLabel} placeholder${balanceInfo}`,
+    action,
+  };
 }
 
 function toBuiltTx(
@@ -287,8 +325,14 @@ function toHumanAmount(amount: AaveAction["amount"], decimals: number): string {
   if (typeof amount === "bigint") raw = amount;
   else if (typeof amount === "number") raw = BigInt(Math.floor(amount));
   else if (typeof amount === "string") raw = BigInt(amount);
-  else if (typeof amount === "object" && amount?.kind === "literal") raw = BigInt(amount.value);
-  else throw new Error("Unsupported amount type for Aave action");
+  else if (typeof amount === "object" && amount?.kind === "literal") {
+    const lit = amount.value;
+    if (typeof lit === "bigint") raw = lit;
+    else if (typeof lit === "number") raw = BigInt(Math.floor(lit));
+    else if (typeof lit === "string") raw = BigInt(lit);
+    else if (typeof lit === "boolean") raw = BigInt(lit ? 1 : 0);
+    else throw new Error("Unsupported literal amount type for Aave action");
+  } else throw new Error("Unsupported amount type for Aave action");
 
   const divisor = 10n ** BigInt(decimals);
   const whole = raw / divisor;

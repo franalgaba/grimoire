@@ -67,16 +67,22 @@ export function evaluate(expr: Expression, ctx: EvalContext): EvalValue {
     }
 
     case "item":
-      if (ctx.item === undefined) {
-        throw new Error("'item' is only available inside loops/pipelines");
+      if (ctx.item !== undefined) {
+        return ctx.item as EvalValue;
       }
-      return ctx.item as EvalValue;
+      if (ctx.bindings.has("item")) {
+        return ctx.bindings.get("item") as EvalValue;
+      }
+      throw new Error("'item' is only available inside loops/pipelines");
 
     case "index":
-      if (ctx.index === undefined) {
-        throw new Error("'index' is only available inside loops/pipelines");
+      if (ctx.index !== undefined) {
+        return ctx.index;
       }
-      return ctx.index;
+      if (ctx.bindings.has("index")) {
+        return ctx.bindings.get("index") as number;
+      }
+      throw new Error("'index' is only available inside loops/pipelines");
 
     case "binary":
       return evaluateBinary(expr.op, evaluate(expr.left, ctx), evaluate(expr.right, ctx));

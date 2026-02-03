@@ -1,0 +1,16 @@
+# Test: Block definitions + do + import
+
+spell TestBlocksImports
+
+  version: "1.0.0"
+  description: "Block invocation and import syntax"
+  assets: []
+
+  import "blocks/common.spell"
+
+  block add(a, b):
+    sum = a + b
+    emit added(sum=sum)
+
+  on manual:
+    do add(2, 3)

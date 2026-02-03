@@ -20,6 +20,8 @@ export interface VenueAdapterContext {
   walletAddress: Address;
   chainId: number;
   vault?: Address;
+  /** Execution mode (simulate, dry-run, execute). Undefined when adapters are used directly. */
+  mode?: "simulate" | "dry-run" | "execute";
 }
 
 export interface OffchainExecutionResult {

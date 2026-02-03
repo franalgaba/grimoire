@@ -38,8 +38,11 @@ interface ExecuteOptions {
   wallet?: Wallet;
   provider?: Provider;
   adapters?: VenueAdapter[];
+  advisorSkillsDirs?: string[];
 }
 ```
+
+`advisorSkillsDirs` points to directories that contain advisor skill folders (each with `SKILL.md` frontmatter). The runtime uses these to attach `skills`/`allowedTools` metadata to advisory events.
 
 ### ExecutionResult
 

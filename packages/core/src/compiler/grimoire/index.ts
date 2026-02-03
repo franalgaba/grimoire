@@ -19,21 +19,24 @@ import { transform } from "./transformer.js";
 /**
  * Parse Grimoire source to SpellSource
  */
-export function parseGrimoire(source: string): SpellSource {
+export function parseGrimoire(source: string, options?: { filePath?: string }): SpellSource {
   const ast = parse(source);
-  return transform(ast);
+  return transform(ast, options);
 }
 
 /**
  * Compile Grimoire source to IR
  */
-export function compileGrimoire(source: string): CompilationResult {
+export function compileGrimoire(
+  source: string,
+  options?: { filePath?: string }
+): CompilationResult {
   try {
     // Step 1: Parse to AST
     const ast = parse(source);
 
     // Step 2: Transform to SpellSource
-    const spellSource = transform(ast);
+    const spellSource = transform(ast, options);
 
     // Step 3: Generate IR
     const irResult = generateIR(spellSource);

@@ -58,6 +58,7 @@ Options:
 - `-p, --params <json>` — parameters as JSON
 - `--vault <address>` — vault address
 - `--chain <id>` — chain ID (default: 1)
+- `--advisor-skills-dir <dir>` — directory to resolve advisor skills (repeatable)
 - `--state-dir <dir>` — directory for state database (default: `.grimoire/`)
 - `--no-state` — disable state persistence
 
@@ -83,6 +84,7 @@ Options:
 - `--skip-confirm` — skip confirmation prompt
 - `-v, --verbose` — show verbose output
 - `--json` — machine-readable output
+- `--advisor-skills-dir <dir>` — directory to resolve advisor skills (repeatable)
 - `--state-dir <dir>` — directory for state database (default: `.grimoire/`)
 - `--no-state` — disable state persistence
 

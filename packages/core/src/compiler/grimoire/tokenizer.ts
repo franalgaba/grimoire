@@ -68,6 +68,22 @@ export const KEYWORDS = new Set([
   "for",
   "in",
   "while",
+  "repeat",
+  "loop",
+  "until",
+  "try",
+  "catch",
+  "finally",
+  "parallel",
+  "join",
+  "on_fail",
+  "block",
+  "import",
+  "do",
+  "advise",
+  "using",
+  "via",
+  "output",
   "atomic",
   "emit",
   "halt",
@@ -85,13 +101,18 @@ export const KEYWORDS = new Set([
   "persistent",
   "ephemeral",
   "with",
+  "condition",
+  "event",
+  "every",
+  "where",
+  "as",
 ]);
 
 /** Multi-character operators */
 const MULTI_CHAR_OPS = ["==", "!=", "<=", ">=", "**"];
 
 /** Single-character operators */
-const SINGLE_CHAR_OPS = new Set(["+", "-", "*", "/", "%", "<", ">"]);
+const SINGLE_CHAR_OPS = new Set(["+", "-", "*", "/", "%", "<", ">", "|"]);
 
 // =============================================================================
 // TOKENIZER CLASS

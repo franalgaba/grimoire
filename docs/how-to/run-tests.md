@@ -25,7 +25,7 @@ The onchain test runner (`scripts/run-onchain-tests.sh`) validates venue adapter
 
 | Phase | What it does | Requires |
 |-------|-------------|----------|
-| 0 | Compile all spells | Nothing |
+| 0 | Compile all spells (`spells/` + `@spells/`) | Nothing |
 | 1 | Simulate pure-computation spells | Nothing |
 | 2 | Simulate feature spells (guards, constraints, onFailure) | Nothing |
 | 3 | Cast feature spells (guards, constraints, output binding, onFailure) | `--dry-run` or `--execute` |

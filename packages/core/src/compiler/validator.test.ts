@@ -111,6 +111,38 @@ describe("Validator", () => {
     expect(result.warnings.some((w) => w.code === "UNKNOWN_ASSET")).toBe(true);
   });
 
+  test("allows auto-selected venues for skills", () => {
+    const ir = createValidIR();
+    ir.aliases.push({
+      alias: "uniswap",
+      chain: 1,
+      address: "0x0000000000000000000000000000000000000004",
+    });
+    ir.skills = [{ name: "dex", type: "swap", adapters: ["uniswap"] }];
+    ir.steps = [
+      {
+        kind: "action",
+        id: "action_auto",
+        skill: "dex",
+        action: {
+          type: "swap",
+          venue: "dex",
+          assetIn: "USDC",
+          assetOut: "USDC",
+          amount: { kind: "literal", value: 1, type: "int" },
+          mode: "exact_in",
+        },
+        constraints: {},
+        onFailure: "revert",
+        dependsOn: [],
+      },
+    ];
+
+    const result = validateIR(ir);
+    expect(result.valid).toBe(true);
+    expect(result.warnings.some((w) => w.code === "AUTO_VENUE")).toBe(true);
+  });
+
   test("detects dependency cycles", () => {
     const ir = createValidIR();
     ir.steps = [

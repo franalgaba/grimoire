@@ -1,0 +1,18 @@
+# Test: Try/Catch with retry and finally
+
+spell TestTryCatchRetry
+
+  version: "1.0.0"
+  description: "Try/catch retries once and succeeds"
+  assets: []
+
+  on manual:
+    try:
+      boom = missing_binding
+    catch *:
+      retry:
+        max_attempts: 2
+        backoff: none
+      action: skip
+    finally:
+      emit try_finally(note="done")

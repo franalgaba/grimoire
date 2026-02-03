@@ -64,7 +64,13 @@ export function parseSpell(content: string): ParseResult {
 export async function parseSpellFile(filePath: string): Promise<ParseResult> {
   try {
     const content = await Bun.file(filePath).text();
-    return parseSpell(content);
+    const source = parseGrimoire(content, { filePath });
+    return {
+      success: true,
+      source,
+      errors: [],
+      warnings: [],
+    };
   } catch (e) {
     const error = e as Error;
     return {
@@ -95,7 +101,7 @@ export function compile(source: string): CompilationResult {
 export async function compileFile(filePath: string): Promise<CompilationResult> {
   try {
     const content = await Bun.file(filePath).text();
-    return compile(content);
+    return compileGrimoire(content, { filePath });
   } catch (e) {
     const error = e as Error;
     return {

@@ -1,0 +1,7 @@
+spell CommonBlocks
+
+  version: "1.0.0"
+
+  block add(a, b):
+    sum = a + b
+    emit added(sum=sum)

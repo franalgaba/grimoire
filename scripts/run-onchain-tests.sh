@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # ============================================================================
 # Grimoire Onchain Test Suite
-# Validates all 4 new spell syntax features end-to-end
+# Validates spell syntax features end-to-end
 #
 # Features tested:
-#   1. Guards section      — spell-level invariants
-#   2. Action constraints  — `with slippage=50, deadline=300`
-#   3. Output binding      — `result = venue.method(args)`
-#   4. onFailure mode      — `atomic skip:` / `atomic halt:`
+#   - Guards section           — spell-level invariants
+#   - Action constraints       — `with slippage=50, deadline=300, ...`
+#   - Output binding           — `result = venue.method(args)`
+#   - onFailure mode           — `atomic skip:` / `atomic halt:`
+#   - Imports with alias       — `import "path" as alias`
+#   - Typed params + units     — `type: amount`, `1.5 USDC`, `50 bps`
+#   - Advisory output schemas  — object/array schemas
+#   - Condition/event triggers — `on condition ... every`, `on event ... where`
+#   - Skill auto-select        — action venue uses skill name
 #
 # Budget (per spell, USDC 6-decimals):
 #   Feature tests:
@@ -55,6 +60,7 @@
 # ============================================================================
 
 set -euo pipefail
+shopt -s nullglob
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
@@ -65,6 +71,7 @@ KEYSTORE="${KEYSTORE:-$HOME/.grimoire/keystore.json}"
 CLI="bun packages/cli/src/index.ts"
 STATE_DIR=".grimoire/test-suite"
 CHECKPOINT_FILE="$STATE_DIR/checkpoint"
+SPELLS_DIRS=("spells" "@spells")
 
 # ── Argument Parsing ─────────────────────────────────────────────────────────
 
@@ -120,6 +127,17 @@ SIMULATE_SPELLS=(
   spells/test-ternary.spell
   spells/test-builtin-functions.spell
   spells/test-loop-index.spell
+  spells/test-repeat-loop.spell
+  spells/test-until-loop.spell
+  spells/test-try-catch-retry.spell
+  spells/test-parallel.spell
+  spells/test-pipeline.spell
+  spells/test-advise-output.spell
+  spells/test-advise-schema-object-array.spell
+  spells/test-blocks-imports.spell
+  spells/test-import-alias.spell
+  spells/test-typed-params-assets.spell
+  spells/test-trigger-condition-event.spell
   spells/test-ephemeral-state.spell
   spells/test-state-counter.spell
 )
@@ -131,12 +149,20 @@ SIMULATE_SPELLS=(
 # Spells WITH output binding (result = venue.method(...)) only fully work
 # in --execute mode because the action must actually run to produce output.
 CAST_SPELLS_SIMULATE_OK=(
+  # AI advisory condition
+  spells/test-ai-judgment.spell
+
+  # Skills + auto-select venue
+  spells/test-using-skill-autoselect.spell
+  spells/test-skill-autoselect-implicit.spell
+
   # Feature 1: Guards (guards + swap — guard checking works in simulate)
   spells/test-guards-complex.spell
 
   # Feature 2: Constraints (swap + with clause — action built correctly)
   spells/test-constraints.spell
   spells/test-constraint-single.spell
+  spells/test-constraints-extended.spell
 
   # Feature 4: onFailure (atomic blocks with failure mode)
   spells/test-atomic-onfailure.spell
@@ -190,6 +216,14 @@ MULTICHAIN_SPELLS=(
   spells/test-hyperliquid-short-small.spell       # Short perp
   spells/test-across-usdc-arb-to-base-final.spell # Bridge USDC Arb → Base (final)
 )
+
+# All spells in spells/@spells folders for validation
+VALIDATION_SPELLS=()
+for dir in "${SPELLS_DIRS[@]}"; do
+  if [ -d "$dir" ]; then
+    VALIDATION_SPELLS+=("$dir"/*.spell)
+  fi
+done
 
 # ── Helper Functions ─────────────────────────────────────────────────────────
 
@@ -439,6 +473,32 @@ fi
 # ── Phase 0: Compile All Spells ──────────────────────────────────────────────
 
 if [ "$START_PHASE" -le 0 ]; then
+  log_phase "Phase 0: Validate All Spells"
+
+  validate_fail=0
+  for spell in "${VALIDATION_SPELLS[@]}"; do
+    if [ ! -f "$spell" ]; then
+      continue
+    fi
+    spell_name=$(basename "$spell" .spell)
+    printf "  %-45s" "$spell_name"
+    output=$($CLI validate "$spell" 2>&1) || {
+      echo -e "${RED}FAIL${NC}"
+      echo -e "    ${DIM}${output}${NC}"
+      validate_fail=$((validate_fail + 1))
+      continue
+    }
+    echo -e "${GREEN}OK${NC}"
+  done
+
+  if [ $validate_fail -gt 0 ]; then
+    echo ""
+    echo -e "${RED}$validate_fail spell(s) failed validation. Aborting.${NC}"
+    exit 1
+  fi
+  echo ""
+  echo -e "${GREEN}All spells validated successfully.${NC}"
+
   log_phase "Phase 0: Compile All Spells"
 
   compile_fail=0
@@ -547,10 +607,8 @@ if [[ ("$MODE" == "--dry-run" || "$MODE" == "--execute") && "$START_PHASE" -le 3
     "$CLI cast spells/test-atomic-onfailure.spell $CAST_FLAGS"
   run_spell "spells/test-atomic-halt.spell" \
     "$CLI cast spells/test-atomic-halt.spell $CAST_FLAGS"
-  # atomic revert: is supposed to fail — it propagates inner failures
   run_spell "spells/test-atomic-revert.spell" \
-    "$CLI cast spells/test-atomic-revert.spell $CAST_FLAGS" \
-    "expect_fail"
+    "$CLI cast spells/test-atomic-revert.spell $CAST_FLAGS"
 fi
 
 # ── Phase 4: Venue Adapter Tests (dry-run or live) ────────────────────────────

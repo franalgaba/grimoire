@@ -49,8 +49,16 @@ export function createContext(options: CreateContextOptions): ExecutionContext {
     ephemeral.set(key, field.initialValue);
   }
 
-  // Initialize bindings with params
+  // Initialize bindings with state defaults first
   const bindings = new Map<string, unknown>();
+  for (const [key, value] of persistent.entries()) {
+    bindings.set(key, value);
+  }
+  for (const [key, value] of ephemeral.entries()) {
+    bindings.set(key, value);
+  }
+
+  // Initialize bindings with params (override state keys if same name)
   for (const param of spell.params) {
     const value = params[param.name] ?? param.default;
     bindings.set(param.name, value);
@@ -131,6 +139,11 @@ export function popFrame(ctx: ExecutionContext): CallFrame | undefined {
  */
 export function setBinding(ctx: ExecutionContext, name: string, value: unknown): void {
   ctx.bindings.set(name, value);
+  if (ctx.state.persistent.has(name)) {
+    ctx.state.persistent.set(name, value);
+  } else if (ctx.state.ephemeral.has(name)) {
+    ctx.state.ephemeral.set(name, value);
+  }
 }
 
 /**
@@ -145,6 +158,7 @@ export function getBinding(ctx: ExecutionContext, name: string): unknown {
  */
 export function setPersistentState(ctx: ExecutionContext, key: string, value: unknown): void {
   ctx.state.persistent.set(key, value);
+  ctx.bindings.set(key, value);
 }
 
 /**
@@ -152,6 +166,7 @@ export function setPersistentState(ctx: ExecutionContext, key: string, value: un
  */
 export function setEphemeralState(ctx: ExecutionContext, key: string, value: unknown): void {
   ctx.state.ephemeral.set(key, value);
+  ctx.bindings.set(key, value);
 }
 
 /**

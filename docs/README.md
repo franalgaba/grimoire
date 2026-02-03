@@ -41,3 +41,4 @@ Background and design rationale.
 - [Venue adapter model](explanation/venue-adapters.md)
 - [Approval and multi-tx flows](explanation/approval-flows.md)
 - [Execution modes](explanation/execution-modes.md)
+- [Grimoire extensions spec (draft)](explanation/grimoire-extensions-spec.md)

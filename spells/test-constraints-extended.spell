@@ -1,0 +1,18 @@
+# Test: extended action constraints
+
+spell TestConstraintsExtended
+
+  version: "1.0.0"
+  description: "Action constraints with additional fields"
+
+  assets: [USDC, ETH]
+
+  params:
+    amount: 100000
+
+  venues:
+    uniswap_v3: @uniswap_v3
+
+  on manual:
+    uniswap_v3.swap(USDC, ETH, params.amount) with slippage=50, deadline=300, max_price_impact=200, min_liquidity=1000000, require_quote=true, require_simulation=true, max_gas=300000
+    emit constraints_applied(amount=params.amount)

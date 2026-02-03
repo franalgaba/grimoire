@@ -126,6 +126,41 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
     expect(result.ir?.steps.length).toBeGreaterThan(0);
   });
 
+  test("compiles min_output/max_input constraints into IR", () => {
+    const source = `spell TestSpell
+
+  version: "1.0.0"
+
+  assets: [USDC, ETH]
+
+  venues:
+    uniswap_v3: @uniswap_v3
+
+  on manual:
+    uniswap_v3.swap(USDC, ETH, 1000) with min_output=900, max_input=1100
+`;
+    const result = compile(source);
+    if (!result.success || !result.ir) {
+      console.log("Errors:", result.errors);
+      console.log("Warnings:", result.warnings);
+      throw new Error("Compilation failed");
+    }
+    const actionStep = result.ir.steps.find((s) => s.kind === "action");
+    if (!actionStep || actionStep.kind !== "action") {
+      throw new Error("Missing action step");
+    }
+    expect(actionStep.constraints.minOutput).toBeDefined();
+    expect(actionStep.constraints.maxInput).toBeDefined();
+    if (actionStep.constraints.minOutput?.kind !== "literal") {
+      throw new Error("Expected literal minOutput");
+    }
+    if (actionStep.constraints.maxInput?.kind !== "literal") {
+      throw new Error("Expected literal maxInput");
+    }
+    expect(actionStep.constraints.minOutput.value).toBe(900);
+    expect(actionStep.constraints.maxInput.value).toBe(1100);
+  });
+
   test("compiles spell with venues and assets", () => {
     const source = `spell SwapSpell
 

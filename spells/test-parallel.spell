@@ -1,0 +1,18 @@
+# Test: Parallel join all
+
+spell TestParallel
+
+  version: "1.0.0"
+  description: "Parallel branches compute values"
+  assets: []
+
+  on manual:
+    parallel join=all on_fail=continue:
+      alpha:
+        a = 1
+      beta:
+        b = 2
+      gamma:
+        c = 3
+    sum = a + b + c
+    emit parallel_done(sum=sum)

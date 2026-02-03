@@ -87,6 +87,24 @@ describe("Parser", () => {
       expect(assetsSection?.items.map((item) => item.symbol)).toEqual(["USDC", "USDT", "DAI"]);
     });
 
+    test("parses assets section with block metadata", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+  assets:
+    USDC:
+      decimals: 6
+    ETH:
+      chain: 1
+      decimals: 18
+`;
+      const ast = parse(source);
+      const assetsSection = ast.sections.find((s): s is AssetsSection => s.kind === "assets");
+      expect(assetsSection).toBeDefined();
+      expect(assetsSection?.items.length).toBe(2);
+      expect(assetsSection?.items[0]?.decimals).toBe(6);
+    });
+
     test("parses params section", () => {
       const source = `spell Test
 
@@ -99,6 +117,23 @@ describe("Parser", () => {
       const paramsSection = ast.sections.find((s): s is ParamsSection => s.kind === "params");
       expect(paramsSection).toBeDefined();
       expect(paramsSection?.items.length).toBe(2);
+    });
+
+    test("parses typed params block", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+  params:
+    amount:
+      type: amount
+      asset: USDC
+      default: 1
+`;
+      const ast = parse(source);
+      const paramsSection = ast.sections.find((s): s is ParamsSection => s.kind === "params");
+      expect(paramsSection).toBeDefined();
+      expect(paramsSection?.items[0]?.type).toBe("amount");
+      expect(paramsSection?.items[0]?.asset).toBe("USDC");
     });
 
     test("parses limits section with percentages", () => {
@@ -229,6 +264,33 @@ describe("Parser", () => {
 `;
       const ast = parse(source);
       expect(ast.triggers[0]?.trigger.kind).toBe("daily");
+    });
+
+    test("parses condition trigger with interval", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on condition params.amount > 10 every 5m:
+    pass
+`;
+      const ast = parse(source);
+      expect(ast.triggers[0]?.trigger.kind).toBe("condition");
+      if (ast.triggers[0]?.trigger.kind === "condition") {
+        expect(ast.triggers[0].trigger.pollInterval).toBe(300);
+      }
+    });
+
+    test("parses event trigger with filter", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on event "base.block" where block.number > 0:
+    pass
+`;
+      const ast = parse(source);
+      expect(ast.triggers[0]?.trigger.kind).toBe("event");
     });
   });
 
@@ -365,6 +427,34 @@ describe("Parser", () => {
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0];
       expect(stmt.kind).toBe("wait");
+    });
+
+    test("parses advise statement with object schema", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  advisors:
+    risk:
+      model: sonnet
+
+  on manual:
+    decision = advise risk: "Check risk"
+      output:
+        type: object
+        fields:
+          allow:
+            type: boolean
+          score:
+            type: number
+            min: 0
+            max: 1
+      timeout: 10
+      fallback: true
+`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0];
+      expect(stmt?.kind).toBe("advise");
     });
   });
 
@@ -515,6 +605,19 @@ describe("Parser", () => {
         throw new Error("Expected array literal");
       }
       expect((stmt.value as ArrayLiteralNode).elements.length).toBe(3);
+    });
+
+    test("parses unit literal", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on manual:
+    x = 1 USDC
+`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
+      expect(stmt.value.kind).toBe("unit_literal");
     });
 
     test("parses venue reference expression", () => {
@@ -713,15 +816,18 @@ describe("Parser", () => {
   version: "1.0.0"
 
   on manual:
-    venue.swap(USDC, ETH, 1000) with slippage=50, deadline=300
+    venue.swap(USDC, ETH, 1000) with slippage=50, deadline=300, min_output=900, max_input=1100
 `;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
       expect(stmt.kind).toBe("method_call");
       expect(stmt.constraints).toBeDefined();
-      expect(stmt.constraints?.constraints.length).toBe(2);
-      expect(stmt.constraints?.constraints[0]?.key).toBe("slippage");
-      expect(stmt.constraints?.constraints[1]?.key).toBe("deadline");
+      expect(stmt.constraints?.constraints.length).toBe(4);
+      const keys = stmt.constraints?.constraints.map((c) => c.key);
+      expect(keys).toContain("slippage");
+      expect(keys).toContain("deadline");
+      expect(keys).toContain("min_output");
+      expect(keys).toContain("max_input");
     });
 
     test("parses with clause on assignment", () => {

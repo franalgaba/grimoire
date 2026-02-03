@@ -1,0 +1,31 @@
+# Test: typed params + assets metadata + unit literals
+
+spell TestTypedParamsAssets
+
+  version: "1.0.0"
+  description: "Typed params, asset metadata, and unit literal parsing"
+
+  assets:
+    USDC:
+      chain: 1
+      address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+      decimals: 6
+    ETH:
+      decimals: 18
+
+  params:
+    amount:
+      type: amount
+      asset: USDC
+      default: 1.5 USDC
+    slippage:
+      type: bps
+      default: 50 bps
+    interval:
+      type: duration
+      default: 5m
+
+  on manual:
+    total = params.amount + 500000
+    fee = 25 bps
+    emit typed_params(amount=params.amount, slippage=params.slippage, interval=params.interval, total=total, fee=fee)

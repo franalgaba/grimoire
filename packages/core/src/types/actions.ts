@@ -8,17 +8,25 @@ import type { Address, AssetId, BasisPoints, ChainId } from "./primitives.js";
 /** Constraints for actions */
 export interface ActionConstraints {
   maxSlippageBps?: BasisPoints;
+  maxPriceImpactBps?: BasisPoints;
   deadline?: number; // seconds from now
   minOutput?: Expression;
   maxInput?: Expression;
-  maxGas?: bigint;
+  minLiquidity?: Expression;
+  requireQuote?: Expression;
+  requireSimulation?: Expression;
+  maxGas?: Expression;
 }
 
 export interface ActionConstraintsResolved {
   maxSlippageBps?: BasisPoints;
+  maxPriceImpactBps?: BasisPoints;
   deadline?: number;
   minOutput?: bigint;
   maxInput?: bigint;
+  minLiquidity?: bigint;
+  requireQuote?: boolean;
+  requireSimulation?: boolean;
   maxGas?: bigint;
 }
 

@@ -28,6 +28,13 @@ export async function executeEmitStep(
     // Note: This is a user-defined event, not a system event
     // We log it as a step completion with the event data
     ledger.emit({
+      type: "event_emitted",
+      stepId: step.id,
+      event: step.event,
+      data: serializeData(data),
+    });
+
+    ledger.emit({
       type: "step_completed",
       stepId: step.id,
       result: {

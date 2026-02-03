@@ -16,6 +16,15 @@ grimoire cast spells/uniswap-swap-execute.spell \
   --rpc-url https://eth.llamarpc.com
 ```
 
+## Dry-run (build transactions without sending)
+
+```bash
+grimoire cast spells/uniswap-swap-execute.spell \
+  --key-env PRIVATE_KEY \
+  --rpc-url https://eth.llamarpc.com \
+  --dry-run
+```
+
 ### Secret handling
 
 Avoid passing secrets as CLI arguments. Prefer environment variables:
@@ -43,6 +52,17 @@ grimoire simulate spells/my-spell.spell --state-dir /path/to/state
 
 ```bash
 grimoire simulate spells/my-spell.spell --no-state
+```
+
+## Advisor skills directories
+
+Advisors can reference external skills (Agent Skills) for metadata like allowed tools.
+Pass one or more directories that contain skill folders (each with `SKILL.md`):
+
+```bash
+grimoire simulate spells/my-spell.spell \
+  --advisor-skills-dir ./skills \
+  --advisor-skills-dir ~/.agents/skills
 ```
 
 ## View execution history

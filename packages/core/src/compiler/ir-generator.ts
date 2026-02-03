@@ -24,11 +24,14 @@ import type {
 } from "../types/primitives.js";
 import type {
   ActionStep,
+  AdvisoryStep,
   CatchBlock,
   ComputeStep,
   ConditionalStep,
   ErrorType,
   LoopStep,
+  ParallelStep,
+  PipelineStep,
   Step,
   TryStep,
 } from "../types/steps.js";
@@ -83,10 +86,17 @@ export function generateIR(source: SpellSource): IRGeneratorResult {
   if (source.params) {
     for (const [name, value] of Object.entries(source.params)) {
       if (typeof value === "object" && value !== null && "type" in value) {
-        const extended = value as { type?: string; default?: unknown; min?: number; max?: number };
+        const extended = value as {
+          type?: string;
+          default?: unknown;
+          min?: number;
+          max?: number;
+          asset?: string;
+        };
         params.push({
           name,
           type: (extended.type ?? "number") as ParamDef["type"],
+          asset: extended.asset,
           default: extended.default,
           min: extended.min,
           max: extended.max,
@@ -142,6 +152,11 @@ export function generateIR(source: SpellSource): IRGeneratorResult {
         model: advisor.model as AdvisorDef["model"],
         scope: "read-only",
         systemPrompt: advisor.system_prompt,
+        skills: advisor.skills,
+        allowedTools: advisor.allowed_tools,
+        mcp: advisor.mcp,
+        defaultTimeout: advisor.timeout,
+        defaultFallback: advisor.fallback,
         rateLimit: advisor.rate_limit
           ? {
               maxCallsPerRun: advisor.rate_limit.max_per_run ?? 10,
@@ -297,6 +312,13 @@ function transformTrigger(raw: NonNullable<SpellSource["trigger"]>): Trigger | n
       pollInterval: (raw.poll_interval as number) ?? 60,
     };
   }
+  if ("event" in raw) {
+    return {
+      type: "event",
+      event: raw.event as string,
+      filter: raw.filter as string | undefined,
+    };
+  }
   if ("any" in raw && Array.isArray(raw.any)) {
     const triggers: Trigger[] = [];
     for (const t of raw.any) {
@@ -386,7 +408,8 @@ function transformStep(
       if (!action) return null;
 
       const constraints = transformConstraints(
-        raw.constraints as Record<string, unknown> | undefined
+        raw.constraints as Record<string, unknown> | undefined,
+        errors
       );
       const onFailure = (raw.on_failure as string) ?? "revert";
 
@@ -444,7 +467,8 @@ function transformStep(
     if (!action) return null;
 
     const constraints = transformConstraints(
-      raw.constraints as Record<string, unknown> | undefined
+      raw.constraints as Record<string, unknown> | undefined,
+      errors
     );
     const onFailure = (raw.on_failure as string) ?? "revert";
 
@@ -452,6 +476,7 @@ function transformStep(
       kind: "action",
       id,
       action,
+      skill: raw.skill as string | undefined,
       constraints,
       outputBinding: raw.output as string | undefined,
       onFailure: onFailure as ActionStep["onFailure"],
@@ -524,19 +549,108 @@ function transformStep(
     const timeout = (advisory.timeout as number) ?? 30;
     const fallbackValue = advisory.fallback ?? true;
     const outputBinding = (advisory.output as string) ?? `${id}_result`;
+    const outputSchemaRaw = advisory.output_schema as Record<string, unknown> | undefined;
+    const outputSchema = outputSchemaRaw
+      ? parseOutputSchema(outputSchemaRaw)
+      : ({ type: "boolean" } as AdvisoryStep["outputSchema"]);
 
     return {
       kind: "advisory",
       id,
       advisor,
       prompt,
-      outputSchema: { type: "boolean" },
+      outputSchema,
       outputBinding,
       timeout,
-      fallback:
-        typeof fallbackValue === "boolean"
-          ? { kind: "literal", value: fallbackValue, type: "bool" }
-          : parseExpression(String(fallbackValue)),
+      fallback: fallbackToExpression(fallbackValue, errors),
+      dependsOn: [],
+    };
+  }
+
+  // Parallel step
+  if ("parallel" in raw) {
+    const parallel = raw.parallel as Record<string, unknown>;
+    const branchesRaw = (parallel.branches as Array<Record<string, unknown>>) ?? [];
+    const branches = branchesRaw.map((b) => ({
+      id: `${id}_${b.name as string}`,
+      name: b.name as string,
+      steps: (b.steps as string[]) ?? [],
+    }));
+
+    const joinRaw = parallel.join as Record<string, unknown> | undefined;
+    let join: ParallelStep["join"] = { type: "all" };
+    if (joinRaw?.type) {
+      const type = joinRaw.type as ParallelStep["join"]["type"];
+      if (type === "best") {
+        const metricStr = joinRaw.metric as string;
+        join = {
+          type: "best",
+          metric: metricStr ? parseExpression(metricStr) : parseExpression("0"),
+          order: (joinRaw.order as "max" | "min") ?? "max",
+        };
+      } else if (type === "any") {
+        join = { type: "any", count: (joinRaw.count as number) ?? 1 };
+      } else if (type === "majority") {
+        join = { type: "majority" };
+      } else if (type === "first") {
+        join = { type: "first" };
+      } else {
+        join = { type: "all" };
+      }
+    }
+
+    return {
+      kind: "parallel",
+      id,
+      branches,
+      join,
+      onFail: (parallel.on_fail as "abort" | "continue") ?? "abort",
+      timeout: parallel.timeout as number | undefined,
+      outputBinding: raw.output as string | undefined,
+      dependsOn: [],
+    };
+  }
+
+  // Pipeline step
+  if ("pipeline" in raw) {
+    const pipeline = raw.pipeline as Record<string, unknown>;
+    const sourceStr = pipeline.source as string;
+    const stagesRaw = (pipeline.stages as Array<Record<string, unknown>>) ?? [];
+    const stages: PipelineStep["stages"] = stagesRaw.map((stage) => {
+      const op = stage.op as PipelineStep["stages"][number]["op"];
+      if (op === "reduce") {
+        return {
+          op: "reduce",
+          step: stage.step as string,
+          initial: parseExpression(String(stage.initial ?? "0")),
+        };
+      }
+      if (op === "take") {
+        return { op: "take", count: stage.count as number };
+      }
+      if (op === "skip") {
+        return { op: "skip", count: stage.count as number };
+      }
+      if (op === "sort") {
+        return {
+          op: "sort",
+          by: parseExpression(String(stage.by ?? "0")),
+          order: (stage.order as "asc" | "desc") ?? "asc",
+        };
+      }
+      if (op === "where") {
+        return { op: "where", predicate: parseExpression(String(stage.predicate ?? "false")) };
+      }
+      return { op: op ?? "map", step: stage.step as string } as PipelineStep["stages"][number];
+    });
+
+    return {
+      kind: "pipeline",
+      id,
+      source: parseExpression(sourceStr),
+      stages,
+      parallel: (pipeline.parallel as boolean) ?? false,
+      outputBinding: raw.output as string | undefined,
       dependsOn: [],
     };
   }
@@ -658,9 +772,15 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
 /**
  * Parse expression safely, returning a literal on failure
  */
-function parseExpressionSafe(input: string | number, errors: CompilationError[]): Expression {
+function parseExpressionSafe(
+  input: string | number | boolean,
+  errors: CompilationError[]
+): Expression {
   if (typeof input === "number") {
     return { kind: "literal", value: input, type: "int" };
+  }
+  if (typeof input === "boolean") {
+    return { kind: "literal", value: input, type: "bool" };
   }
   try {
     return parseExpression(input);
@@ -673,14 +793,167 @@ function parseExpressionSafe(input: string | number, errors: CompilationError[])
   }
 }
 
+function fallbackToExpression(input: unknown, errors: CompilationError[]): Expression {
+  if (input && typeof input === "object") {
+    if ("__expr" in input) {
+      const exprValue = (input as { __expr: unknown }).__expr;
+      try {
+        return parseExpression(String(exprValue));
+      } catch (e) {
+        errors.push({
+          code: "EXPRESSION_PARSE_ERROR",
+          message: `Failed to parse fallback expression '${exprValue}': ${(e as Error).message}`,
+        });
+        return { kind: "literal", value: false, type: "bool" };
+      }
+    }
+    if ("__literal" in input) {
+      return literalFromValue((input as { __literal: unknown }).__literal);
+    }
+    return literalFromValue(input);
+  }
+
+  if (typeof input === "boolean") {
+    return { kind: "literal", value: input, type: "bool" };
+  }
+  if (typeof input === "number") {
+    return {
+      kind: "literal",
+      value: input,
+      type: Number.isInteger(input) ? "int" : "float",
+    };
+  }
+  if (typeof input === "bigint") {
+    return { kind: "literal", value: input, type: "int" };
+  }
+  if (typeof input === "string") {
+    return { kind: "literal", value: input, type: "string" };
+  }
+
+  try {
+    return parseExpression(String(input));
+  } catch (e) {
+    errors.push({
+      code: "EXPRESSION_PARSE_ERROR",
+      message: `Failed to parse fallback expression '${String(input)}': ${(e as Error).message}`,
+    });
+    return { kind: "literal", value: false, type: "bool" };
+  }
+}
+
+function literalFromValue(input: unknown): Expression {
+  if (typeof input === "boolean") {
+    return { kind: "literal", value: input, type: "bool" };
+  }
+  if (typeof input === "number") {
+    return {
+      kind: "literal",
+      value: input,
+      type: Number.isInteger(input) ? "int" : "float",
+    };
+  }
+  if (typeof input === "bigint") {
+    return { kind: "literal", value: input, type: "int" };
+  }
+  if (typeof input === "string") {
+    return { kind: "literal", value: input, type: "string" };
+  }
+  return { kind: "literal", value: input as Record<string, unknown>, type: "json" };
+}
+
+function parseOutputSchema(raw: Record<string, unknown>): AdvisoryStep["outputSchema"] {
+  const type = raw.type as AdvisoryStep["outputSchema"]["type"];
+  switch (type) {
+    case "enum":
+      return {
+        type: "enum",
+        values: (raw.values as string[]) ?? [],
+      };
+    case "number":
+      return {
+        type: "number",
+        min: raw.min as number | undefined,
+        max: raw.max as number | undefined,
+      };
+    case "string":
+      return {
+        type: "string",
+        minLength: (raw.min_length as number | undefined) ?? (raw.minLength as number | undefined),
+        maxLength: (raw.max_length as number | undefined) ?? (raw.maxLength as number | undefined),
+        pattern: raw.pattern as string | undefined,
+      };
+    case "object": {
+      const fieldsRaw = raw.fields as Record<string, unknown> | undefined;
+      const fields: Record<string, AdvisoryStep["outputSchema"]> | undefined = fieldsRaw
+        ? Object.fromEntries(
+            Object.entries(fieldsRaw).map(([key, value]) => [
+              key,
+              parseOutputSchema(value as Record<string, unknown>),
+            ])
+          )
+        : undefined;
+      return { type: "object", fields };
+    }
+    case "array": {
+      const itemsRaw = raw.items as Record<string, unknown> | undefined;
+      return {
+        type: "array",
+        items: itemsRaw ? parseOutputSchema(itemsRaw) : undefined,
+      };
+    }
+    default:
+      return { type: "boolean" };
+  }
+}
+
 /**
  * Transform constraints
  */
-function transformConstraints(raw: Record<string, unknown> | undefined): ActionConstraints {
+function transformConstraints(
+  raw: Record<string, unknown> | undefined,
+  errors: CompilationError[]
+): ActionConstraints {
   if (!raw) return {};
+
+  const minOutputRaw = (raw.min_output ?? raw.minOutput) as string | number | undefined;
+  const maxInputRaw = (raw.max_input ?? raw.maxInput) as string | number | undefined;
+  const minLiquidityRaw = (raw.min_liquidity ?? raw.minLiquidity) as string | number | undefined;
+  const maxGasRaw = (raw.max_gas ?? raw.maxGas) as string | number | undefined;
+  const maxPriceImpactRaw = (raw.max_price_impact ?? raw.maxPriceImpact) as
+    | string
+    | number
+    | undefined;
+  const requireQuoteRaw = (raw.require_quote ?? raw.requireQuote) as
+    | string
+    | number
+    | boolean
+    | undefined;
+  const requireSimulationRaw = (raw.require_simulation ?? raw.requireSimulation) as
+    | string
+    | number
+    | boolean
+    | undefined;
+
   return {
     maxSlippageBps: raw.max_slippage as number | undefined,
+    maxPriceImpactBps:
+      typeof maxPriceImpactRaw === "number"
+        ? maxPriceImpactRaw
+        : typeof maxPriceImpactRaw === "string"
+          ? Number.parseFloat(maxPriceImpactRaw)
+          : undefined,
     deadline: raw.deadline as number | undefined,
+    minOutput: minOutputRaw !== undefined ? parseExpressionSafe(minOutputRaw, errors) : undefined,
+    maxInput: maxInputRaw !== undefined ? parseExpressionSafe(maxInputRaw, errors) : undefined,
+    minLiquidity:
+      minLiquidityRaw !== undefined ? parseExpressionSafe(minLiquidityRaw, errors) : undefined,
+    maxGas: maxGasRaw !== undefined ? parseExpressionSafe(maxGasRaw, errors) : undefined,
+    requireQuote:
+      requireQuoteRaw !== undefined ? parseExpressionSafe(requireQuoteRaw, errors) : undefined,
+    requireSimulation:
+      requireSimulationRaw !== undefined
+        ? parseExpressionSafe(requireSimulationRaw, errors)
+        : undefined,
   };
 }
 

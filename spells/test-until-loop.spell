@@ -1,0 +1,16 @@
+# Test: Loop-until — condition-driven loop
+
+spell TestUntilLoop
+
+  version: "1.0.0"
+  description: "Loop until counter reaches limit"
+  assets: []
+
+  params:
+    limit: 3
+
+  on manual:
+    counter = 0
+    loop until counter >= params.limit max 10:
+      counter = counter + 1
+    emit loop_done(counter=counter)

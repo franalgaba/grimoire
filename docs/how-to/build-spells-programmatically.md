@@ -19,6 +19,7 @@ import {
   tryBlock,
   advisory,
   parallel,
+  pipeline,
   literal,
   binding,
   binary,
@@ -40,6 +41,24 @@ const mySpell = spell("YieldOptimizer")
   .param("threshold", { type: "number", default: 0.5 })
   .persistentState("runCount", "number")
   .trigger({ type: "manual" });
+```
+
+## 2.5) Add skills and advisors (optional)
+
+```ts
+mySpell
+  .skill("dex", {
+    type: "swap",
+    adapters: ["uniswap_v3", "uniswap_v4"],
+    defaultConstraints: { maxSlippage: 50 },
+  })
+  .advisor("risk", {
+    model: "sonnet",
+    systemPrompt: "Be conservative.",
+    defaultTimeout: 30,
+    defaultFallback: true,
+    rateLimit: { maxCallsPerRun: 10, maxCallsPerHour: 100 },
+  });
 ```
 
 ## 3) Add steps with expressions
@@ -120,6 +139,21 @@ const forEachLoop = forLoop("asset", binding("assets"), 100)
 
 // Until a condition is met
 const untilLoop = until(binding("done"), 50).body("checkStep").build();
+```
+
+## 6.5) Pipelines and advisory steps
+
+```ts
+const pipelineStep = pipeline(binding("assets"))
+  .filter("isGood") // step id
+  .map("transform") // step id
+  .build();
+
+const advisoryStep = advisory("risk", "Is this trade safe?", "decision")
+  .outputSchema({ type: "boolean" })
+  .timeout(20)
+  .fallback(literal(true))
+  .build();
 ```
 
 ## 7) Build and execute

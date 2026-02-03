@@ -58,8 +58,8 @@ export type Expression =
 /** Literal value */
 export interface LiteralExpr {
   kind: "literal";
-  value: string | number | boolean | bigint;
-  type: "int" | "float" | "bool" | "string" | "address";
+  value: string | number | boolean | bigint | Record<string, unknown> | unknown[] | null;
+  type: "int" | "float" | "bool" | "string" | "address" | "json";
 }
 
 /** Parameter reference */
@@ -139,7 +139,7 @@ export interface PropertyAccessExpr {
  * Helper to create literal expressions
  */
 export function literal(
-  value: string | number | boolean | bigint,
+  value: string | number | boolean | bigint | Record<string, unknown> | unknown[] | null,
   type?: LiteralExpr["type"]
 ): LiteralExpr {
   const inferredType =
@@ -152,9 +152,11 @@ export function literal(
         ? "bool"
         : typeof value === "bigint"
           ? "int"
-          : Number.isInteger(value)
-            ? "int"
-            : "float");
+          : typeof value === "number"
+            ? Number.isInteger(value)
+              ? "int"
+              : "float"
+            : "json");
 
   return { kind: "literal", value, type: inferredType };
 }

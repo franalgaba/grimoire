@@ -39,6 +39,7 @@ export async function executeLoopStep(
         for (let i = 0; i < count; i++) {
           evalCtx.index = i;
           iterations++;
+          ctx.bindings.set("index", i);
 
           for (const bodyStepId of step.bodySteps) {
             const result = await executeStepById(bodyStepId, ctx, evalCtx);
@@ -67,6 +68,8 @@ export async function executeLoopStep(
 
           // Set loop variable in bindings
           ctx.bindings.set(step.loopType.variable, items[i]);
+          ctx.bindings.set("item", items[i]);
+          ctx.bindings.set("index", i);
 
           for (const bodyStepId of step.bodySteps) {
             const result = await executeStepById(bodyStepId, ctx, evalCtx);
@@ -89,6 +92,7 @@ export async function executeLoopStep(
 
           evalCtx.index = iterations;
           iterations++;
+          ctx.bindings.set("index", iterations - 1);
 
           for (const bodyStepId of step.bodySteps) {
             const result = await executeStepById(bodyStepId, ctx, evalCtx);

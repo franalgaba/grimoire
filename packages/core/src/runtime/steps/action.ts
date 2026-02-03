@@ -78,9 +78,29 @@ export async function executeActionStep(
 
   try {
     const evalCtx = createEvalContext(ctx);
-    const resolvedAction = await resolveAction(step.action, evalCtx);
-    const resolvedConstraints = await resolveConstraints(step.constraints, evalCtx);
+    const explicitSkill = step.skill
+      ? ctx.spell.skills.find((s) => s.name === step.skill)
+      : undefined;
+    const actionVenue = hasVenue(step.action) ? step.action.venue : undefined;
+    const inferredSkill =
+      !explicitSkill && actionVenue
+        ? ctx.spell.skills.find((s) => s.name === actionVenue)
+        : undefined;
+    const skill = explicitSkill ?? inferredSkill;
+    const skillName = skill?.name;
+
+    const actionWithVenue = resolveActionVenue(step.action, skill, ctx, skillName);
+    const resolvedAction = await resolveAction(actionWithVenue, evalCtx);
+
+    const mergedConstraints = applySkillDefaults(step.constraints, skill);
+    const resolvedConstraints = await resolveConstraints(mergedConstraints, evalCtx);
     const actionWithConstraints = { ...resolvedAction, constraints: resolvedConstraints } as Action;
+
+    ledger.emit({
+      type: "constraint_evaluated",
+      stepId: step.id,
+      constraints: resolvedConstraints,
+    });
 
     if (options.mode === "simulate") {
       const amountValue =
@@ -112,6 +132,10 @@ export async function executeActionStep(
         stepId: step.id,
         result: { simulated: true, action: actionWithConstraints },
       });
+
+      if (step.outputBinding) {
+        setBinding(ctx, step.outputBinding, { simulated: true, action: actionWithConstraints });
+      }
 
       return {
         success: true,
@@ -231,6 +255,52 @@ export async function executeActionStep(
       error: message,
     };
   }
+}
+
+function hasVenue(action: Action): action is Action & { venue: string } {
+  return "venue" in action;
+}
+
+function resolveActionVenue(
+  action: Action,
+  skill: { adapters: string[] } | undefined,
+  ctx: ExecutionContext,
+  skillName?: string
+): Action {
+  if (!skill || !skill.adapters.length) {
+    return action;
+  }
+
+  const hasAlias = (venue?: string): boolean =>
+    !!venue && ctx.spell.aliases.some((a) => a.alias === venue);
+
+  const venue = (action as { venue?: string }).venue;
+  const isSkillNamedVenue = !!skillName && venue === skillName;
+
+  if (!isSkillNamedVenue && hasAlias(venue)) {
+    return action;
+  }
+
+  const selected = skill.adapters.find((adapter) => hasAlias(adapter));
+  if (!selected) {
+    return action;
+  }
+
+  return { ...action, venue: selected } as Action;
+}
+
+function applySkillDefaults(
+  constraints: ActionConstraints | undefined,
+  skill: { defaultConstraints?: { maxSlippage?: number } } | undefined
+): ActionConstraints | undefined {
+  if (!skill?.defaultConstraints) return constraints;
+
+  const merged: ActionConstraints = { ...(constraints ?? {}) };
+  if (merged.maxSlippageBps === undefined && skill.defaultConstraints.maxSlippage !== undefined) {
+    merged.maxSlippageBps = skill.defaultConstraints.maxSlippage;
+  }
+
+  return merged;
 }
 
 async function resolveAction(
@@ -368,22 +438,37 @@ async function resolveAddress(
 }
 
 async function resolveConstraints(
-  constraints: ActionConstraints,
+  constraints: ActionConstraints | undefined,
   evalCtx: ReturnType<typeof createEvalContext>
 ): Promise<ActionConstraintsResolved> {
-  const minOutput = constraints.minOutput
-    ? toBigInt(await evaluateAsync(constraints.minOutput, evalCtx))
+  const active = constraints ?? {};
+  const minOutput = active.minOutput
+    ? toBigInt(await evaluateAsync(active.minOutput, evalCtx))
     : undefined;
-  const maxInput = constraints.maxInput
-    ? toBigInt(await evaluateAsync(constraints.maxInput, evalCtx))
+  const maxInput = active.maxInput
+    ? toBigInt(await evaluateAsync(active.maxInput, evalCtx))
+    : undefined;
+  const minLiquidity = active.minLiquidity
+    ? toBigInt(await evaluateAsync(active.minLiquidity, evalCtx))
+    : undefined;
+  const maxGas = active.maxGas ? toBigInt(await evaluateAsync(active.maxGas, evalCtx)) : undefined;
+  const requireQuote = active.requireQuote
+    ? Boolean(await evaluateAsync(active.requireQuote, evalCtx))
+    : undefined;
+  const requireSimulation = active.requireSimulation
+    ? Boolean(await evaluateAsync(active.requireSimulation, evalCtx))
     : undefined;
 
   return {
-    maxSlippageBps: constraints.maxSlippageBps,
-    deadline: constraints.deadline,
+    maxSlippageBps: active.maxSlippageBps,
+    maxPriceImpactBps: active.maxPriceImpactBps,
+    deadline: active.deadline,
     minOutput,
     maxInput,
-    maxGas: constraints.maxGas,
+    minLiquidity,
+    requireQuote,
+    requireSimulation,
+    maxGas,
   };
 }
 

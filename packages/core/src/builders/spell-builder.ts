@@ -225,6 +225,10 @@ export class SpellBuilder {
       model: "haiku" | "sonnet" | "opus";
       scope?: "read-only";
       systemPrompt?: string;
+      skills?: string[];
+      allowedTools?: string[];
+      defaultTimeout?: number;
+      defaultFallback?: boolean;
       rateLimit?: {
         maxCallsPerRun: number;
         maxCallsPerHour: number;
@@ -236,6 +240,10 @@ export class SpellBuilder {
       model: config.model,
       scope: config.scope ?? "read-only",
       systemPrompt: config.systemPrompt,
+      skills: config.skills,
+      allowedTools: config.allowedTools,
+      defaultTimeout: config.defaultTimeout,
+      defaultFallback: config.defaultFallback,
       rateLimit: config.rateLimit,
     });
     return this;
@@ -337,6 +345,10 @@ export class SpellBuilder {
         model: string;
         scope?: string;
         system_prompt?: string;
+        skills?: string[];
+        allowed_tools?: string[];
+        timeout?: number;
+        fallback?: boolean;
         rate_limit?: {
           max_per_run?: number;
           max_per_hour?: number;
@@ -348,6 +360,10 @@ export class SpellBuilder {
         model: a.model,
         scope: a.scope,
         system_prompt: a.systemPrompt,
+        skills: a.skills,
+        allowed_tools: a.allowedTools,
+        timeout: a.defaultTimeout,
+        fallback: a.defaultFallback,
         rate_limit: a.rateLimit
           ? {
               max_per_run: a.rateLimit.maxCallsPerRun,

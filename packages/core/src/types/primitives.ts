@@ -46,7 +46,8 @@ export interface AssetDef {
 /** Parameter definition */
 export interface ParamDef {
   name: string;
-  type: "number" | "bool" | "address" | "asset" | "string";
+  type: "number" | "bool" | "address" | "asset" | "string" | "amount" | "bps" | "duration";
+  asset?: string;
   default?: unknown;
   min?: number;
   max?: number;
@@ -63,6 +64,7 @@ export type Trigger =
   | { type: "manual" }
   | { type: "schedule"; cron: string }
   | { type: "condition"; expression: string; pollInterval: number }
+  | { type: "event"; event: string; filter?: string }
   | { type: "any"; triggers: Trigger[] };
 
 /** Wallet mode for execution */

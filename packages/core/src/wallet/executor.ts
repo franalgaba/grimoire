@@ -273,6 +273,7 @@ export class Executor {
                 provider: this.provider,
                 walletAddress: this.wallet.address,
                 chainId: this.provider.chainId,
+                mode: this.options.mode,
               })
             );
           }
@@ -295,6 +296,7 @@ export class Executor {
             provider: this.provider,
             walletAddress: this.wallet.address,
             chainId: this.provider.chainId,
+            mode: this.options.mode,
           })
         );
       }
@@ -461,6 +463,7 @@ export class Executor {
         provider: this.provider,
         walletAddress: this.wallet.address,
         chainId: this.provider.chainId,
+        mode: this.options.mode,
       });
 
       return { ...result, success: true };

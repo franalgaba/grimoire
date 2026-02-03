@@ -14,10 +14,12 @@ Grimoire enables you to define, simulate, and execute complex DeFi strategies us
 - **Multi-tx approvals** - Adapters return approval + action plans
 - **Onchain + offchain** - EVM transactions or offchain execution (Hyperliquid)
 - **Bridging support** - Across bridge integration
-- **Action constraints** - Slippage, deadlines, and bounds per action
-- **Advisory AI integration** - Use `**prompts**` for AI-assisted decisions
+- **Action constraints** - Slippage/deadlines/limits per action (`with` clause)
+- **Skills + advisors** - Routing defaults and AI advisory metadata
+- **Advisory AI integration** - Use `**prompts**` or `advise` for decisions (fallback-only runtime)
 - **Atomic transactions** - Group operations for all-or-nothing execution
-- **Scheduled triggers** - Run strategies hourly, daily, or manually
+- **Structured control flow** - repeat/loop-until, try/catch, parallel, pipeline
+- **Scheduled triggers** - Run strategies via manual/hourly/daily/cron/condition/event
 - **State persistence** - Spell state survives across runs (SQLite-backed)
 - **Execution history** - Run history and ledger events stored per spell
 
@@ -43,36 +45,38 @@ bun run packages/cli/src/index.ts cast spells/uniswap-swap-execute.spell --key-e
 ## Example Spell
 
 ```
-spell YieldOptimizer
+spell SafeSwap
 
   version: "1.0.0"
-  description: "Optimizes yield across lending protocols"
+  description: "Swap USDC to ETH with advisory gate"
 
-  assets: [USDC, USDT, DAI]
+  assets: [USDC, ETH]
 
   params:
-    min_amount: 100
-    rebalance_threshold: 0.5
-
-  limits:
-    max_per_venue: 50%
+    amount: 100000
 
   venues:
-    lending: [@aave_v3, @morpho_blue]
-    swap: @uniswap_v3
+    uniswap_v3: @uniswap_v3
 
-  on hourly:
-    for asset in assets:
-      current_rate = lending.get_rate(asset)
-      best_rate = max(lending.get_all_rates(asset))
+  skills:
+    dex_skill:
+      type: swap
+      adapters: [uniswap_v3]
+      default_constraints:
+        max_slippage: 50
 
-      if best_rate - current_rate > params.rebalance_threshold:
-        if **gas costs justify rebalancing**:
-          atomic:
-            current_venue.withdraw(asset, balance)
-            best_venue.deposit(asset, balance)
+  advisors:
+    risk:
+      model: sonnet
+      timeout: 20
+      fallback: true
 
-          emit rebalanced(asset=asset, gain=best_rate - current_rate)
+  on manual:
+    if **is it safe to swap now** via risk:
+      tx = uniswap_v3.swap(USDC, ETH, params.amount) using dex_skill
+      emit swapped(tx=tx)
+    else:
+      emit skipped(reason="advisory_declined")
 ```
 
 ## Syntax Highlights
@@ -82,12 +86,22 @@ spell YieldOptimizer
 | Spell declaration | `spell Name` | Define a new strategy |
 | Assets | `assets: [USDC, DAI]` | Tokens the spell interacts with |
 | Venue references | `@aave_v3` | Reference to a venue adapter |
+| Skills | `skills:` | Capability modules and defaults |
+| Advisors | `advisors:` | AI advisory metadata and defaults |
 | Percentages | `50%` | Automatically converts to 0.5 |
-| Triggers | `on hourly:` | Schedule: `manual`, `hourly`, `daily` |
+| Triggers | `on hourly:` | Schedule: `manual`, `hourly`, `daily`, cron, condition, event |
 | Loops | `for x in items:` | Iterate over collections |
+| Repeat/Until | `repeat N:` / `loop until cond max N:` | Safe looping |
 | Conditionals | `if condition:` | Branch logic with `elif`/`else` |
-| Advisory AI | `**prompt**` | AI-assisted decision making |
+| Advisory AI | `**prompt**` / `advise` | AI-assisted decision making |
+| Using skill | `using name` | Apply skill defaults/routing (optional when using a skill name) |
+| Constraints | `with k=v` | Slippage/deadline/min_output/max_input/max_gas/etc |
+| Output binding | `x = action()` | Capture action output |
 | Atomic blocks | `atomic:` | Transaction batching |
+| Try/catch | `try:` | Error handling + retry |
+| Parallel | `parallel:` | Concurrent branches |
+| Pipeline | `expr | map:` | Functional stages |
+| Block/do | `block` / `do` | Reusable statement blocks |
 | Events | `emit name(k=v)` | Emit events for monitoring |
 
 ## CLI Commands

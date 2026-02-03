@@ -25,6 +25,26 @@ grimoire-aave market --chain 1 --address 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA
 grimoire-aave reserve --chain 1 --market 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2 --token 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
 ```
 
+## Supported Chains
+
+| Chain | Market Address |
+|-------|---------------|
+| Ethereum (1) | `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2` |
+| Base (8453) | `0xA238Dd80C259a72e81d7e4664a9801593F98d1c5` |
+
+## Amount Format
+
+The `@aave/client` SDK uses different amount formats per action:
+
+| Action | Format | Example (0.1 USDC) |
+|--------|--------|---------------------|
+| supply | `value: "0.1"` | Human-readable BigDecimal |
+| borrow | `value: "0.1"` | Human-readable BigDecimal |
+| withdraw | `value: { exact: "100000" }` | Raw amount in `exact` wrapper |
+| repay | `value: { exact: "100000" }` | Raw amount in `exact` wrapper |
+
+The adapter handles this conversion automatically.
+
 ## Notes
 
 - Outputs JSON plus a human-readable table.

@@ -60,6 +60,7 @@ program
   .option("-p, --params <json>", "Parameters as JSON")
   .option("--vault <address>", "Vault address")
   .option("--chain <id>", "Chain ID", "1")
+  .option("--advisor-skills-dir <dir...>", "Directory to load advisor skills (default: ./skills)")
   .option("--state-dir <dir>", "Directory for state database")
   .option("--no-state", "Disable state persistence")
   .action(simulateCommand);
@@ -81,6 +82,7 @@ program
   .option("--skip-confirm", "Skip confirmation prompt (use with caution)")
   .option("-v, --verbose", "Show verbose output")
   .option("--json", "Output results as JSON")
+  .option("--advisor-skills-dir <dir...>", "Directory to load advisor skills (default: ./skills)")
   .option("--state-dir <dir>", "Directory for state database")
   .option("--no-state", "Disable state persistence")
   .action(castCommand);

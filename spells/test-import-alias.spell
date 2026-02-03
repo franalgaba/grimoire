@@ -1,0 +1,13 @@
+# Test: import alias + namespaced block call
+
+spell TestImportAlias
+
+  version: "1.0.0"
+  description: "Import blocks with alias and call namespaced block"
+
+  assets: []
+
+  import "blocks/common.spell" as util
+
+  on manual:
+    do util.add(2, 3)

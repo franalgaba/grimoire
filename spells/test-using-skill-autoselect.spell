@@ -1,0 +1,24 @@
+# Test: skills section + using clause + auto-select venue
+
+spell TestUsingSkillAutoselect
+
+  version: "1.0.0"
+  description: "Use skill to auto-select venue"
+  assets: [USDC, ETH]
+
+  params:
+    amount: 100000
+
+  venues:
+    uniswap_v4: @uniswap_v4
+
+  skills:
+    dex:
+      type: swap
+      adapters: [uniswap_v4]
+      default_constraints:
+        max_slippage: 50
+
+  on manual:
+    dex.swap(USDC, ETH, params.amount) using dex
+    emit swapped(amount=params.amount)

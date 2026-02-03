@@ -68,7 +68,7 @@ spell YieldOptimizer
 
   params:
     min_amount: 100
-    threshold: 0.5
+    amount: 100000
 
   limits:
     max_allocation_per_venue: 50%
@@ -76,6 +76,19 @@ spell YieldOptimizer
   venues:
     lending: [@aave_v3, @morpho_blue, @compound_v3]
     swap: @uniswap_v3
+
+  skills:
+    dex:
+      type: swap
+      adapters: [swap]
+      default_constraints:
+        max_slippage: 50
+
+  advisors:
+    risk:
+      model: sonnet
+      timeout: 30
+      fallback: true
 
   state:
     persistent:
@@ -85,14 +98,13 @@ spell YieldOptimizer
 
   on hourly:
     for asset in assets:
-      rates = lending.get_supply_rates(asset)
-      best_venue = max(rates, key=rate)
+      current_balance = balance(asset)
 
-      if rate_diff > limits.min_rebalance_threshold:
-        if **gas costs justify the move**:
+      if current_balance > params.min_amount:
+        if **gas costs justify the move** via risk:
           atomic:
-            current_venue.withdraw(asset, balance)
-            best_venue.deposit(asset, balance)
+            aave_v3.withdraw(asset, params.amount)
+            morpho_blue.lend(asset, params.amount)
 ```
 
 ### Syntax Reference
@@ -103,15 +115,26 @@ spell YieldOptimizer
 | Arrays | `[item1, item2]` | `assets: [USDC, DAI]` |
 | Venue refs | `@name` | `@aave_v3` |
 | Venue groups | `name: [@v1, @v2]` | `lending: [@aave_v3, @morpho_blue]` |
+| Skills | `skills:` | `skills: ...` |
+| Advisors | `advisors:` | `advisors: ...` |
 | Percentages | `N%` | `50%` (converts to 0.5) |
 | Triggers | `on trigger:` | `on hourly:`, `on daily:`, `on manual:` |
 | For loops | `for x in y:` | `for asset in assets:` |
+| Repeat loops | `repeat N:` | `repeat 3:` |
+| Loop until | `loop until cond max N:` | `loop until done max 10:` |
 | If/elif/else | `if cond:` | `if x > 0:` |
 | Advisory (AI) | `**prompt**` | `if **is this safe**:` |
+| Advise | `x = advise advisor:` | `decision = advise risk: "..."` |
 | Atomic blocks | `atomic:` | Transaction grouping |
+| Try/catch | `try:` | `try: ... catch *:` |
+| Parallel | `parallel ...:` | `parallel join=all:` |
+| Pipeline | `expr | map:` | `items | map:` |
+| Block/Do | `block` / `do` | `block add(a,b):` |
 | Comments | `# comment` | `# Calculate rates` |
 | Method calls | `obj.method(args)` | `venue.deposit(asset, amount)` |
-| Assignment | `x = expr` | `rates = get_rates()` |
+| Assignment | `x = expr` | `rate = get_apy("aave_v3", asset)` |
+| Using skill | `using name` | `swap(...) using dex` |
+| Constraints | `with k=v` | `with slippage=50` |
 | Logical ops | `and`, `or`, `not` | `if a > 0 and b < 10:` |
 | Emit events | `emit name(k=v)` | `emit done(value=42)` |
 | Halt execution | `halt "reason"` | `halt "insufficient balance"` |
@@ -314,13 +337,36 @@ done
   - `grimoire-morpho-blue`
   - `grimoire-hyperliquid`
 
-## Documentation
+## Documentation & Skills Maintenance
 
 Docs live in `docs/` and follow the Diátaxis structure:
 - tutorials/
 - how-to/
-- reference/
+- reference/ (includes `grimoire-dsl-spec.md` — the full DSL specification)
 - explanation/
+
+Skills live in `skills/` and provide LLM-consumable context:
+- `skills/grimoire/` — Core CLI commands
+- `skills/grimoire-spell/` — Spell authoring reference
+- `skills/grimoire-testing/` — Unit tests + onchain test suite
+- `skills/grimoire-aave/` — Aave V3 venue CLI + amount format
+- `skills/grimoire-uniswap/` — Uniswap V3/V4 venue CLI
+- `skills/grimoire-morpho-blue/` — Morpho Blue venue CLI + default markets
+- `skills/grimoire-hyperliquid/` — Hyperliquid venue CLI
+
+**Keep docs and skills in sync with code changes.** When modifying any of the following, update the corresponding docs and skills:
+
+| Change | Update |
+|--------|--------|
+| New/changed CLI command or flag | `docs/reference/cli.md`, `skills/grimoire/SKILL.md`, this file |
+| New/changed DSL syntax or feature | `docs/reference/grimoire-dsl-spec.md`, `skills/grimoire-spell/SKILL.md` |
+| New/changed venue adapter | `docs/reference/venues.md`, matching `skills/grimoire-<venue>/SKILL.md` |
+| New venue adapter added | Create `skills/grimoire-<venue>/SKILL.md`, update `docs/reference/venues.md` |
+| Test runner changes | `docs/how-to/run-tests.md`, `skills/grimoire-testing/SKILL.md` |
+| Wallet/keystore changes | `docs/reference/cli.md` (wallet section) |
+| Bridge/amount thresholds | `docs/how-to/bridge-with-across.md`, `docs/reference/venues.md` |
+| State persistence changes | This file (State Persistence section) |
+| New example spells | `README.md` (Examples section), `docs/reference/grimoire-dsl-spec.md` |
 
 ## Pre-commit Hooks
 

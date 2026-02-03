@@ -1,0 +1,25 @@
+# Test: auto-skill routing when action uses skill name
+
+spell TestSkillAutoselectImplicit
+
+  version: "1.0.0"
+  description: "Auto-select venue from skill adapters"
+
+  assets: [USDC, ETH]
+
+  params:
+    amount: 100000
+
+  venues:
+    uni: @uniswap_v4
+
+  skills:
+    dex:
+      type: swap
+      adapters: [uni]
+      default_constraints:
+        max_slippage: 50
+
+  on manual:
+    dex.swap(USDC, ETH, params.amount)
+    emit swapped(amount=params.amount)

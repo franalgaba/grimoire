@@ -129,6 +129,25 @@ describe("Transformer", () => {
       const result = transform(ast);
       expect(result.params?.ratio).toBe(0.5);
     });
+
+    test("transforms unit literal params with asset decimals", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+  assets:
+    USDC:
+      decimals: 6
+
+  params:
+    amount: 1.5 USDC
+
+  on manual:
+    pass
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      expect(result.params?.amount).toBe(1500000);
+    });
   });
 
   describe("limits transformation", () => {
@@ -267,6 +286,38 @@ describe("Transformer", () => {
       const ast = parse(source);
       const result = transform(ast);
       expect(result.trigger).toEqual({ schedule: "0 0 * * *" });
+    });
+
+    test("transforms condition trigger", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on condition params.amount > 1 every 60:
+    pass
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      expect(result.trigger).toEqual({
+        condition: "(params.amount > 1)",
+        poll_interval: 60,
+      });
+    });
+
+    test("transforms event trigger", () => {
+      const source = `spell Test
+
+  version: "1.0.0"
+
+  on event "base.block" where block.number > 0:
+    pass
+`;
+      const ast = parse(source);
+      const result = transform(ast);
+      expect(result.trigger).toEqual({
+        event: "base.block",
+        filter: "(block.number > 0)",
+      });
     });
   });
 
@@ -738,7 +789,7 @@ describe("Transformer", () => {
   version: "1.0.0"
 
   on manual:
-    venue.swap(USDC, ETH, 1000) with slippage=50, deadline=300
+    venue.swap(USDC, ETH, 1000) with slippage=50, deadline=300, min_output=900, max_input=1100
 `;
       const ast = parse(source);
       const result = transform(ast);
@@ -748,6 +799,8 @@ describe("Transformer", () => {
       expect(constraints).toBeDefined();
       expect(constraints?.max_slippage).toBe(50);
       expect(constraints?.deadline).toBe(300);
+      expect(constraints?.min_output).toBe(900);
+      expect(constraints?.max_input).toBe(1100);
     });
 
     test("transforms with clause on assignment with method call", () => {

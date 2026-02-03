@@ -18,7 +18,9 @@ import type {
 /**
  * Create a literal expression
  */
-export function literal(value: number | string | boolean): LiteralExpr {
+export function literal(
+  value: number | string | boolean | Record<string, unknown> | unknown[] | null
+): LiteralExpr {
   const type: LiteralExpr["type"] =
     typeof value === "string"
       ? value.startsWith("0x")
@@ -26,9 +28,11 @@ export function literal(value: number | string | boolean): LiteralExpr {
         : "string"
       : typeof value === "boolean"
         ? "bool"
-        : Number.isInteger(value)
-          ? "int"
-          : "float";
+        : typeof value === "number"
+          ? Number.isInteger(value)
+            ? "int"
+            : "float"
+          : "json";
 
   return { kind: "literal", value, type };
 }

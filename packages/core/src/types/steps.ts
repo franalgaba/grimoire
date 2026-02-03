@@ -205,12 +205,13 @@ export interface TryStep {
 // =============================================================================
 
 /** Output schema for advisory */
-export interface AdvisoryOutputSchema {
-  type: "enum" | "number" | "boolean";
-  values?: string[]; // For enum type
-  min?: number; // For number type
-  max?: number; // For number type
-}
+export type AdvisoryOutputSchema =
+  | { type: "boolean" }
+  | { type: "number"; min?: number; max?: number }
+  | { type: "enum"; values?: string[] }
+  | { type: "string"; minLength?: number; maxLength?: number; pattern?: string }
+  | { type: "object"; fields?: Record<string, AdvisoryOutputSchema> }
+  | { type: "array"; items?: AdvisoryOutputSchema };
 
 /** Advisory step - AI consultation (read-only) */
 export interface AdvisoryStep {

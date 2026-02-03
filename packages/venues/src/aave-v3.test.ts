@@ -4,6 +4,7 @@ import type { Action, Address, Expression, Provider, VenueAdapterContext } from 
 import { type AaveV3AdapterConfig, createAaveV3Adapter } from "./aave-v3.js";
 
 const market = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2" as Address;
+const zeroAddress = "0x0000000000000000000000000000000000000000" as Address;
 
 const ctx: VenueAdapterContext = {
   provider: { chainId: 1 } as unknown as Provider,
@@ -297,6 +298,102 @@ describe("Aave V3 adapter", () => {
     } as unknown as Action;
 
     await expect(adapter.buildAction(missingAssetAction, ctx)).rejects.toThrow("Asset is required");
+  });
+
+  test("returns placeholder on insufficient balance in dry-run", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: { 1: market },
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({
+          __typename: "TransactionRequest",
+          to: "0x",
+          data: "0x",
+          value: "0",
+        }),
+        withdraw: async () => ({
+          __typename: "InsufficientBalanceError",
+          required: { value: "1" },
+          available: { value: "0" },
+        }),
+        borrow: async () => ({
+          __typename: "TransactionRequest",
+          to: "0x",
+          data: "0x",
+          value: "0",
+        }),
+        repay: async () => ({
+          __typename: "TransactionRequest",
+          to: "0x",
+          data: "0x",
+          value: "0",
+        }),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.buildAction) {
+      throw new Error("Missing buildAction");
+    }
+
+    const withdrawAction: Action = {
+      type: "withdraw",
+      venue: "aave_v3",
+      asset: "USDC",
+      amount: amount1,
+    };
+
+    const result = await adapter.buildAction(withdrawAction, { ...ctx, mode: "dry-run" });
+    const built = Array.isArray(result) ? result[0] : result;
+
+    expect(built.description).toContain("placeholder");
+    expect(built.tx.to).toBe(zeroAddress);
+  });
+
+  test("throws on insufficient balance in execute mode", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: { 1: market },
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({
+          __typename: "TransactionRequest",
+          to: "0x",
+          data: "0x",
+          value: "0",
+        }),
+        withdraw: async () => ({
+          __typename: "InsufficientBalanceError",
+          required: { value: "1" },
+          available: { value: "0" },
+        }),
+        borrow: async () => ({
+          __typename: "TransactionRequest",
+          to: "0x",
+          data: "0x",
+          value: "0",
+        }),
+        repay: async () => ({
+          __typename: "TransactionRequest",
+          to: "0x",
+          data: "0x",
+          value: "0",
+        }),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.buildAction) {
+      throw new Error("Missing buildAction");
+    }
+
+    const withdrawAction: Action = {
+      type: "withdraw",
+      venue: "aave_v3",
+      asset: "USDC",
+      amount: amount1,
+    };
+
+    await expect(adapter.buildAction(withdrawAction, { ...ctx, mode: "execute" })).rejects.toThrow(
+      "insufficient balance"
+    );
   });
 
   test("rejects max amount and unknown assets", async () => {

@@ -1,0 +1,17 @@
+# Test: on condition + on event triggers
+
+spell TestTriggerConditionEvent
+
+  version: "1.0.0"
+  description: "Condition and event trigger syntax"
+
+  assets: []
+
+  on manual:
+    emit manual_trigger(ok=true)
+
+  on condition true every 1h:
+    emit condition_triggered(interval=1)
+
+  on event "risk.alert" where true:
+    emit event_triggered(kind="risk.alert")
