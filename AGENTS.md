@@ -20,7 +20,7 @@ If the user did not give a concrete task in their first message, read `README.md
 ## Code Quality
 - No `any` unless absolutely necessary.
 - Avoid Bun-only APIs in `packages/core`, `packages/venues`, and `packages/cli`. If you must use Bun APIs, add a Node fallback.
-- Keep protocol SDKs out of `@grimoire/core` (core stays protocol-agnostic).
+- Keep protocol SDKs out of `@grimoirelabs/core` (core stays protocol-agnostic).
 - Prefer deterministic, side-effect-free logic in compiler/runtime.
 - Ask before removing functionality or changing DSL semantics.
 
@@ -213,7 +213,7 @@ Key files:
 
 # Venues and Adapters
 
-Core is SDK-free. Protocol integrations live in `@grimoire/venues` and are injected at execution time.
+Core is SDK-free. Protocol integrations live in `@grimoirelabs/venues` and are injected at execution time.
 
 Supported adapters:
 - `aave_v3` (AaveKit) - lending/borrowing on Ethereum + Base
@@ -314,7 +314,7 @@ For swaps, **always set both `max_slippage` and `min_output`** to prevent unexpe
 - `grimoire log <spell> <runId>` - view ledger events for a specific run
 - `grimoire venues` - list available venue adapters
 - `grimoire init` - initialize a new `.grimoire` directory
-- Per-venue CLIs in `@grimoire/venues`:
+- Per-venue CLIs in `@grimoirelabs/venues`:
   - `grimoire-aave`
   - `grimoire-uniswap`
   - `grimoire-morpho-blue`
@@ -401,8 +401,8 @@ The expression parser (`packages/core/src/compiler/expression-parser.ts`) handle
 # Usage Example
 
 ```typescript
-import { compile, execute, SqliteStateStore, createRunRecord } from "@grimoire/core";
-import { adapters } from "@grimoire/venues";
+import { compile, execute, SqliteStateStore, createRunRecord } from "@grimoirelabs/core";
+import { adapters } from "@grimoirelabs/venues";
 
 // Compile a spell
 const result = compile(spellSource);

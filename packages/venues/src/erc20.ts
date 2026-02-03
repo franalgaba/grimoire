@@ -1,4 +1,4 @@
-import type { Action, Address, BuiltTransaction, VenueAdapterContext } from "@grimoire/core";
+import type { Action, Address, BuiltTransaction, VenueAdapterContext } from "@grimoirelabs/core";
 import { encodeFunctionData, parseAbi } from "viem";
 
 const ERC20_ABI = parseAbi([

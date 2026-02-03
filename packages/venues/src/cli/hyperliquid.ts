@@ -49,7 +49,7 @@ async function main() {
       const password = process.env[passwordEnv];
       if (!password) throw new Error(`${passwordEnv} not set`);
 
-      const { loadPrivateKey } = await import("@grimoire/core");
+      const { loadPrivateKey } = await import("@grimoirelabs/core");
       const { readFileSync } = await import("node:fs");
       const { privateKeyToAccount } = await import("viem/accounts");
 

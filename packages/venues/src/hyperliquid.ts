@@ -1,4 +1,4 @@
-import type { VenueAdapter, VenueAdapterContext } from "@grimoire/core";
+import type { VenueAdapter, VenueAdapterContext } from "@grimoirelabs/core";
 import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
 import { zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";

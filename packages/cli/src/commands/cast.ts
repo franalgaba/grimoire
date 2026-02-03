@@ -22,9 +22,9 @@ import {
   getNativeCurrencySymbol,
   isTestnet,
   loadPrivateKey,
-} from "@grimoire/core";
-import type { VenueAdapter } from "@grimoire/core";
-import { adapters, createHyperliquidAdapter } from "@grimoire/venues";
+} from "@grimoirelabs/core";
+import type { VenueAdapter } from "@grimoirelabs/core";
+import { adapters, createHyperliquidAdapter } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";

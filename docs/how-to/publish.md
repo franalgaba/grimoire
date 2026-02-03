@@ -4,7 +4,7 @@ Grimoire uses Changesets for ongoing releases. The initial `0.1.0` publish is do
 
 ## Prerequisites
 
-- npm account with access to the `@grimoire` scope
+- npm account with access to the `@grimoirelabs` scope
 - Node + npm available locally
 
 ## Manual publish (one-time)

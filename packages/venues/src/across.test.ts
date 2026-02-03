@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { Quote } from "@across-protocol/app-sdk";
-import type { Action, Address, Expression, Provider, VenueAdapterContext } from "@grimoire/core";
+import type {
+  Action,
+  Address,
+  Expression,
+  Provider,
+  VenueAdapterContext,
+} from "@grimoirelabs/core";
 import { createAcrossAdapter } from "./across.js";
 
 const ctx: VenueAdapterContext = {

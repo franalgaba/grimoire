@@ -1,13 +1,13 @@
 # Bridge with Across
 
-Across bridges use the `bridge` action and the Across adapter in `@grimoire/venues`.
+Across bridges use the `bridge` action and the Across adapter in `@grimoirelabs/venues`.
 
 ## 1) Configure assets and integrator ID
 
 Across requires token mappings per chain and an integrator ID.
 
 ```ts
-import { createAcrossAdapter } from "@grimoire/venues";
+import { createAcrossAdapter } from "@grimoirelabs/venues";
 
 const across = createAcrossAdapter({
   integratorId: "0x0000",
@@ -46,8 +46,8 @@ spell AcrossBridge
 ## 3) Execute with adapters
 
 ```ts
-import { execute } from "@grimoire/core";
-import { createAcrossAdapter } from "@grimoire/venues";
+import { execute } from "@grimoirelabs/core";
+import { createAcrossAdapter } from "@grimoirelabs/venues";
 
 await execute({
   spell,

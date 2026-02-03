@@ -1,11 +1,11 @@
 # Core API reference
 
-The `@grimoire/core` package exposes compiler, runtime, state persistence, and wallet utilities.
+The `@grimoirelabs/core` package exposes compiler, runtime, state persistence, and wallet utilities.
 
 ## Compiler
 
 ```ts
-import { compile, compileFile, parseSpell, parseExpression, validateIR } from "@grimoire/core";
+import { compile, compileFile, parseSpell, parseExpression, validateIR } from "@grimoirelabs/core";
 ```
 
 - `compile(source: string)` → `CompilationResult`
@@ -17,7 +17,7 @@ import { compile, compileFile, parseSpell, parseExpression, validateIR } from "@
 ## Runtime
 
 ```ts
-import { execute, createContext, InMemoryLedger } from "@grimoire/core";
+import { execute, createContext, InMemoryLedger } from "@grimoirelabs/core";
 ```
 
 - `execute(options: ExecuteOptions)` → `Promise<ExecutionResult>`
@@ -89,8 +89,8 @@ interface ExecutionResult {
 ## State Persistence
 
 ```ts
-import { SqliteStateStore, createRunRecord } from "@grimoire/core";
-import type { StateStore, RunRecord, RunMetrics } from "@grimoire/core";
+import { SqliteStateStore, createRunRecord } from "@grimoirelabs/core";
+import type { StateStore, RunRecord, RunMetrics } from "@grimoirelabs/core";
 ```
 
 ### StateStore interface
@@ -183,7 +183,7 @@ import {
   createWalletFromConfig,
   Executor,
   TransactionBuilder,
-} from "@grimoire/core";
+} from "@grimoirelabs/core";
 ```
 
 - `createProvider(chainId, rpcUrl?)`
@@ -194,7 +194,7 @@ import {
 ## Venues
 
 ```ts
-import { createVenueRegistry } from "@grimoire/core";
+import { createVenueRegistry } from "@grimoirelabs/core";
 ```
 
 - `createVenueRegistry(adapters)`

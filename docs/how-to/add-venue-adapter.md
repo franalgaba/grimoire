@@ -1,13 +1,13 @@
 # Add a new venue adapter
 
-Venue adapters live in `@grimoire/venues`, keeping core protocol-agnostic.
+Venue adapters live in `@grimoirelabs/venues`, keeping core protocol-agnostic.
 
 ## 1) Create the adapter file
 
 Create `packages/venues/src/<venue>.ts`:
 
 ```ts
-import type { VenueAdapter } from "@grimoire/core";
+import type { VenueAdapter } from "@grimoirelabs/core";
 
 export function createMyAdapter(): VenueAdapter {
   return {

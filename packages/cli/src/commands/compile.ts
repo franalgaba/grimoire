@@ -4,7 +4,7 @@
  */
 
 import { writeFile } from "node:fs/promises";
-import { compileFile } from "@grimoire/core";
+import { compileFile } from "@grimoirelabs/core";
 import chalk from "chalk";
 import ora from "ora";
 

@@ -1,4 +1,4 @@
-import type { VenueAdapter } from "@grimoire/core";
+import type { VenueAdapter } from "@grimoirelabs/core";
 
 export const compoundV3Adapter: VenueAdapter = {
   meta: {

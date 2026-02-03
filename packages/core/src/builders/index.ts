@@ -3,7 +3,7 @@
  *
  * @example
  * ```ts
- * import { spell, action, conditional } from "@grimoire/core/builders";
+ * import { spell, action, conditional } from "@grimoirelabs/core/builders";
  *
  * const mySpell = spell("MyStrategy")
  *   .version("1.0.0")

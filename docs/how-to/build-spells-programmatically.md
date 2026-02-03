@@ -24,7 +24,7 @@ import {
   binding,
   binary,
   call,
-} from "@grimoire/core";
+} from "@grimoirelabs/core";
 ```
 
 ## 2) Create a basic spell
@@ -161,7 +161,7 @@ const advisoryStep = advisory("risk", "Is this trade safe?", "decision")
 Call `.build()` to get a `SpellIR` object, then pass it to `execute()`:
 
 ```ts
-import { execute } from "@grimoire/core";
+import { execute } from "@grimoirelabs/core";
 
 const ir = mySpell.build();
 
@@ -189,7 +189,7 @@ const source = mySpell.buildSource();
 ## Complete example
 
 ```ts
-import { spell, compute, action, conditional, emit, literal, binding, binary, execute } from "@grimoire/core";
+import { spell, compute, action, conditional, emit, literal, binding, binary, execute } from "@grimoirelabs/core";
 
 const successEmit = emit("rebalanced").data("gain", binding("gain")).build();
 

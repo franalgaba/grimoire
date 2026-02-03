@@ -5,7 +5,7 @@
 
 import { readdir, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { compileFile } from "@grimoire/core";
+import { compileFile } from "@grimoirelabs/core";
 import chalk from "chalk";
 
 interface CompileAllOptions {

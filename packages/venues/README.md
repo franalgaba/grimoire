@@ -1,4 +1,4 @@
-# @grimoire/venues
+# @grimoirelabs/venues
 
 Official Grimoire venue adapters bundle.
 
@@ -13,8 +13,8 @@ Official Grimoire venue adapters bundle.
 ## Usage
 
 ```ts
-import { adapters } from "@grimoire/venues";
-import { execute } from "@grimoire/core";
+import { adapters } from "@grimoirelabs/venues";
+import { execute } from "@grimoirelabs/core";
 
 await execute({
   spell,

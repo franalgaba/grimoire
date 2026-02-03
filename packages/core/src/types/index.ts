@@ -1,5 +1,5 @@
 /**
- * Type exports for @grimoire/core
+ * Type exports for @grimoirelabs/core
  */
 
 // Primitives

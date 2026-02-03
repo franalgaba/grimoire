@@ -13,8 +13,8 @@
     "allowImportingTsExtensions": false,
     "baseUrl": ".",
     "paths": {
-      "@grimoire/core": ["../core/dist/index.d.ts"],
-      "@grimoire/venues": ["../venues/dist/index.d.ts"]
+      "@grimoirelabs/core": ["../core/dist/index.d.ts"],
+      "@grimoirelabs/venues": ["../venues/dist/index.d.ts"]
     }
   },
   "include": ["src/**/*"],

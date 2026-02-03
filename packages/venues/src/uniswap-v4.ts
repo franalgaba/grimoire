@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
-import type { Action, Address, BuiltTransaction, VenueAdapterContext } from "@grimoire/core";
-import type { VenueAdapter } from "@grimoire/core";
+import type { Action, Address, BuiltTransaction, VenueAdapterContext } from "@grimoirelabs/core";
+import type { VenueAdapter } from "@grimoirelabs/core";
 import { type Abi, encodeAbiParameters, encodeFunctionData, parseAbi } from "viem";
 
 // ─── Constants ────────────────────────────────────────────────────────────────

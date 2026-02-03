@@ -1,5 +1,5 @@
 /**
- * @grimoire/core
+ * @grimoirelabs/core
  * Core compiler and runtime for Grimoire spell execution
  */
 

@@ -19,9 +19,9 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "paths": {
-      "@grimoire/core": ["./packages/core/src/index.ts"],
-      "@grimoire/venues": ["./packages/venues/src/index.ts"],
-      "@grimoire/cli": ["./packages/cli/src/index.ts"]
+      "@grimoirelabs/core": ["./packages/core/src/index.ts"],
+      "@grimoirelabs/venues": ["./packages/venues/src/index.ts"],
+      "@grimoirelabs/cli": ["./packages/cli/src/index.ts"]
     }
   },
   "include": ["packages/*/src/**/*"],

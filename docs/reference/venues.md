@@ -1,6 +1,6 @@
 # Venues reference
 
-The `@grimoire/venues` package provides official adapters.
+The `@grimoirelabs/venues` package provides official adapters.
 
 ## Adapters
 
@@ -14,8 +14,8 @@ The `@grimoire/venues` package provides official adapters.
 ## Usage
 
 ```ts
-import { adapters } from "@grimoire/venues";
-import { execute } from "@grimoire/core";
+import { adapters } from "@grimoirelabs/venues";
+import { execute } from "@grimoirelabs/core";
 
 await execute({
   spell,
@@ -31,7 +31,7 @@ await execute({
 Use factory functions to pass SDK config:
 
 ```ts
-import { createAcrossAdapter, createUniswapV3Adapter } from "@grimoire/venues";
+import { createAcrossAdapter, createUniswapV3Adapter } from "@grimoirelabs/venues";
 
 const across = createAcrossAdapter({
   integratorId: "0x0000",
@@ -54,7 +54,7 @@ const uniswap = createUniswapV3Adapter({
 Supports Ethereum mainnet and Base with pre-configured market addresses.
 
 ```ts
-import { createAaveV3Adapter } from "@grimoire/venues";
+import { createAaveV3Adapter } from "@grimoirelabs/venues";
 
 // Default: Ethereum + Base markets pre-configured
 const aave = createAaveV3Adapter();
@@ -82,7 +82,7 @@ const aave = createAaveV3Adapter({
 Ships with default markets for Base (chain 8453). No configuration needed for USDC lending on Base.
 
 ```ts
-import { createMorphoBlueAdapter } from "@grimoire/venues";
+import { createMorphoBlueAdapter } from "@grimoirelabs/venues";
 
 // Default: Base USDC markets (cbBTC/USDC + WETH/USDC) pre-configured
 const morpho = createMorphoBlueAdapter();
@@ -114,7 +114,7 @@ When no collateral is specified in a spell, the first matching market by loan to
 ### Uniswap V3
 
 ```ts
-import { createUniswapV3Adapter } from "@grimoire/venues";
+import { createUniswapV3Adapter } from "@grimoirelabs/venues";
 
 const uniswap = createUniswapV3Adapter({
   routers: {
@@ -130,7 +130,7 @@ const uniswap = createUniswapV3Adapter({
 Uses Universal Router with Permit2 approval flow.
 
 ```ts
-import { createUniswapV4Adapter } from "@grimoire/venues";
+import { createUniswapV4Adapter } from "@grimoirelabs/venues";
 
 const uniswapV4 = createUniswapV4Adapter({
   routers: {
@@ -146,7 +146,7 @@ const uniswapV4 = createUniswapV4Adapter({
 Cross-chain bridging. Enforces minimum amounts per token to cover relayer fees.
 
 ```ts
-import { createAcrossAdapter } from "@grimoire/venues";
+import { createAcrossAdapter } from "@grimoirelabs/venues";
 
 const across = createAcrossAdapter({
   integratorId: "0x0000",
@@ -170,7 +170,7 @@ const across = createAcrossAdapter({
 ### Hyperliquid (offchain)
 
 ```ts
-import { createHyperliquidAdapter } from "@grimoire/venues";
+import { createHyperliquidAdapter } from "@grimoirelabs/venues";
 
 const hyperliquid = createHyperliquidAdapter({
   privateKey: "0x...",

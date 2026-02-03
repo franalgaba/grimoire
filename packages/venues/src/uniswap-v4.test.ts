@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Address, Expression, Provider, VenueAdapterContext } from "@grimoire/core";
+import type { Address, Expression, Provider, VenueAdapterContext } from "@grimoirelabs/core";
 import { createUniswapV4Adapter } from "./uniswap-v4.js";
 
 /** Mock quoter: returns 3000 USDC (3000e6) for 1 ETH input, and 1 ETH for 3000 USDC output */

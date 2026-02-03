@@ -1,4 +1,4 @@
-import type { VenueAdapter } from "@grimoire/core";
+import type { VenueAdapter } from "@grimoirelabs/core";
 import { aaveV3Adapter, createAaveV3Adapter } from "./aave-v3.js";
 import { acrossAdapter, createAcrossAdapter } from "./across.js";
 import { createHyperliquidAdapter, hyperliquidAdapter } from "./hyperliquid.js";

@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
-import type { Address } from "@grimoire/core";
-import type { VenueAdapter } from "@grimoire/core";
+import type { Address } from "@grimoirelabs/core";
+import type { VenueAdapter } from "@grimoirelabs/core";
 import { CurrencyAmount, Percent, Token, TradeType } from "@uniswap/sdk-core";
 import {
   type FeeAmount,

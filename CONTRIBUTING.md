@@ -50,7 +50,7 @@ Do not bump versions manually. Changesets handle versioning after the initial 0.
 
 ## Philosophy
 
-Grimoire’s core stays lean. Protocol SDKs and heavyweight integrations belong in `@grimoire/venues` or external tooling, not the compiler/runtime.
+Grimoire’s core stays lean. Protocol SDKs and heavyweight integrations belong in `@grimoirelabs/venues` or external tooling, not the compiler/runtime.
 
 ## Questions?
 

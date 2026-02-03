@@ -18,7 +18,7 @@ import {
   getAddressFromConfig,
   getChainName,
   getNativeCurrencySymbol,
-} from "@grimoire/core";
+} from "@grimoirelabs/core";
 import chalk from "chalk";
 import { Command } from "commander";
 import ora from "ora";

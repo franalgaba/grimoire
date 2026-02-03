@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { Action, Address, Expression, Provider, VenueAdapterContext } from "@grimoire/core";
+import type {
+  Action,
+  Address,
+  Expression,
+  Provider,
+  VenueAdapterContext,
+} from "@grimoirelabs/core";
 import { createMorphoBlueAdapter } from "./morpho-blue.js";
 
 const market = {

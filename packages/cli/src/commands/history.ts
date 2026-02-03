@@ -4,7 +4,7 @@
  */
 
 import { join } from "node:path";
-import { SqliteStateStore } from "@grimoire/core";
+import { SqliteStateStore } from "@grimoirelabs/core";
 import chalk from "chalk";
 
 interface HistoryOptions {

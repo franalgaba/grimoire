@@ -1,6 +1,6 @@
 import { AaveClient, chainId, evmAddress } from "@aave/client";
 import { borrow, repay, supply, withdraw } from "@aave/client/actions";
-import type { Action, Address, BuiltTransaction, VenueAdapter } from "@grimoire/core";
+import type { Action, Address, BuiltTransaction, VenueAdapter } from "@grimoirelabs/core";
 
 export interface AaveV3AdapterConfig {
   markets: Record<number, Address>;

@@ -341,7 +341,7 @@ wait_for_bridge() {
     local balance
     balance=$(bun -e "
       import { createPublicClient, http, erc20Abi } from 'viem';
-      import { createWalletFromConfig, loadPrivateKey } from '@grimoire/core';
+      import { createWalletFromConfig, loadPrivateKey } from '@grimoirelabs/core';
       import { readFileSync } from 'node:fs';
       import { privateKeyToAccount } from 'viem/accounts';
 

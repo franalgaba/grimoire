@@ -1,4 +1,4 @@
-import type { Action, Address, VenueAdapter } from "@grimoire/core";
+import type { Action, Address, VenueAdapter } from "@grimoirelabs/core";
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { encodeFunctionData } from "viem";

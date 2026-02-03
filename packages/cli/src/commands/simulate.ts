@@ -3,8 +3,8 @@
  * Simulates spell execution (dry run)
  */
 
-import { type Address, compileFile, execute } from "@grimoire/core";
-import { adapters } from "@grimoire/venues";
+import { type Address, compileFile, execute } from "@grimoirelabs/core";
+import { adapters } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";

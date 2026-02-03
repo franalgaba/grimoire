@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { AaveClient } from "@aave/client";
-import type { Action, Address, Expression, Provider, VenueAdapterContext } from "@grimoire/core";
+import type {
+  Action,
+  Address,
+  Expression,
+  Provider,
+  VenueAdapterContext,
+} from "@grimoirelabs/core";
 import { type AaveV3AdapterConfig, createAaveV3Adapter } from "./aave-v3.js";
 
 const market = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2" as Address;

@@ -14,14 +14,14 @@
       },
     },
     "packages/cli": {
-      "name": "@grimoire/cli",
+      "name": "@grimoirelabs/cli",
       "version": "0.1.0",
       "bin": {
         "grimoire": "./src/index.ts",
       },
       "dependencies": {
-        "@grimoire/core": "workspace:*",
-        "@grimoire/venues": "workspace:*",
+        "@grimoirelabs/core": "workspace:*",
+        "@grimoirelabs/venues": "workspace:*",
         "chalk": "^5.3.0",
         "commander": "^12.1.0",
         "ora": "^8.1.0",
@@ -31,7 +31,7 @@
       },
     },
     "packages/core": {
-      "name": "@grimoire/core",
+      "name": "@grimoirelabs/core",
       "version": "0.1.0",
       "dependencies": {
         "ethers": "^6.12.1",
@@ -50,7 +50,7 @@
       ],
     },
     "packages/venues": {
-      "name": "@grimoire/venues",
+      "name": "@grimoirelabs/venues",
       "version": "0.1.0",
       "bin": {
         "grimoire-aave": "./src/cli/aave.ts",
@@ -61,7 +61,7 @@
       "dependencies": {
         "@aave/client": "^0.7.0",
         "@across-protocol/app-sdk": "^0.4.4",
-        "@grimoire/core": "workspace:*",
+        "@grimoirelabs/core": "workspace:*",
         "@morpho-org/blue-sdk": "^2.0.0",
         "@morpho-org/blue-sdk-viem": "^2.0.0",
         "@nktkas/hyperliquid": "^0.30.3",
@@ -197,11 +197,11 @@
 
     "@gql.tada/internal": ["@gql.tada/internal@1.0.8", "", { "dependencies": { "@0no-co/graphql.web": "^1.0.5" }, "peerDependencies": { "graphql": "^15.5.0 || ^16.0.0 || ^17.0.0", "typescript": "^5.0.0" } }, "sha512-XYdxJhtHC5WtZfdDqtKjcQ4d7R1s0d1rnlSs3OcBEUbYiPoJJfZU7tWsVXuv047Z6msvmr4ompJ7eLSK5Km57g=="],
 
-    "@grimoire/cli": ["@grimoire/cli@workspace:packages/cli"],
+    "@grimoirelabs/cli": ["@grimoirelabs/cli@workspace:packages/cli"],
 
-    "@grimoire/core": ["@grimoire/core@workspace:packages/core"],
+    "@grimoirelabs/core": ["@grimoirelabs/core@workspace:packages/core"],
 
-    "@grimoire/venues": ["@grimoire/venues@workspace:packages/venues"],
+    "@grimoirelabs/venues": ["@grimoirelabs/venues@workspace:packages/venues"],
 
     "@inquirer/external-editor": ["@inquirer/external-editor@1.0.3", "", { "dependencies": { "chardet": "^2.1.1", "iconv-lite": "^0.7.0" }, "peerDependencies": { "@types/node": ">=18" }, "optionalPeers": ["@types/node"] }, "sha512-RWbSrDiYmO4LbejWY7ttpxczuwQyZLBUyygsA9Nsv95hpzUWwnNTVQmAq3xuh7vNwCp07UTmE5i11XAEExx4RA=="],
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Action, Address, Provider, VenueAdapterContext } from "@grimoire/core";
+import type { Action, Address, Provider, VenueAdapterContext } from "@grimoirelabs/core";
 import { buildApprovalIfNeeded } from "./erc20.js";
 
 const baseAction: Action = {

@@ -3,7 +3,7 @@
  */
 
 import { join } from "node:path";
-import { type ExecutionResult, SqliteStateStore, createRunRecord } from "@grimoire/core";
+import { type ExecutionResult, SqliteStateStore, createRunRecord } from "@grimoirelabs/core";
 
 interface StatePersistenceOptions {
   stateDir?: string;

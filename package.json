@@ -6,7 +6,7 @@
   "type": "module",
   "workspaces": ["packages/*"],
   "scripts": {
-    "build": "bun run --filter @grimoire/core build && bun run --filter @grimoire/venues build && bun run --filter @grimoire/cli build",
+    "build": "bun run --filter @grimoirelabs/core build && bun run --filter @grimoirelabs/venues build && bun run --filter @grimoirelabs/cli build",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "bun run build && NPM_CONFIG_PROVENANCE=true NPM_CONFIG_ACCESS=public changeset publish",

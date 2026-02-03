@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Address, Expression, Provider, VenueAdapterContext } from "@grimoire/core";
+import type { Address, Expression, Provider, VenueAdapterContext } from "@grimoirelabs/core";
 import { createUniswapV3Adapter } from "./uniswap-v3.js";
 
 /** Mock pool state: sqrtPriceX96 = 2^96 (price = 1 in raw units), tick = 0 */

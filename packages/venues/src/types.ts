@@ -3,4 +3,4 @@ export type {
   VenueAdapterMeta,
   OffchainExecutionResult,
   VenueBuildResult,
-} from "@grimoire/core";
+} from "@grimoirelabs/core";

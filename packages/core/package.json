@@ -1,5 +1,5 @@
 {
-  "name": "@grimoire/core",
+  "name": "@grimoirelabs/core",
   "version": "0.1.0",
   "description": "Core compiler and runtime for Grimoire",
   "type": "module",

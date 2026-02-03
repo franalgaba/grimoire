@@ -13,7 +13,7 @@
     "allowImportingTsExtensions": false,
     "baseUrl": ".",
     "paths": {
-      "@grimoire/core": ["../core/dist/index.d.ts"]
+      "@grimoirelabs/core": ["../core/dist/index.d.ts"]
     }
   },
   "include": ["src/**/*"],

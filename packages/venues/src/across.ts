@@ -1,6 +1,6 @@
 import { addressToBytes32, getIntegratorDataSuffix, getQuote } from "@across-protocol/app-sdk";
 import { spokePoolAbiV3_5 } from "@across-protocol/app-sdk/dist/abis/SpokePool/v3_5.js";
-import type { Address, BuiltTransaction, VenueAdapter } from "@grimoire/core";
+import type { Address, BuiltTransaction, VenueAdapter } from "@grimoirelabs/core";
 import { zeroAddress } from "viem";
 import { buildApprovalIfNeeded } from "./erc20.js";
 

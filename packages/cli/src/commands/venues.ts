@@ -3,7 +3,7 @@
  * Lists available adapters and supported chains
  */
 
-import { adapters } from "@grimoire/venues";
+import { adapters } from "@grimoirelabs/venues";
 import chalk from "chalk";
 
 interface VenuesOptions {

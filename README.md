@@ -10,7 +10,7 @@ Grimoire enables you to define, simulate, and execute complex DeFi strategies us
 
 - **Human-readable DSL** - Write strategies in a clean, Python-like syntax
 - **Compile-time validation** - Catch errors before execution
-- **Adapter-based venues** - Protocol SDKs live outside core (`@grimoire/venues`)
+- **Adapter-based venues** - Protocol SDKs live outside core (`@grimoirelabs/venues`)
 - **Multi-tx approvals** - Adapters return approval + action plans
 - **Onchain + offchain** - EVM transactions or offchain execution (Hyperliquid)
 - **Bridging support** - Across bridge integration
@@ -157,11 +157,11 @@ grimoire/
 
 ## Venue Adapters
 
-Adapters live in `@grimoire/venues` and are injected at execution time. Core stays SDK-free.
+Adapters live in `@grimoirelabs/venues` and are injected at execution time. Core stays SDK-free.
 
 ```ts
-import { adapters } from "@grimoire/venues";
-import { execute } from "@grimoire/core";
+import { adapters } from "@grimoirelabs/venues";
+import { execute } from "@grimoirelabs/core";
 
 await execute({ spell, vault, chain: 1, adapters });
 ```
@@ -208,8 +208,8 @@ SpellIR → Runtime → Executor → (Adapter Registry) → Venue Adapter → Tr
 ## Programmatic Usage
 
 ```typescript
-import { compile, execute, SqliteStateStore, createRunRecord } from "@grimoire/core";
-import { adapters } from "@grimoire/venues";
+import { compile, execute, SqliteStateStore, createRunRecord } from "@grimoirelabs/core";
+import { adapters } from "@grimoirelabs/venues";
 
 // Compile a spell
 const result = compile(spellSource);

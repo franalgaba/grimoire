@@ -3,7 +3,7 @@
  * Validates a .spell file
  */
 
-import { compileFile } from "@grimoire/core";
+import { compileFile } from "@grimoirelabs/core";
 import chalk from "chalk";
 import ora from "ora";
 
