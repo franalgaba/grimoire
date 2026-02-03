@@ -25,7 +25,7 @@ import { resolveAdvisorSkill } from "./skills/registry.js";
 
 // Step executors
 import { type ActionExecutionOptions, executeActionStep } from "./steps/action.js";
-import { executeAdvisoryStep } from "./steps/advisory.js";
+import { type AdvisoryHandler, executeAdvisoryStep } from "./steps/advisory.js";
 import { executeComputeStep } from "./steps/compute.js";
 import { executeConditionalStep } from "./steps/conditional.js";
 import { executeEmitStep } from "./steps/emit.js";
@@ -74,6 +74,8 @@ export interface ExecuteOptions {
   policy?: PolicySet;
   /** Advisor skill search directories */
   advisorSkillsDirs?: string[];
+  /** Optional advisory handler for agent execution */
+  onAdvisory?: AdvisoryHandler;
 }
 
 /**
@@ -138,7 +140,14 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
       }
 
       // Execute step
-      const result = await executeStep(step, ctx, ledger, stepMap, actionExecution);
+      const result = await executeStep(
+        step,
+        ctx,
+        ledger,
+        stepMap,
+        actionExecution,
+        options.onAdvisory
+      );
 
       // Mark all child steps of container steps (try/loop/conditional) as executed
       // so the main loop doesn't re-execute them standalone
@@ -340,6 +349,7 @@ async function executeStep(
   ledger: InMemoryLedger,
   stepMap: Map<string, Step>,
   actionExecution: ActionExecutionOptions,
+  advisoryHandler?: AdvisoryHandler,
   evalCtx?: EvalContext
 ): Promise<StepResult> {
   // Helper to execute steps by ID (for loops, conditionals, etc.)
@@ -352,7 +362,15 @@ async function executeStep(
     if (!innerStep) {
       return { success: false, stepId, error: `Unknown step: ${stepId}` };
     }
-    return executeStep(innerStep, ctx, ledger, stepMap, actionExecution, innerEvalCtx);
+    return executeStep(
+      innerStep,
+      ctx,
+      ledger,
+      stepMap,
+      actionExecution,
+      advisoryHandler,
+      innerEvalCtx
+    );
   };
 
   switch (step.kind) {
@@ -404,7 +422,7 @@ async function executeStep(
       return executePipelineStep(step, ctx, ledger, executeStepById);
 
     case "advisory":
-      return executeAdvisoryStep(step, ctx, ledger);
+      return executeAdvisoryStep(step, ctx, ledger, advisoryHandler);
 
     default:
       return {

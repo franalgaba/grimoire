@@ -9,10 +9,32 @@ import { incrementAdvisoryCalls, setBinding } from "../context.js";
 import type { InMemoryLedger } from "../context.js";
 import { createEvalContext, evaluateAsync } from "../expression-evaluator.js";
 
+export interface AdvisoryHandlerInput {
+  advisor: string;
+  prompt: string;
+  model?: string;
+  outputSchema: AdvisoryStep["outputSchema"];
+  timeout: number;
+  skills?: string[];
+  allowedTools?: string[];
+  mcp?: string[];
+  context: {
+    params: Record<string, unknown>;
+    bindings: Record<string, unknown>;
+    state: {
+      persistent: Record<string, unknown>;
+      ephemeral: Record<string, unknown>;
+    };
+  };
+}
+
+export type AdvisoryHandler = (input: AdvisoryHandlerInput) => Promise<unknown>;
+
 export async function executeAdvisoryStep(
   step: AdvisoryStep,
   ctx: ExecutionContext,
-  ledger: InMemoryLedger
+  ledger: InMemoryLedger,
+  handler?: AdvisoryHandler
 ): Promise<StepResult> {
   ledger.emit({ type: "step_started", stepId: step.id, kind: "advisory" });
   const tooling = ctx.advisorTooling?.[step.advisor];
@@ -31,46 +53,96 @@ export async function executeAdvisoryStep(
   });
   incrementAdvisoryCalls(ctx);
 
+  const advisorDef = ctx.spell.advisors.find((advisor) => advisor.name === step.advisor);
+  const handlerInput: AdvisoryHandlerInput = {
+    advisor: step.advisor,
+    prompt: step.prompt,
+    model: advisorDef?.model,
+    outputSchema: step.outputSchema,
+    timeout: step.timeout,
+    skills,
+    allowedTools,
+    mcp,
+    context: {
+      params: buildParamsSnapshot(ctx),
+      bindings: Object.fromEntries(ctx.bindings),
+      state: {
+        persistent: Object.fromEntries(ctx.state.persistent),
+        ephemeral: Object.fromEntries(ctx.state.ephemeral),
+      },
+    },
+  };
+
+  let output: unknown;
+  let usedFallback = false;
+
   try {
-    const evalCtx = createEvalContext(ctx);
-    const fallbackValue = await evaluateAsync(step.fallback, evalCtx);
-    const output = coerceToSchema(fallbackValue, step.outputSchema);
-
-    setBinding(ctx, step.outputBinding, output);
-
-    ledger.emit({ type: "advisory_completed", advisor: step.advisor, output });
-    ledger.emit({ type: "step_completed", stepId: step.id, result: output });
-
-    return {
-      success: true,
-      stepId: step.id,
-      output,
-    };
+    if (handler) {
+      const handlerOutput = await withTimeout(handler(handlerInput), step.timeout);
+      output = coerceToSchema(handlerOutput, step.outputSchema);
+    } else {
+      const evalCtx = createEvalContext(ctx);
+      const fallbackValue = await evaluateAsync(step.fallback, evalCtx);
+      output = coerceToSchema(fallbackValue, step.outputSchema);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    let fallbackOutput: unknown;
-    try {
-      const evalCtx = createEvalContext(ctx);
-      fallbackOutput = await evaluateAsync(step.fallback, evalCtx);
-    } catch {
-      fallbackOutput = undefined;
+    if (handler) {
+      let fallbackValue: unknown;
+      try {
+        const evalCtx = createEvalContext(ctx);
+        fallbackValue = await evaluateAsync(step.fallback, evalCtx);
+        output = coerceToSchema(fallbackValue, step.outputSchema);
+        usedFallback = true;
+        ledger.emit({
+          type: "advisory_failed",
+          advisor: step.advisor,
+          error: message,
+          fallback: fallbackValue,
+        });
+      } catch (fallbackError) {
+        const fallbackMessage =
+          fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        ledger.emit({
+          type: "advisory_failed",
+          advisor: step.advisor,
+          error: fallbackMessage,
+          fallback: fallbackValue,
+        });
+        ledger.emit({ type: "step_failed", stepId: step.id, error: fallbackMessage });
+        return {
+          success: false,
+          stepId: step.id,
+          error: fallbackMessage,
+        };
+      }
+    } else {
+      ledger.emit({
+        type: "advisory_failed",
+        advisor: step.advisor,
+        error: message,
+        fallback: undefined,
+      });
+      ledger.emit({ type: "step_failed", stepId: step.id, error: message });
+      return {
+        success: false,
+        stepId: step.id,
+        error: message,
+      };
     }
-
-    ledger.emit({
-      type: "advisory_failed",
-      advisor: step.advisor,
-      error: message,
-      fallback: fallbackOutput,
-    });
-    ledger.emit({ type: "step_failed", stepId: step.id, error: message });
-
-    return {
-      success: false,
-      stepId: step.id,
-      error: message,
-      output: fallbackOutput,
-    };
   }
+
+  setBinding(ctx, step.outputBinding, output);
+
+  ledger.emit({ type: "advisory_completed", advisor: step.advisor, output });
+  ledger.emit({ type: "step_completed", stepId: step.id, result: output });
+
+  return {
+    success: true,
+    stepId: step.id,
+    output,
+    fallback: usedFallback || undefined,
+  };
 }
 
 function coerceToSchema(value: unknown, schema: AdvisoryStep["outputSchema"]): unknown {
@@ -118,6 +190,37 @@ function coerceToSchema(value: unknown, schema: AdvisoryStep["outputSchema"]): u
   }
 
   return value;
+}
+
+function buildParamsSnapshot(ctx: ExecutionContext): Record<string, unknown> {
+  const params: Record<string, unknown> = {};
+  for (const param of ctx.spell.params) {
+    params[param.name] = ctx.bindings.get(param.name);
+  }
+  return params;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutSeconds: number): Promise<T> {
+  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+    return promise;
+  }
+  return new Promise<T>((resolve, reject) => {
+    const ms = timeoutSeconds * 1000;
+    const timer = setTimeout(
+      () => reject(new Error(`Advisory timed out after ${timeoutSeconds}s`)),
+      ms
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 function schemaToEvent(schema: AdvisoryStep["outputSchema"]): AdvisorySchemaEvent {

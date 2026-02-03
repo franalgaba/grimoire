@@ -1,5 +1,7 @@
 # Execution modes
 
+This page covers execution modes in the **external runtime/executor**. For in-agent VM behavior, see [Grimoire VM spec](../reference/grimoire-vm.md).
+
 Grimoire supports multiple execution modes in the runtime/executor.
 
 ## Modes

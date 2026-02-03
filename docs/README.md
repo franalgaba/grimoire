@@ -31,6 +31,7 @@ Authoritative specifications.
 - [CLI reference](reference/cli.md)
 - [IR schema reference](reference/ir.md)
 - [Action constraints reference](reference/action-constraints.md)
+- [Grimoire VM spec](reference/grimoire-vm.md)
 
 ## Explanation
 
@@ -41,4 +42,5 @@ Background and design rationale.
 - [Venue adapter model](explanation/venue-adapters.md)
 - [Approval and multi-tx flows](explanation/approval-flows.md)
 - [Execution modes](explanation/execution-modes.md)
+- [Business model modes](explanation/business-model-modes.md)
 - [Grimoire extensions spec (draft)](explanation/grimoire-extensions-spec.md)

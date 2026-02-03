@@ -48,7 +48,7 @@ Rules:
 
 - `skills`, `allowed_tools`, and `mcp` are **metadata only** in core.
 - They must be emitted into advisory events for external orchestrators.
-- `fallback` remains the in-core behavior until external tooling is wired.
+- `fallback` is the in-core default; external tooling can override via `onAdvisory`.
 
 ### Advisory prompts
 
@@ -112,7 +112,7 @@ output:
 
 - `cast` runs advisory steps using `fallback` by default.
 - `simulate` always uses `fallback`.
-- External orchestrators may override advisory results by consuming events.
+- External orchestrators can supply advisory outputs via the Core API `onAdvisory` hook.
 
 ### Validation rules
 

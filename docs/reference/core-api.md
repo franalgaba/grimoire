@@ -39,10 +39,36 @@ interface ExecuteOptions {
   provider?: Provider;
   adapters?: VenueAdapter[];
   advisorSkillsDirs?: string[];
+  onAdvisory?: AdvisoryHandler;
 }
 ```
 
 `advisorSkillsDirs` points to directories that contain advisor skill folders (each with `SKILL.md` frontmatter). The runtime uses these to attach `skills`/`allowedTools` metadata to advisory events.
+
+`onAdvisory` lets you execute advisory steps with an external agent (Pi, Claude, Codex, etc.). The handler returns a value that is coerced to the advisory output schema. If it throws or times out, the runtime uses the spell fallback.
+
+```ts
+type AdvisoryHandler = (input: AdvisoryHandlerInput) => Promise<unknown>;
+
+interface AdvisoryHandlerInput {
+  advisor: string;
+  prompt: string;
+  model?: string;
+  outputSchema: AdvisoryStep["outputSchema"];
+  timeout: number;
+  skills?: string[];
+  allowedTools?: string[];
+  mcp?: string[];
+  context: {
+    params: Record<string, unknown>;
+    bindings: Record<string, unknown>;
+    state: {
+      persistent: Record<string, unknown>;
+      ephemeral: Record<string, unknown>;
+    };
+  };
+}
+```
 
 ### ExecutionResult
 

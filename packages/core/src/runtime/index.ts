@@ -3,6 +3,7 @@
  */
 
 export { execute, type ExecuteOptions } from "./interpreter.js";
+export type { AdvisoryHandler, AdvisoryHandlerInput } from "./steps/advisory.js";
 export {
   createContext,
   InMemoryLedger,

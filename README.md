@@ -16,12 +16,13 @@ Grimoire enables you to define, simulate, and execute complex DeFi strategies us
 - **Bridging support** - Across bridge integration
 - **Action constraints** - Slippage/deadlines/limits per action (`with` clause)
 - **Skills + advisors** - Routing defaults and AI advisory metadata
-- **Advisory AI integration** - Use `**prompts**` or `advise` for decisions (fallback-only runtime)
+- **Advisory AI integration** - Use `**prompts**` or `advise` for decisions (fallback by default; external handlers optional)
 - **Atomic transactions** - Group operations for all-or-nothing execution
 - **Structured control flow** - repeat/loop-until, try/catch, parallel, pipeline
 - **Scheduled triggers** - Run strategies via manual/hourly/daily/cron/condition/event
 - **State persistence** - Spell state survives across runs (SQLite-backed)
 - **Execution history** - Run history and ledger events stored per spell
+- **Two execution modes** - In-agent VM (best-effort) or external runtime (deterministic)
 
 ## Quick Start
 
