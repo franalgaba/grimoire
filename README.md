@@ -67,7 +67,7 @@ spell SafeSwap
 
   advisors:
     risk:
-      model: sonnet
+      model: "anthropic:sonnet"
       timeout: 20
       fallback: true
 

@@ -41,11 +41,12 @@ interface SkillDef {
 
 interface AdvisorDef {
   name: string;
-  model: "haiku" | "sonnet" | "opus";
+  model: string; // e.g. "anthropic:sonnet", "openai:gpt-4.1"
   scope: "read-only";
   systemPrompt?: string;
   skills?: string[];
   allowedTools?: string[];
+  mcp?: string[];
   defaultTimeout?: number;
   defaultFallback?: boolean;
   rateLimit?: {

@@ -9,7 +9,7 @@ spell TestAdviseSchemaObjectArray
 
   advisors:
     analyst:
-      model: "haiku"
+      model: "anthropic:haiku"
       skills: ["web-search"]
       allowed_tools: ["web.run"]
       mcp: ["x-search"]

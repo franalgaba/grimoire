@@ -32,7 +32,7 @@ Add optional fields to the `advisors` section:
 ```spell
 advisors:
   risk:
-    model: sonnet
+    model: "anthropic:sonnet"
     system_prompt: "Be conservative and concise."
     skills: [web-search, x-search]
     allowed_tools: [web.search, x.search]

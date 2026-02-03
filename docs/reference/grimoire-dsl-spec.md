@@ -41,7 +41,7 @@ spell <Name>
 
   advisors:
     <name>:
-      model: <haiku|sonnet|opus>
+      model: "<provider:model>"
       system_prompt: "<text>"
       skills: [<advisor_skill>, ...]
       allowed_tools: [<tool_id>, ...]
@@ -297,7 +297,7 @@ Advisors define AI judgement defaults and metadata for tooling.
 ```
 advisors:
   risk:
-    model: sonnet
+    model: "anthropic:sonnet"
     system_prompt: "Be conservative and concise."
     skills: [web-search]
     allowed_tools: [web.search, x.search]
@@ -310,6 +310,7 @@ advisors:
 ```
 
 Notes:
+- Use quotes for namespaced model IDs (e.g. `"anthropic:sonnet"`).
 - `skills` here refers to **advisor skills** (Agent Skills directories), not the spell `skills` section.
 - `allowed_tools`, `skills`, and `mcp` are emitted in advisory ledger events for external orchestrators.
 - The runtime currently uses `fallback` values (no tool execution yet).

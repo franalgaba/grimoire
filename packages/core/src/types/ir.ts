@@ -17,7 +17,7 @@ import type { Step } from "./steps.js";
 /** Advisor definition */
 export interface AdvisorDef {
   name: string;
-  model: "haiku" | "sonnet" | "opus";
+  model: string;
   scope: "read-only"; // Always read-only, enforced
   systemPrompt?: string;
   skills?: string[];

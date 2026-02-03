@@ -8,7 +8,7 @@ spell TestAdviseOutput
 
   advisors:
     reviewer:
-      model: "haiku"
+      model: "anthropic:haiku"
       skills: ["web-search"]
       allowed_tools: ["web.run"]
 

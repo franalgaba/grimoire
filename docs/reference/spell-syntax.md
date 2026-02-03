@@ -22,7 +22,7 @@ spell Name
 
   advisors:
     risk:
-      model: sonnet
+      model: "anthropic:sonnet"
       timeout: 30
       fallback: true
 

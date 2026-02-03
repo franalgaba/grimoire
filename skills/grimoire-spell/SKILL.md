@@ -38,7 +38,7 @@ spell <Name>
 
   advisors:
     <name>:
-      model: <haiku|sonnet|opus>
+      model: "<provider:model>"
       timeout: <seconds>
       fallback: <bool>
       mcp: [<mcp_id>, ...]

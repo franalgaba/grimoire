@@ -149,7 +149,7 @@ export interface AdvisorsSection extends ASTNode {
 
 export interface AdvisorItem extends ASTNode {
   name: string;
-  model: "haiku" | "sonnet" | "opus";
+  model: string;
   systemPrompt?: string;
   skills?: string[];
   allowedTools?: string[];

@@ -222,11 +222,12 @@ export class SpellBuilder {
   advisor(
     name: string,
     config: {
-      model: "haiku" | "sonnet" | "opus";
+      model: string;
       scope?: "read-only";
       systemPrompt?: string;
       skills?: string[];
       allowedTools?: string[];
+      mcp?: string[];
       defaultTimeout?: number;
       defaultFallback?: boolean;
       rateLimit?: {
@@ -242,6 +243,7 @@ export class SpellBuilder {
       systemPrompt: config.systemPrompt,
       skills: config.skills,
       allowedTools: config.allowedTools,
+      mcp: config.mcp,
       defaultTimeout: config.defaultTimeout,
       defaultFallback: config.defaultFallback,
       rateLimit: config.rateLimit,
@@ -347,6 +349,7 @@ export class SpellBuilder {
         system_prompt?: string;
         skills?: string[];
         allowed_tools?: string[];
+        mcp?: string[];
         timeout?: number;
         fallback?: boolean;
         rate_limit?: {
@@ -362,6 +365,7 @@ export class SpellBuilder {
         system_prompt: a.systemPrompt,
         skills: a.skills,
         allowed_tools: a.allowedTools,
+        mcp: a.mcp,
         timeout: a.defaultTimeout,
         fallback: a.defaultFallback,
         rate_limit: a.rateLimit

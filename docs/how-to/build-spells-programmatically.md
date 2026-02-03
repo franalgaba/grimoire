@@ -53,7 +53,7 @@ mySpell
     defaultConstraints: { maxSlippage: 50 },
   })
   .advisor("risk", {
-    model: "sonnet",
+    model: "anthropic:sonnet",
     systemPrompt: "Be conservative.",
     defaultTimeout: 30,
     defaultFallback: true,
