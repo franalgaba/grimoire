@@ -8,7 +8,7 @@ Grimoire is a language for agents to express financial intent with readable synt
 
 Agents are always-on, multi-service operators. What they need is a trustable execution layer: explicit constraints, auditable outcomes, and policy-bound actions that do not rely on opaque code or vague prompts. Grimoire makes those boundaries explicit in the language itself.
 
-Docs: [docs/README.md](./docs/README.md) | VM Spec: [docs/reference/grimoire-vm.md](./docs/reference/grimoire-vm.md) | CLI: [docs/reference/cli.md](./docs/reference/cli.md) | Examples: [spells/](./spells) | Skills: [skills/](./skills)
+[Docs](./docs/README.md) | [VM Spec](./docs/reference/grimoire-vm.md) | [CLI](./docs/reference/cli.md) | [Examples](./spells) | [Skills](./skills)
 
 ---
 
