@@ -4,7 +4,46 @@
 
 [![CI](https://github.com/franalgaba/grimoire/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/grimoire/actions/workflows/ci.yml)
 
-Grimoire enables you to define, simulate, and execute complex DeFi strategies using a human-readable `.spell` format with Python-like syntax.
+Grimoire is a language for agents to express financial intent with readable syntax and deterministic execution. Spells compile to an intermediate representation (IR) and run through protocol adapters, so you can swap venues by changing aliases and configuration instead of rewriting strategy logic.
+
+Agents are always-on, multi-service operators. What they need is a trustable execution layer: explicit constraints, auditable outcomes, and policy-bound actions that do not rely on opaque code or vague prompts. Grimoire makes those boundaries explicit in the language itself.
+
+Docs: [docs/README.md](./docs/README.md) | VM Spec: [docs/reference/grimoire-vm.md](./docs/reference/grimoire-vm.md) | CLI: [docs/reference/cli.md](./docs/reference/cli.md) | Examples: [spells/](./spells) | Skills: [skills/](./skills)
+
+---
+
+```
+spell YieldOptimizer
+
+  assets: [USDC, USDT, DAI]
+
+  venues:
+    aave_v3: @aave_v3
+    morpho_blue: @morpho_blue
+
+  limits:
+    max_per_venue: 50%
+    min_rate_diff: 0.5%
+
+  params:
+    amount: 100000
+
+  advisors:
+    risk:
+      model: anthropic:sonnet
+      timeout: 30
+      fallback: true
+
+  on hourly:
+    if **gas costs justify the move** via risk:
+      amount_to_move = balance(USDC) * 50%
+      aave_v3.withdraw(USDC, amount_to_move)
+      morpho_blue.lend(USDC, amount_to_move)
+```
+
+The boundary between strict logic and AI judgment is explicit. Everything outside `**...**` or `advise` blocks is deterministic. AI judgment is allowed only inside those marked sections. Action constraints like slippage, deadlines, and min/max bounds are explicit and machine-checkable at execution time.
+
+Execution runs in two modes: an in-agent VM and an external runtime. The VM mode lets any LLM simulate or execute spells inside a session for prototyping, reviews, and dry runs. It is best-effort and non-deterministic by design. The external runtime executes compiled IR with adapters for deterministic behavior, onchain safety, and reliable state persistence. Both modes share the same syntax and conformance suite.
 
 ## Features
 
