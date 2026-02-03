@@ -12,48 +12,6 @@ Agents are always-on, multi-service operators. What they need is a trustable exe
 
 ---
 
-## The Policy-Bound Inversion of Control
-
-Traditional automation requires explicit coordination code. Grimoire inverts this: you declare intent, control flow, and constraints, and the runtime enforces them. The spell is the contract. The execution layer is the IoC container.
-
-### 1. The Session as Runtime
-
-Instead of orchestrating agents from the outside, Grimoire can run inside the agent session via the VM. The session becomes the interpreter, able to execute the spell while preserving context and intent.
-
-### 2. The Judgment Boundary (`**...**`)
-
-When you need AI judgment instead of strict execution, you break out of structure:
-
-```
-if **gas costs justify the move** via risk:
-  ...
-```
-
-The `**...**` syntax is an explicit boundary. Everything outside is deterministic. Everything inside is semantic judgment. This keeps flexibility where it helps and policy where it matters.
-
-### 3. Open Standard, Zero Lock-in
-
-Grimoire is a language specification. Any agent runtime can implement the VM, and any deterministic executor can run the compiled IR. You can switch platforms without rewriting spells.
-
-### 4. Structure + Flexibility
-
-Why not plain English? It is too ambiguous for control flow and constraints. Why not rigid frameworks? They are too inflexible for real-world decisions. Grimoire gives you structure for execution and constraints, and natural language for judgment inside explicit boundaries.
-
-## Install the VM skill
-
-### Option A: skills.sh (npx)
-
-```bash
-npx skills add grimoire-vm
-```
-
-### Option B: Claude plugin
-
-```bash
-claude plugin marketplace add franalgaba/grimoire
-claude plugin install grimoire-vm@grimoire
-```
-
 ```
 spell YieldOptimizer
 
@@ -83,9 +41,51 @@ spell YieldOptimizer
       morpho_blue.lend(USDC, amount_to_move)
 ```
 
-The boundary between strict logic and AI judgment is explicit. Everything outside `**...**` or `advise` blocks is deterministic. AI judgment is allowed only inside those marked sections. Action constraints like slippage, deadlines, and min/max bounds are explicit and machine-checkable at execution time.
+---
 
-Execution runs in two modes: an in-agent VM and an external runtime. The VM mode lets any LLM simulate or execute spells inside a session for prototyping, reviews, and dry runs. It is best-effort and non-deterministic by design. The external runtime executes compiled IR with adapters for deterministic behavior, onchain safety, and reliable state persistence. Both modes share the same syntax and conformance suite.
+## Install the VM skill
+
+### skills.sh
+
+```bash
+npx skills add https://github.com/franalgaba/grimoire
+```
+
+### Option B: Claude plugin
+
+```bash
+claude plugin marketplace add franalgaba/grimoire
+claude plugin install grimoire-vm@grimoire
+```
+
+---
+
+## The Policy-Bound Inversion of Control
+
+Traditional automation requires explicit coordination code. Grimoire inverts this: you declare intent, control flow, and constraints, and the runtime enforces them. The spell is the contract. The execution layer is the IoC container.
+
+### 1. The Session as Runtime
+
+Instead of orchestrating agents from the outside, Grimoire can run inside the agent session via the VM. The session becomes the interpreter, able to execute the spell while preserving context and intent.
+
+### 2. The Judgment Boundary (`**...**`)
+
+When you need AI judgment instead of strict execution, you break out of structure:
+
+```
+if **gas costs justify the move** via risk:
+  ...
+```
+
+The `**...**` syntax is an explicit boundary. Everything outside is deterministic. Everything inside is semantic judgment. This keeps flexibility where it helps and policy where it matters.
+
+### 3. Open Standard, Zero Lock-in
+
+Grimoire is a language specification. Any agent runtime can implement the VM, and any deterministic executor can run the compiled IR. You can switch platforms without rewriting spells.
+
+### 4. Structure + Flexibility
+
+Why not plain English? It is too ambiguous for control flow and constraints. Why not rigid frameworks? They are too inflexible for real-world decisions. Grimoire gives you structure for execution and constraints, and natural language for judgment inside explicit boundaries.
 
 ## Features
 
@@ -122,43 +122,6 @@ bun run packages/cli/src/index.ts simulate spells/compute-only.spell
 
 # Execute a spell (requires wallet + RPC)
 bun run packages/cli/src/index.ts cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url <rpc>
-```
-
-## Example Spell
-
-```
-spell SafeSwap
-
-  version: "1.0.0"
-  description: "Swap USDC to ETH with advisory gate"
-
-  assets: [USDC, ETH]
-
-  params:
-    amount: 100000
-
-  venues:
-    uniswap_v3: @uniswap_v3
-
-  skills:
-    dex_skill:
-      type: swap
-      adapters: [uniswap_v3]
-      default_constraints:
-        max_slippage: 50
-
-  advisors:
-    risk:
-      model: "anthropic:sonnet"
-      timeout: 20
-      fallback: true
-
-  on manual:
-    if **is it safe to swap now** via risk:
-      tx = uniswap_v3.swap(USDC, ETH, params.amount) using dex_skill
-      emit swapped(tx=tx)
-    else:
-      emit skipped(reason="advisory_declined")
 ```
 
 ## Syntax Highlights
@@ -199,33 +162,6 @@ spell SafeSwap
 | `grimoire venues` | List adapters and supported chains |
 | `grimoire history [spell]` | View execution history |
 | `grimoire log <spell> <runId>` | View ledger events for a run |
-
-### Venue CLIs
-
-- `grimoire-aave`
-- `grimoire-uniswap`
-- `grimoire-morpho-blue`
-- `grimoire-hyperliquid`
-
-## Project Structure
-
-```
-grimoire/
-├── packages/
-│   ├── core/              # Compiler, runtime, adapter registry
-│   │   └── src/
-│   │       ├── compiler/  # Tokenizer, parser, IR generator
-│   │       ├── runtime/   # Execution engine + state persistence
-│   │       ├── venues/    # Adapter registry + types
-│   │       ├── types/     # TypeScript definitions
-│   │       └── builders/  # Fluent spell builder API
-│   ├── venues/            # Official SDK adapters
-│   ├── cli/               # Command-line interface
-│   └── sdk/               # High-level SDK (WIP)
-├── spells/                # Example spell files
-├── skills/                # Agent skills (per-venue)
-└── docs/                  # Diátaxis documentation
-```
 
 ## Supported Venues
 
