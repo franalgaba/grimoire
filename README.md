@@ -8,9 +8,24 @@ Grimoire is a language for agents to express financial intent with readable synt
 
 Agents are always-on, multi-service operators. What they need is a trustable execution layer: explicit constraints, auditable outcomes, and policy-bound actions that do not rely on opaque code or vague prompts. Grimoire makes those boundaries explicit in the language itself.
 
-[Docs](./docs/README.md) | [VM Spec](./docs/reference/grimoire-vm.md) | [CLI](./docs/reference/cli.md) | [Examples](./spells) | [Skills](./skills)
+[Docs](./docs/README.md) | [VM Mode](./docs/how-to/run-grimoire-vm.md) | [VM Spec](./docs/reference/grimoire-vm.md) | [CLI](./docs/reference/cli.md) | [Examples](./spells) | [Skills](./skills)
 
 ---
+
+## Install the VM skill
+
+### Option A: skills.sh (npx)
+
+```bash
+npx skills add grimoire-vm
+```
+
+### Option B: Claude plugin (when published)
+
+```bash
+claude plugin marketplace add franalgaba/grimoire
+claude plugin install grimoire-vm@grimoire
+```
 
 ```
 spell YieldOptimizer

@@ -1,0 +1,11 @@
+{
+  "name": "grimoire-vm",
+  "description": "A programming language for agentic finance - structured, reviewable spells that compile to deterministic execution with explicit AI judgment boundaries",
+  "version": "0.1.0",
+  "author": {
+    "name": "Grimoire Labs",
+    "url": "https://github.com/franalgaba/grimoire"
+  },
+  "repository": "https://github.com/franalgaba/grimoire",
+  "keywords": ["ai", "agents", "defi", "dsl", "grimoire", "spells", "vm"]
+}

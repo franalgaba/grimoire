@@ -21,6 +21,7 @@ Task-focused recipes.
 - [Add and organize spells](how-to/add-spells.md)
 - [Run tests and checks](how-to/run-tests.md)
 - [Publish packages](how-to/publish.md)
+- [Run spells in VM mode](how-to/run-grimoire-vm.md)
 
 ## Reference
 

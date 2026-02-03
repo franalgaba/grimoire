@@ -1,0 +1,14 @@
+{
+  "name": "grimoire",
+  "owner": {
+    "name": "Grimoire Labs",
+    "url": "https://github.com/franalgaba/grimoire"
+  },
+  "plugins": [
+    {
+      "name": "grimoire-vm",
+      "source": "./",
+      "description": "A programming language for agentic finance - structured, reviewable spells that compile to deterministic execution with explicit AI judgment boundaries"
+    }
+  ]
+}
