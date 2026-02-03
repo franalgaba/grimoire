@@ -20,7 +20,7 @@ Agents are always-on, multi-service operators. What they need is a trustable exe
 npx skills add grimoire-vm
 ```
 
-### Option B: Claude plugin (when published)
+### Option B: Claude plugin
 
 ```bash
 claude plugin marketplace add franalgaba/grimoire
