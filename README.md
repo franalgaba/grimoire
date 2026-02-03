@@ -55,7 +55,7 @@ This mode runs inside an agent session. It does not ship with venue adapters or 
 npx skills add https://github.com/franalgaba/grimoire
 ```
 
-#### Claude plugin
+### Claude plugin
 
 ```bash
 claude plugin marketplace add franalgaba/grimoire
