@@ -3,21 +3,25 @@
   "version": "0.1.0",
   "description": "CLI for Grimoire spell execution",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "bin": {
-    "grimoire": "./src/index.ts"
+    "grimoire": "./dist/index.js"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "dev": "bun run src/index.ts",
     "test": "bun test"
   },
   "dependencies": {
-    "@grimoire/core": "workspace:*",
-    "@grimoire/venues": "workspace:*",
+    "@grimoire/core": "0.1.0",
+    "@grimoire/venues": "0.1.0",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "ora": "^8.1.0"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
-  }
+  },
+  "files": ["dist"]
 }

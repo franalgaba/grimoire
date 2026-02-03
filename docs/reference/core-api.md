@@ -111,7 +111,7 @@ interface StateStore {
 
 ### SqliteStateStore
 
-SQLite-backed implementation using `bun:sqlite`. Zero external dependencies.
+SQLite-backed implementation. Uses `bun:sqlite` when running under Bun, and falls back to `better-sqlite3` in Node (install `better-sqlite3` if you use the store in Node).
 
 ```ts
 const store = new SqliteStateStore({

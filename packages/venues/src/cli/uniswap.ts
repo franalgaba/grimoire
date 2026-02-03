@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 import { createUniswapV3Adapter, defaultUniswapV3Routers } from "../uniswap-v3.js";
 import { getOption, parseArgs, printResult } from "./utils.js";

@@ -1,3 +1,8 @@
+<!--
+This file is generated from docs/reference/grimoire-vm.md.
+Run scripts/sync-references.sh to update.
+-->
+
 # Grimoire VM (In-Agent) Execution Spec
 
 Status: draft
@@ -430,4 +435,4 @@ The VM executes inside an agent session and may use tools with side effects. The
 
 ## Conformance
 
-See `docs/reference/grimoire-vm-conformance.md` for a checklist and test matrix.
+See `references/CONFORMANCE.md` for a checklist and test matrix.

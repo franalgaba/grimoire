@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { createMorphoBlueAdapter } from "../morpho-blue.js";

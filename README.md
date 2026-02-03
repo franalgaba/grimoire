@@ -249,6 +249,17 @@ Docs are organized with the [Diátaxis](https://diataxis.fr/) framework in `docs
 
 Start at [docs/README.md](./docs/README.md).
 
+## Skills
+
+Grimoire ships agent skills under `skills/`:
+
+- `grimoire` — core CLI commands (compile, validate, simulate, cast)
+- `grimoire-vm` — in-agent VM execution spec + conformance references
+- `grimoire-aave` — Aave V3 venue CLI metadata
+- `grimoire-uniswap` — Uniswap V3/V4 venue CLI metadata
+- `grimoire-morpho-blue` — Morpho Blue venue CLI metadata
+- `grimoire-hyperliquid` — Hyperliquid venue CLI metadata
+
 ## More Examples
 
 See the [`spells/`](./spells) directory for more examples:
@@ -266,11 +277,7 @@ See the [`spells/`](./spells) directory for more examples:
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run `bun run validate` to ensure tests pass
-5. Submit a pull request
+See `CONTRIBUTING.md` for contribution guidelines and `AGENTS.md` for project-specific rules (for both humans and agents).
 
 ## License
 

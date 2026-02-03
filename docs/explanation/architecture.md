@@ -41,7 +41,7 @@ The `execute()` function is pure — it accepts `persistentState` as input and r
     └────────────────────────────────────┘
 ```
 
-The `SqliteStateStore` uses `bun:sqlite` with three tables:
+The `SqliteStateStore` uses `bun:sqlite` under Bun and `better-sqlite3` under Node, with three tables:
 - `spell_state` — current persistent state per spell (key-value JSON)
 - `runs` — execution history with metrics
 - `ledger` — full event log per run

@@ -3,7 +3,7 @@
  * Scaffolds a new .grimoire directory
  */
 
-import { access, mkdir } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import chalk from "chalk";
 import ora from "ora";
@@ -160,14 +160,14 @@ export async function initCommand(options: InitOptions): Promise<void> {
     await mkdir(join(baseDir, "spells"), { recursive: true });
 
     // Write config file
-    await Bun.write(join(baseDir, "config.yaml"), DEFAULT_CONFIG);
+    await writeFile(join(baseDir, "config.yaml"), DEFAULT_CONFIG, "utf8");
 
     // Write default aliases
-    await Bun.write(join(baseDir, "aliases", "default.yaml"), DEFAULT_ALIASES);
+    await writeFile(join(baseDir, "aliases", "default.yaml"), DEFAULT_ALIASES, "utf8");
 
     // Write example spell
     await mkdir(join(baseDir, "spells", "example-swap"), { recursive: true });
-    await Bun.write(join(baseDir, "spells", "example-swap", "spell.spell"), EXAMPLE_SPELL);
+    await writeFile(join(baseDir, "spells", "example-swap", "spell.spell"), EXAMPLE_SPELL, "utf8");
 
     spinner.succeed(chalk.green("Grimoire initialized successfully!"));
 

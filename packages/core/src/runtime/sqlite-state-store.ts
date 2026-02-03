@@ -1,10 +1,10 @@
 /**
  * SQLite-based StateStore implementation
- * Uses bun:sqlite for zero-dependency persistence
+ * Uses bun:sqlite when available, otherwise falls back to better-sqlite3.
  */
 
-import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import type { LedgerEntry } from "../types/execution.js";
 import type { RunRecord, StateStore } from "./state-store.js";
@@ -19,8 +19,93 @@ export interface SqliteStateStoreOptions {
 const DEFAULT_DB_PATH = ".grimoire/grimoire.db";
 const DEFAULT_MAX_RUNS = 100;
 
+type SqliteStatement<T, P extends unknown[]> = {
+  get: (...params: P) => T | undefined;
+  all: (...params: P) => T[];
+  run: (...params: P) => void;
+};
+
+type DatabaseLike = {
+  exec: (sql: string) => void;
+  query: <T, P extends unknown[]>(sql: string) => SqliteStatement<T, P>;
+  transaction: (fn: () => void) => () => void;
+  close: () => void;
+};
+
+type BetterSqliteStatement = {
+  get: (...params: unknown[]) => unknown;
+  all: (...params: unknown[]) => unknown[];
+  run: (...params: unknown[]) => void;
+};
+
+type BetterSqliteDatabase = {
+  exec: (sql: string) => void;
+  prepare: (sql: string) => BetterSqliteStatement;
+  transaction: (fn: () => void) => () => void;
+  close: () => void;
+};
+
+type BetterSqliteModule = new (path: string) => BetterSqliteDatabase;
+
+class BetterSqliteAdapter implements DatabaseLike {
+  private db: BetterSqliteDatabase;
+
+  constructor(dbPath: string) {
+    const BetterSqlite = loadBetterSqlite3();
+    this.db = new BetterSqlite(dbPath);
+  }
+
+  exec(sql: string): void {
+    this.db.exec(sql);
+  }
+
+  query<T, P extends unknown[]>(sql: string): SqliteStatement<T, P> {
+    const stmt = this.db.prepare(sql);
+    return {
+      get: (...params: P) => stmt.get(...params) as T | undefined,
+      all: (...params: P) => stmt.all(...params) as T[],
+      run: (...params: P) => {
+        stmt.run(...params);
+      },
+    };
+  }
+
+  transaction(fn: () => void): () => void {
+    const wrapped = this.db.transaction(fn);
+    return () => {
+      wrapped();
+    };
+  }
+
+  close(): void {
+    this.db.close();
+  }
+}
+
+function loadBetterSqlite3(): BetterSqliteModule {
+  const require = createRequire(import.meta.url);
+  try {
+    return require("better-sqlite3") as BetterSqliteModule;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `SqliteStateStore requires bun:sqlite (Bun) or better-sqlite3 (Node). Install better-sqlite3 to use SqliteStateStore in Node (npm i better-sqlite3). (${message})`
+    );
+  }
+}
+
+function createDatabase(dbPath: string): DatabaseLike {
+  const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
+  if (isBun) {
+    const require = createRequire(import.meta.url);
+    const { Database } = require("bun:sqlite") as { Database: new (path: string) => DatabaseLike };
+    return new Database(dbPath);
+  }
+  return new BetterSqliteAdapter(dbPath);
+}
+
 export class SqliteStateStore implements StateStore {
-  private db: Database;
+  private db: DatabaseLike;
   private maxRuns: number;
 
   constructor(options: SqliteStateStoreOptions = {}) {
@@ -30,7 +115,7 @@ export class SqliteStateStore implements StateStore {
     // Ensure parent directory exists
     mkdirSync(dirname(dbPath), { recursive: true });
 
-    this.db = new Database(dbPath);
+    this.db = createDatabase(dbPath);
     this.db.exec("PRAGMA journal_mode = WAL");
     this.initSchema();
   }

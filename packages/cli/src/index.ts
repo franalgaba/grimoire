@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 /**
  * Grimoire CLI
  * Command-line interface for spell management and execution

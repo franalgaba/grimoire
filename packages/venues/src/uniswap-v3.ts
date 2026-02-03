@@ -1,6 +1,6 @@
+import { createRequire } from "node:module";
 import type { Address } from "@grimoire/core";
 import type { VenueAdapter } from "@grimoire/core";
-import tokenList from "@uniswap/default-token-list";
 import { CurrencyAmount, Percent, Token, TradeType } from "@uniswap/sdk-core";
 import {
   type FeeAmount,
@@ -50,6 +50,11 @@ const POOL_ABI = parseAbi([
 ]);
 
 const WETH_ABI = parseAbi(["function deposit() payable"]);
+
+const require = createRequire(import.meta.url);
+const tokenList = require("@uniswap/default-token-list") as {
+  tokens: Array<{ chainId: number; symbol: string; address: string; decimals: number }>;
+};
 
 export function createUniswapV3Adapter(
   config: UniswapV3AdapterConfig = { routers: DEFAULT_ROUTERS }

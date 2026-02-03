@@ -1,6 +1,6 @@
+import { createRequire } from "node:module";
 import type { Action, Address, BuiltTransaction, VenueAdapterContext } from "@grimoire/core";
 import type { VenueAdapter } from "@grimoire/core";
-import tokenList from "@uniswap/default-token-list";
 import { type Abi, encodeAbiParameters, encodeFunctionData, parseAbi } from "viem";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -60,6 +60,11 @@ const PERMIT2_ABI = parseAbi([
   "function approve(address token, address spender, uint160 amount, uint48 expiration)",
   "function allowance(address owner, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)",
 ]);
+
+const require = createRequire(import.meta.url);
+const tokenList = require("@uniswap/default-token-list") as {
+  tokens: Array<{ chainId: number; symbol: string; address: string; decimals: number }>;
+};
 
 /** JSON ABI for Quoter (nested struct requires explicit tuple definitions) */
 const QUOTER_ABI = [

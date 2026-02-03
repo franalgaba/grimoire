@@ -20,6 +20,7 @@ Task-focused recipes.
 - [Bridge with Across](how-to/bridge-with-across.md)
 - [Add and organize spells](how-to/add-spells.md)
 - [Run tests and checks](how-to/run-tests.md)
+- [Publish packages](how-to/publish.md)
 
 ## Reference
 
@@ -32,6 +33,7 @@ Authoritative specifications.
 - [IR schema reference](reference/ir.md)
 - [Action constraints reference](reference/action-constraints.md)
 - [Grimoire VM spec](reference/grimoire-vm.md)
+- [Grimoire VM conformance](reference/grimoire-vm-conformance.md)
 
 ## Explanation
 

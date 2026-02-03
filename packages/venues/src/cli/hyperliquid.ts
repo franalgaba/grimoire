@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import { getOption, parseArgs, printResult, requireOption } from "./utils.js";

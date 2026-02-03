@@ -19,6 +19,7 @@ export {
   type ExpressionNode,
 } from "./grimoire/index.js";
 
+import { readFile } from "node:fs/promises";
 import type { CompilationResult, SpellSource } from "../types/ir.js";
 import { compileGrimoire, parseGrimoire } from "./grimoire/index.js";
 
@@ -63,7 +64,7 @@ export function parseSpell(content: string): ParseResult {
  */
 export async function parseSpellFile(filePath: string): Promise<ParseResult> {
   try {
-    const content = await Bun.file(filePath).text();
+    const content = await readFile(filePath, "utf8");
     const source = parseGrimoire(content, { filePath });
     return {
       success: true,
@@ -100,7 +101,7 @@ export function compile(source: string): CompilationResult {
  */
 export async function compileFile(filePath: string): Promise<CompilationResult> {
   try {
-    const content = await Bun.file(filePath).text();
+    const content = await readFile(filePath, "utf8");
     return compileGrimoire(content, { filePath });
   } catch (e) {
     const error = e as Error;

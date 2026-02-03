@@ -3,6 +3,7 @@
  * Compiles a .spell file to IR
  */
 
+import { writeFile } from "node:fs/promises";
 import { compileFile } from "@grimoire/core";
 import chalk from "chalk";
 import ora from "ora";
@@ -40,7 +41,7 @@ export async function compileCommand(spellPath: string, options: CompileOptions)
       : JSON.stringify(result.ir, bigintReplacer);
 
     if (options.output) {
-      await Bun.write(options.output, irJson);
+      await writeFile(options.output, irJson, "utf8");
       console.log(chalk.dim(`IR written to ${options.output}`));
     } else {
       console.log();

@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 import { AaveClient, chainId, evmAddress } from "@aave/client";
 import { chains, health, market, markets, reserve } from "@aave/client/actions";
