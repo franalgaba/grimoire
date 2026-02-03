@@ -12,6 +12,33 @@ Agents are always-on, multi-service operators. What they need is a trustable exe
 
 ---
 
+## The Policy-Bound Inversion of Control
+
+Traditional automation requires explicit coordination code. Grimoire inverts this: you declare intent, control flow, and constraints, and the runtime enforces them. The spell is the contract. The execution layer is the IoC container.
+
+### 1. The Session as Runtime
+
+Instead of orchestrating agents from the outside, Grimoire can run inside the agent session via the VM. The session becomes the interpreter, able to execute the spell while preserving context and intent.
+
+### 2. The Judgment Boundary (`**...**`)
+
+When you need AI judgment instead of strict execution, you break out of structure:
+
+```
+if **gas costs justify the move** via risk:
+  ...
+```
+
+The `**...**` syntax is an explicit boundary. Everything outside is deterministic. Everything inside is semantic judgment. This keeps flexibility where it helps and policy where it matters.
+
+### 3. Open Standard, Zero Lock-in
+
+Grimoire is a language specification. Any agent runtime can implement the VM, and any deterministic executor can run the compiled IR. You can switch platforms without rewriting spells.
+
+### 4. Structure + Flexibility
+
+Why not plain English? It is too ambiguous for control flow and constraints. Why not rigid frameworks? They are too inflexible for real-world decisions. Grimoire gives you structure for execution and constraints, and natural language for judgment inside explicit boundaries.
+
 ## Install the VM skill
 
 ### Option A: skills.sh (npx)
