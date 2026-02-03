@@ -51,7 +51,7 @@ spell YieldOptimizer
 npx skills add https://github.com/franalgaba/grimoire
 ```
 
-### Option B: Claude plugin
+### Claude plugin
 
 ```bash
 claude plugin marketplace add franalgaba/grimoire
