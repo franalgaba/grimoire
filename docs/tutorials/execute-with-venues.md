@@ -2,6 +2,20 @@
 
 This tutorial runs a swap spell using the venues package.
 
+## 0) Install dependencies
+
+If you are running from this repo:
+
+```bash
+bun install
+```
+
+If you are using published packages:
+
+```bash
+npm i @grimoirelabs/core @grimoirelabs/venues
+```
+
 ## 1) Use a venue spell
 
 Example: `spells/uniswap-swap-execute.spell`
@@ -36,7 +50,7 @@ bun -e "import { compileFile, execute } from './packages/core/src/index.ts'; imp
 Use the CLI when you have a wallet configured:
 
 ```bash
-grimoire-cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url <rpc>
+grimoire cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url <rpc>
 ```
 
 > Tip: avoid passing secrets on the command line; prefer `--key-env`.

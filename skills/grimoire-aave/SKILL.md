@@ -5,24 +5,33 @@ description: Fetches Aave V3 public market data using the Grimoire venue CLI. Us
 
 # Grimoire Aave Skill
 
-Use the `grimoire-aave` CLI to query Aave market data exposed by the SDK.
+Use the Grimoire CLI to query Aave market data exposed by the SDK.
+
+Preferred:
+
+- `grimoire venue aave ...`
+
+If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-aave`.
 
 ## Commands
 
-- `grimoire-aave health`
-- `grimoire-aave chains`
-- `grimoire-aave markets --chain <id> [--user <address>]`
-- `grimoire-aave market --chain <id> --address <market> [--user <address>]`
-- `grimoire-aave reserve --chain <id> --market <address> --token <address>`
+- `grimoire venue aave health [--format <json|table>]`
+- `grimoire venue aave chains [--format <json|table>]`
+- `grimoire venue aave markets --chain <id> [--user <address>] [--format <json|table>]`
+- `grimoire venue aave market --chain <id> --address <market> [--user <address>] [--format <json|table>]`
+- `grimoire venue aave reserve --chain <id> --market <address> --token <address> [--format <json|table>]`
+- `grimoire venue aave reserves --chain <id> [--market <address>] [--asset <symbol|address>] [--format <json|table|spell>]`
 
 ## Examples
 
 ```bash
-grimoire-aave health
-grimoire-aave chains
-grimoire-aave markets --chain 1
-grimoire-aave market --chain 1 --address 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
-grimoire-aave reserve --chain 1 --market 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2 --token 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+grimoire venue aave health --format table
+grimoire venue aave chains
+grimoire venue aave markets --chain 1 --format table
+grimoire venue aave market --chain 1 --address 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
+grimoire venue aave reserve --chain 1 --market 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2 --token 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+grimoire venue aave reserves --chain 1 --asset USDC --format table
+grimoire venue aave reserves --chain 1 --asset USDC --format spell
 ```
 
 ## Supported Chains

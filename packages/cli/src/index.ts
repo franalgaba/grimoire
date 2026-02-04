@@ -13,10 +13,12 @@ import { initCommand } from "./commands/init.js";
 import { logCommand } from "./commands/log.js";
 import { simulateCommand } from "./commands/simulate.js";
 import { validateCommand } from "./commands/validate.js";
+import { venueCommand } from "./commands/venue.js";
 import { venuesCommand } from "./commands/venues.js";
 import { walletCommand } from "./commands/wallet.js";
 
 const program = new Command();
+program.enablePositionalOptions();
 
 program
   .name("grimoire")
@@ -28,6 +30,7 @@ program
   .command("init")
   .description("Initialize a new .grimoire directory")
   .option("-f, --force", "Overwrite existing files")
+  .option("--vm", "Create a VM quickstart scaffold")
   .action(initCommand);
 
 // Compile command
@@ -93,6 +96,15 @@ program
   .description("List available venue adapters")
   .option("--json", "Output results as JSON")
   .action(venuesCommand);
+
+// Venue metadata command (proxy)
+program
+  .command("venue [adapter] [args...]")
+  .description("Run venue metadata commands (proxy to @grimoirelabs/venues CLIs)")
+  .allowUnknownOption(true)
+  .passThroughOptions()
+  .helpOption(false)
+  .action((adapter, args) => venueCommand(adapter, args));
 
 // History command
 program

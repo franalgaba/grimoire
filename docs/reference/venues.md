@@ -2,6 +2,33 @@
 
 The `@grimoirelabs/venues` package provides official adapters.
 
+## CLI metadata
+
+If you installed the Grimoire CLI, you can access venue metadata via:
+
+```bash
+grimoire venue morpho-blue info
+grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000
+grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
+
+# Uniswap pools snapshot (mainnet)
+grimoire venue uniswap pools --chain 1 --token0 USDC --token1 WETH --fee 3000 --format spell
+
+# Uniswap pools snapshot via RPC (avoids The Graph)
+grimoire venue uniswap pools --chain 1 --token0 USDC --token1 WETH --fee 3000 --rpc-url $RPC_URL --format spell
+
+# Hyperliquid mid prices snapshot
+grimoire venue hyperliquid mids --format spell
+```
+
+If you provide `--rpc-url` (or set `RPC_URL`) and omit `--endpoint`/`--graph-key`, the CLI fetches pools directly from the Uniswap V3 factory onchain.
+
+## Install (programmatic usage)
+
+```bash
+npm i @grimoirelabs/venues
+```
+
 ## Adapters
 
 - `aave_v3` — Aave V3 lending/borrowing (Ethereum, Base)

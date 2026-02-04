@@ -10,6 +10,7 @@ import ora from "ora";
 
 interface InitOptions {
   force?: boolean;
+  vm?: boolean;
 }
 
 const DEFAULT_CONFIG = `# Grimoire Configuration
@@ -132,6 +133,48 @@ guards:
     message: "Insufficient USDC balance"
 `;
 
+const VM_QUICKSTART_SPELL = `# VM quickstart: snapshot-driven compute spell
+
+spell VmQuickstart
+
+  description: "Compute a spread from a Morpho vault snapshot"
+
+  # Replace this params block with output from:
+  # grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
+  params:
+    snapshot_at: ""
+    snapshot_source: ""
+    vault_names: []
+    vault_addresses: []
+    vault_net_apys: []
+    vault_tvl_usd: []
+
+  on manual:
+    best_apy = max(params.vault_net_apys)
+    avg_apy = avg(params.vault_net_apys)
+    spread = best_apy - avg_apy
+
+    emit vault_snapshot_summary(
+      snapshot_at=params.snapshot_at,
+      best_apy=best_apy,
+      avg_apy=avg_apy,
+      spread=spread
+    )
+`;
+
+const VM_QUICKSTART_README = `# VM quickstart (snapshot-driven)
+
+1) Generate a snapshot:
+
+grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
+
+2) Paste the output into spell.spell (replace the params block).
+
+3) Run in the VM:
+
+Run .grimoire/spells/vm-quickstart/spell.spell in the Grimoire VM with trigger manual. Use defaults and no side effects.
+`;
+
 export async function initCommand(options: InitOptions): Promise<void> {
   const spinner = ora("Initializing Grimoire...").start();
   const baseDir = ".grimoire";
@@ -165,9 +208,27 @@ export async function initCommand(options: InitOptions): Promise<void> {
     // Write default aliases
     await writeFile(join(baseDir, "aliases", "default.yaml"), DEFAULT_ALIASES, "utf8");
 
-    // Write example spell
-    await mkdir(join(baseDir, "spells", "example-swap"), { recursive: true });
-    await writeFile(join(baseDir, "spells", "example-swap", "spell.spell"), EXAMPLE_SPELL, "utf8");
+    if (options.vm) {
+      await mkdir(join(baseDir, "spells", "vm-quickstart"), { recursive: true });
+      await writeFile(
+        join(baseDir, "spells", "vm-quickstart", "spell.spell"),
+        VM_QUICKSTART_SPELL,
+        "utf8"
+      );
+      await writeFile(
+        join(baseDir, "spells", "vm-quickstart", "README.md"),
+        VM_QUICKSTART_README,
+        "utf8"
+      );
+    } else {
+      // Write example spell
+      await mkdir(join(baseDir, "spells", "example-swap"), { recursive: true });
+      await writeFile(
+        join(baseDir, "spells", "example-swap", "spell.spell"),
+        EXAMPLE_SPELL,
+        "utf8"
+      );
+    }
 
     spinner.succeed(chalk.green("Grimoire initialized successfully!"));
 
@@ -175,16 +236,37 @@ export async function initCommand(options: InitOptions): Promise<void> {
     console.log(chalk.dim("Created:"));
     console.log(chalk.dim(`  ${baseDir}/config.yaml`));
     console.log(chalk.dim(`  ${baseDir}/aliases/default.yaml`));
-    console.log(chalk.dim(`  ${baseDir}/spells/example-swap/spell.spell`));
+    if (options.vm) {
+      console.log(chalk.dim(`  ${baseDir}/spells/vm-quickstart/spell.spell`));
+      console.log(chalk.dim(`  ${baseDir}/spells/vm-quickstart/README.md`));
+    } else {
+      console.log(chalk.dim(`  ${baseDir}/spells/example-swap/spell.spell`));
+    }
     console.log();
     console.log(chalk.cyan("Next steps:"));
-    console.log(chalk.white("  1. Edit your spell in .grimoire/spells/example-swap/spell.spell"));
-    console.log(
-      chalk.white("  2. Run: grimoire validate .grimoire/spells/example-swap/spell.spell")
-    );
-    console.log(
-      chalk.white("  3. Run: grimoire simulate .grimoire/spells/example-swap/spell.spell")
-    );
+    if (options.vm) {
+      console.log(
+        chalk.white(
+          "  1. Run: grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell"
+        )
+      );
+      console.log(
+        chalk.white("  2. Paste the params block into .grimoire/spells/vm-quickstart/spell.spell")
+      );
+      console.log(
+        chalk.white(
+          "  3. Run in VM: spells/vm-quickstart/spell.spell (trigger manual, no side effects)"
+        )
+      );
+    } else {
+      console.log(chalk.white("  1. Edit your spell in .grimoire/spells/example-swap/spell.spell"));
+      console.log(
+        chalk.white("  2. Run: grimoire validate .grimoire/spells/example-swap/spell.spell")
+      );
+      console.log(
+        chalk.white("  3. Run: grimoire simulate .grimoire/spells/example-swap/spell.spell")
+      );
+    }
   } catch (error) {
     spinner.fail(chalk.red(`Failed to initialize: ${(error as Error).message}`));
     process.exit(1);

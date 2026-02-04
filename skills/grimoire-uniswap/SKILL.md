@@ -5,19 +5,33 @@ description: Retrieves Uniswap router metadata using the Grimoire venue CLI. Use
 
 # Grimoire Uniswap Skill
 
-Use the `grimoire-uniswap` CLI to read public Uniswap adapter data.
+Use the Grimoire CLI to read public Uniswap adapter data.
+
+Preferred:
+
+- `grimoire venue uniswap ...`
+
+If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-uniswap`.
 
 ## Commands
 
-- `grimoire-uniswap info`
-- `grimoire-uniswap routers [--chain <id>]`
+- `grimoire venue uniswap info [--format <json|table>]`
+- `grimoire venue uniswap routers [--chain <id>] [--format <json|table>]`
+- `grimoire venue uniswap tokens [--chain <id>] [--symbol <sym>] [--address <addr>] [--source <url>] [--format <json|table|spell>]`
+- `grimoire venue uniswap pools --chain <id> --token0 <address|symbol> --token1 <address|symbol> [--fee <bps>] [--limit <n>] [--source <url>] [--format <json|table|spell>] [--endpoint <url>] [--graph-key <key>] [--subgraph-id <id>] [--rpc-url <url>] [--factory <address>]`
+
+If you provide `--rpc-url` (or `RPC_URL`) and omit `--endpoint`/`--graph-key`, pools uses onchain factory lookups instead of The Graph.
 
 ## Examples
 
 ```bash
-grimoire-uniswap info
-grimoire-uniswap routers
-grimoire-uniswap routers --chain 1
+grimoire venue uniswap info --format table
+grimoire venue uniswap routers
+grimoire venue uniswap routers --chain 1
+grimoire venue uniswap tokens --chain 1 --symbol USDC --format spell
+grimoire venue uniswap pools --chain 1 --token0 USDC --token1 WETH --fee 3000 --format spell
+grimoire venue uniswap pools --chain 8453 --token0 USDC --token1 WETH --fee 500 --rpc-url $RPC_URL --format table
+grimoire venue uniswap pools --chain 8453 --token0 USDC --token1 WETH --fee 500 --graph-key $GRAPH_API_KEY --subgraph-id <id> --format table
 ```
 
 ## Supported Adapters

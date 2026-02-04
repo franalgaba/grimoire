@@ -22,6 +22,8 @@ Task-focused recipes.
 - [Run tests and checks](how-to/run-tests.md)
 - [Publish packages](how-to/publish.md)
 - [Run spells in VM mode](how-to/run-grimoire-vm.md)
+- [VM quickstart (snapshot-driven)](how-to/vm-quickstart.md)
+- [Transition to deterministic execution](how-to/transition-to-deterministic.md)
 
 ## Reference
 

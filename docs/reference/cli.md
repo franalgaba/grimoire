@@ -10,6 +10,7 @@ grimoire init [options]
 
 Options:
 - `-f, --force` — overwrite existing files
+- `--vm` — create a VM quickstart scaffold instead of the default example spell
 
 ## grimoire compile
 
@@ -128,6 +129,16 @@ grimoire venues
 Options:
 - `--json`
 
+## grimoire venue
+
+Proxy to venue metadata CLIs bundled in `@grimoirelabs/venues`.
+
+```bash
+grimoire venue morpho-blue info
+grimoire venue morpho-blue addresses --chain 8453
+grimoire venue aave markets --chain 1
+```
+
 ## grimoire wallet
 
 Manage wallet operations (wrap/unwrap ETH, generate keystore).
@@ -152,32 +163,44 @@ Options:
 
 ## Venue CLIs
 
+The following commands are available through `grimoire venue <adapter> ...` (recommended). If you install `@grimoirelabs/venues` directly, the standalone `grimoire-<venue>` bins are also available.
+
+Most venue commands accept `--format <json|table>`. Some commands (e.g. `morpho-blue vaults`) also support `--format spell` for VM snapshots.
+
 ### grimoire-aave
 
 Commands:
-- `health`
-- `chains`
-- `markets --chain <id> [--user <address>]`
-- `market --chain <id> --address <market> [--user <address>]`
-- `reserve --chain <id> --market <address> --token <address>`
+- `grimoire venue aave health`
+- `grimoire venue aave chains`
+- `grimoire venue aave markets --chain <id> [--user <address>]`
+- `grimoire venue aave market --chain <id> --address <market> [--user <address>]`
+- `grimoire venue aave reserve --chain <id> --market <address> --token <address>`
+- `grimoire venue aave reserves --chain <id> [--market <address>] [--asset <symbol|address>] [--format <json|table|spell>]`
 
 ### grimoire-uniswap
 
 Commands:
-- `info`
-- `routers [--chain <id>]`
+- `grimoire venue uniswap info`
+- `grimoire venue uniswap routers [--chain <id>]`
+- `grimoire venue uniswap tokens [--chain <id>] [--symbol <sym>] [--address <addr>] [--source <url>] [--format <json|table|spell>]`
+- `grimoire venue uniswap pools --chain <id> --token0 <address|symbol> --token1 <address|symbol> [--fee <bps>] [--limit <n>] [--source <url>] [--format <json|table|spell>] [--endpoint <url>] [--graph-key <key>] [--subgraph-id <id>] [--rpc-url <url>] [--factory <address>]`
+
+If you provide `--rpc-url` (or `RPC_URL`) and omit `--endpoint`/`--graph-key`, the pools command uses onchain factory lookups instead of The Graph.
 
 ### grimoire-morpho-blue
 
 Commands:
-- `info`
-- `addresses [--chain <id>]`
+- `grimoire venue morpho-blue info`
+- `grimoire venue morpho-blue addresses [--chain <id>]`
+- `grimoire venue morpho-blue vaults [--chain <id>] [--asset <symbol>] [--min-tvl <usd>] [--min-apy <decimal>] [--min-net-apy <decimal>] [--sort <field>] [--order <asc|desc>] [--limit <n>] [--format <json|table|spell>]`
 
 ### grimoire-hyperliquid
 
 Commands:
-- `mids`
-- `l2-book --coin <symbol>`
-- `open-orders --user <address>`
-- `meta`
-- `spot-meta`
+- `grimoire venue hyperliquid mids [--format <json|table|spell>]`
+- `grimoire venue hyperliquid l2-book --coin <symbol> [--format <json|table|spell>]`
+- `grimoire venue hyperliquid open-orders --user <address> [--format <json|table|spell>]`
+- `grimoire venue hyperliquid meta [--format <json|table|spell>]`
+- `grimoire venue hyperliquid spot-meta [--format <json|table|spell>]`
+
+Use `--format spell` to emit VM-friendly snapshots of mid prices, order books, open orders, and asset metadata.

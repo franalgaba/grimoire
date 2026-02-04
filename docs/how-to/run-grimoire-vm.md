@@ -2,6 +2,8 @@
 
 The Grimoire VM executes `.spell` files inside an agent session. It is best-effort and non-deterministic, intended for prototyping, reviews, and dry runs. For deterministic execution and onchain safety, use the external runtime (`grimoire simulate` / `grimoire cast`).
 
+For a shorter walkthrough, see [VM quickstart (snapshot-driven)](./vm-quickstart.md).
+
 ## 1) Install the VM skill
 
 Grimoire ships the VM skill at `skills/grimoire-vm/`. Copy or symlink it into your agent's skills directory.
@@ -25,6 +27,27 @@ claude plugin marketplace add franalgaba/grimoire
 claude plugin install grimoire-vm@grimoire
 ```
 
+## VM mode and venue tools
+
+VM mode ships with no adapters or data sources. If a spell needs live data (APY, TVL, positions), you must either:
+- Provide a data snapshot in `params` (recommended for VM prototyping).
+- Allow tools and install the CLI to access venue metadata (or expose your own data tools).
+
+Example (no global install):
+
+```bash
+npx -y @grimoirelabs/cli venue morpho-blue info
+npx -y @grimoirelabs/cli venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
+npx -y @grimoirelabs/cli venue aave reserves --chain 1 --asset USDC --format spell
+npx -y @grimoirelabs/cli venue uniswap pools --chain 1 --token0 USDC --token1 WETH --fee 3000 --format spell
+npx -y @grimoirelabs/cli venue uniswap pools --chain 1 --token0 USDC --token1 WETH --fee 3000 --rpc-url $RPC_URL --format spell
+npx -y @grimoirelabs/cli venue hyperliquid mids --format spell
+```
+
+Provide `--rpc-url` (or `RPC_URL`) to avoid The Graph. For non-mainnet chains, you must pass either a Graph endpoint (`--endpoint` or `--graph-key` + `--subgraph-id`) or an RPC URL.
+
+For deterministic execution with adapters, use the CLI runtime (`grimoire simulate` / `grimoire cast`) which bundles `@grimoirelabs/venues`.
+
 ## 2) Provide a spell
 
 You can pass a file path or inline spell text. If you pass a file path, the agent must be able to read it. Imports are resolved relative to the spell file.
@@ -44,6 +67,7 @@ Run spells/test-state-counter.spell in the Grimoire VM with trigger manual. Use 
 - **Params overrides**: provide values for `params` (e.g., JSON).
 - **State snapshot**: initial persistent/ephemeral state (or start empty).
 - **Tooling**: if you want external side effects (onchain or API calls), explicitly allow them. Otherwise request a dry run.
+- **Data snapshots**: provide a timestamped snapshot for any live data needed by the spell.
 
 ## 5) Output
 
