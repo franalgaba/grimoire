@@ -44,6 +44,8 @@ const DEFAULT_FACTORIES: Record<number, Address> = {
   8453: "0x33128a8fC17869897dcE68Ed026d694621f6FDfD" as Address,
 };
 
+export const defaultUniswapV3Factories = DEFAULT_FACTORIES;
+
 const POOL_ABI = parseAbi([
   "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
   "function liquidity() view returns (uint128)",

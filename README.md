@@ -8,7 +8,7 @@ Grimoire is a language for agents to express financial intent with readable synt
 
 Agents are always-on, multi-service operators. What they need is a trustable execution layer: explicit constraints, auditable outcomes, and policy-bound actions that do not rely on opaque code or vague prompts. Grimoire makes those boundaries explicit in the language itself.
 
-[Docs](./docs/README.md) | [VM Mode](./docs/how-to/run-grimoire-vm.md) | [VM Spec](./docs/reference/grimoire-vm.md) | [CLI](./docs/reference/cli.md) | [Examples](./spells) | [Skills](./skills)
+[Docs](./docs/README.md) | [VM Mode](./docs/how-to/run-grimoire-vm.md) | [VM Quickstart](./docs/how-to/vm-quickstart.md) | [Deterministic Transition](./docs/how-to/transition-to-deterministic.md) | [VM Spec](./docs/reference/grimoire-vm.md) | [CLI](./docs/reference/cli.md) | [Examples](./spells) | [Skills](./skills)
 
 ---
 
@@ -43,9 +43,13 @@ spell YieldOptimizer
 
 ---
 
-## Install the VM skill
+## Install
 
-### skills.sh
+### VM mode (best-effort, no tools)
+
+This mode runs inside an agent session. It does not ship with venue adapters or data tools.
+
+#### skills.sh
 
 ```bash
 npx skills add https://github.com/franalgaba/grimoire
@@ -56,6 +60,27 @@ npx skills add https://github.com/franalgaba/grimoire
 ```bash
 claude plugin marketplace add franalgaba/grimoire
 claude plugin install grimoire-vm@grimoire
+```
+
+### VM mode + venue tooling (metadata and discovery)
+
+If you want venue metadata inside the agent (addresses, market lists), install the CLI and use `grimoire venue`:
+
+```bash
+npm i -g @grimoirelabs/cli
+grimoire venue morpho-blue info
+
+# Or without a global install:
+npx -y @grimoirelabs/cli venue morpho-blue info
+```
+
+### Deterministic runtime (adapters + execution)
+
+The CLI bundles adapters from `@grimoirelabs/venues` and can simulate/cast spells:
+
+```bash
+npm i -g @grimoirelabs/cli
+grimoire --help
 ```
 
 ---
@@ -153,13 +178,14 @@ bun run packages/cli/src/index.ts cast spells/uniswap-swap-execute.spell --key-e
 
 | Command | Description |
 |---------|-------------|
-| `grimoire init` | Initialize a new .grimoire directory |
+| `grimoire init [--vm]` | Initialize a new .grimoire directory |
 | `grimoire compile <spell>` | Compile a .spell file to IR |
 | `grimoire compile-all [dir]` | Compile all .spell files in a directory |
 | `grimoire validate <spell>` | Validate a .spell file |
 | `grimoire simulate <spell>` | Simulate spell execution (dry run) |
 | `grimoire cast <spell>` | Execute a spell onchain |
 | `grimoire venues` | List adapters and supported chains |
+| `grimoire venue <adapter> [args...]` | Venue metadata (proxy to bundled venue CLIs) |
 | `grimoire history [spell]` | View execution history |
 | `grimoire log <spell> <runId>` | View ledger events for a run |
 
@@ -272,10 +298,10 @@ Grimoire ships agent skills under `skills/`:
 
 - `grimoire` — core CLI commands (compile, validate, simulate, cast)
 - `grimoire-vm` — in-agent VM execution spec + conformance references
-- `grimoire-aave` — Aave V3 venue CLI metadata
-- `grimoire-uniswap` — Uniswap V3/V4 venue CLI metadata
-- `grimoire-morpho-blue` — Morpho Blue venue CLI metadata
-- `grimoire-hyperliquid` — Hyperliquid venue CLI metadata
+- `grimoire-aave` — Aave V3 venue metadata (via `grimoire venue aave`)
+- `grimoire-uniswap` — Uniswap V3/V4 venue metadata (via `grimoire venue uniswap`)
+- `grimoire-morpho-blue` — Morpho Blue venue metadata (via `grimoire venue morpho-blue`)
+- `grimoire-hyperliquid` — Hyperliquid venue metadata (via `grimoire venue hyperliquid`)
 
 ## More Examples
 

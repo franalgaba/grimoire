@@ -14,8 +14,10 @@ The Grimoire CLI compiles, validates, simulates, and executes `.spell` strategy 
 Initialize a new `.grimoire` directory with config and examples.
 
 ```bash
-grimoire init [--force]
+grimoire init [--force] [--vm]
 ```
+
+Use `--vm` to scaffold a VM quickstart spell and README.
 
 ### grimoire compile
 
@@ -67,6 +69,14 @@ List available venue adapters and supported chains.
 
 ```bash
 grimoire venues [--json]
+```
+
+### grimoire venue
+
+Proxy to venue metadata CLIs bundled in `@grimoirelabs/venues`.
+
+```bash
+grimoire venue <adapter> [args...]
 ```
 
 ### grimoire history

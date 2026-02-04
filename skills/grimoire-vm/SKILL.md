@@ -31,6 +31,16 @@ Use this skill when the user asks to:
 
 Do not use this skill when the user asks for deterministic, onchain, or CLI-based execution. In those cases, use the `grimoire` CLI skill instead.
 
+## Quickstart (recommended)
+
+- Scaffold a VM starter spell: `grimoire init --vm`
+- Generate snapshots with venue CLIs:
+  - `grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell`
+  - `grimoire venue aave reserves --chain 1 --asset USDC --format spell`
+  - `grimoire venue uniswap pools --chain 1 --token0 USDC --token1 WETH --fee 3000 --format spell`
+  - `grimoire venue hyperliquid mids --format spell`
+- Paste the emitted `params:` block into your VM spell.
+
 ## Activation cues
 
 Trigger this skill on prompts like:
@@ -47,6 +57,8 @@ Before execution, ask for or infer:
 - Param overrides (if any).
 - Initial persistent/ephemeral state (if any).
 - Available tools/adapters (if any) and whether side effects are allowed.
+
+VM mode ships with no adapters or venue data. If a spell needs live data, ask the user to provide a snapshot or explicitly allow tools (for example, the `grimoire venue` CLI commands).
 
 If any of these are missing, ask concise follow-up questions.
 

@@ -5,13 +5,24 @@ export interface ParsedArgs {
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
-  const [command, ...rest] = argv;
+  let command: string | undefined = argv[0];
+  const rest = argv.slice(1);
   const options: Record<string, string | boolean> = {};
   const positionals: string[] = [];
+
+  if (command === "--help" || command === "-h") {
+    options.help = true;
+    command = undefined;
+  }
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
     if (!arg) continue;
+
+    if (arg === "--help" || arg === "-h") {
+      options.help = true;
+      continue;
+    }
 
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
@@ -47,9 +58,26 @@ export function requireOption(options: Record<string, string | boolean>, key: st
   return value;
 }
 
-export function printResult(data: unknown): void {
-  console.log(JSON.stringify(data, null, 2));
+export type OutputFormat = "auto" | "json" | "table";
+
+export function printResult(data: unknown, format: OutputFormat = "auto"): void {
+  if (format === "json") {
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+
   const table = renderTable(data);
+
+  if (format === "table") {
+    if (table) {
+      console.log(table);
+    } else {
+      console.log(JSON.stringify(data, null, 2));
+    }
+    return;
+  }
+
+  console.log(JSON.stringify(data, null, 2));
   if (table) {
     console.log(`\n${table}`);
   }
