@@ -1,6 +1,6 @@
 # Grimoire
 
-**A Portable Execution Language for Onchain Strategies**
+<p align="center"><em>"Verba Volant, Scripta Manent."</em></p>
 
 [![CI](https://github.com/franalgaba/grimoire/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/grimoire/actions/workflows/ci.yml)
 
