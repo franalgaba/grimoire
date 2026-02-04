@@ -8,7 +8,7 @@
   "scripts": {
     "build": "bun run --filter @grimoirelabs/core build && bun run --filter @grimoirelabs/venues build && bun run --filter @grimoirelabs/cli build",
     "changeset": "changeset",
-    "version": "changeset version",
+    "version": "changeset version && bunx biome format --write .",
     "release": "bun run build && NPM_CONFIG_PROVENANCE=true NPM_CONFIG_ACCESS=public changeset publish",
     "test": "bun test",
     "test:watch": "bun test --watch",
