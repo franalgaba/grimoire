@@ -6,7 +6,12 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "grimoire": "./dist/index.js"
+    "grimoire": "dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/franalgaba/grimoire",
+    "directory": "packages/cli"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

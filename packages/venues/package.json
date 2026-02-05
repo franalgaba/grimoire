@@ -9,10 +9,15 @@
     ".": "./dist/index.js"
   },
   "bin": {
-    "grimoire-aave": "./dist/cli/aave.js",
-    "grimoire-uniswap": "./dist/cli/uniswap.js",
-    "grimoire-morpho-blue": "./dist/cli/morpho-blue.js",
-    "grimoire-hyperliquid": "./dist/cli/hyperliquid.js"
+    "grimoire-aave": "dist/cli/aave.js",
+    "grimoire-uniswap": "dist/cli/uniswap.js",
+    "grimoire-morpho-blue": "dist/cli/morpho-blue.js",
+    "grimoire-hyperliquid": "dist/cli/hyperliquid.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/franalgaba/grimoire",
+    "directory": "packages/venues"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json"

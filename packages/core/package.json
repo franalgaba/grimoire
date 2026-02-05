@@ -13,6 +13,11 @@
     "./builders": "./dist/builders/index.js",
     "./venues": "./dist/venues/index.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/franalgaba/grimoire",
+    "directory": "packages/core"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "bun test",
