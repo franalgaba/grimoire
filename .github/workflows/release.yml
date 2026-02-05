@@ -27,6 +27,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Force OIDC publish (no npm tokens)
+        run: |
+          echo "NPM_TOKEN=" >> $GITHUB_ENV
+          echo "NODE_AUTH_TOKEN=" >> $GITHUB_ENV
+          echo "npm_config_userconfig=$RUNNER_TEMP/npmrc" >> $GITHUB_ENV
+          printf "registry=https://registry.npmjs.org/\n" > "$RUNNER_TEMP/npmrc"
+
       - name: Create release PR or publish
         uses: changesets/action@v1
         with:
