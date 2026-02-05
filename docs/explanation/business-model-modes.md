@@ -4,7 +4,7 @@ This document defines a two-mode product strategy that cleanly separates adoptio
 
 ## Overview
 
-Grimoire operates in two execution modes that share the same DSL and IR:
+Grimoire operates in two execution environments (modes) that share the same DSL and IR:
 
 - **Mode A - Grimoire VM Skill (In-Agent)**
   - Runs inside Claude/Codex/agent sessions.
@@ -47,16 +47,16 @@ This creates a clear "draft in-agent, deploy in runtime" workflow.
 
 ## Differentiation Summary
 
-- **Same language**: identical DSL + IR across both modes.
+- **Same language**: identical DSL + IR across both environments.
 - **Different guarantees**: VM skill is flexible; runtime is deterministic.
 - **Different markets**: hobbyists + teams exploring (Mode A) vs production teams (Mode B).
 
 ## Guardrails to Avoid Confusion
 
-- Publish a **conformance test suite** for both modes.
+- Publish a **conformance test suite** for both environments.
 - Clearly label behavior:
-  - "VM mode = best-effort execution"
-  - "Runtime mode = deterministic execution"
+  - "VM environment = best-effort execution"
+  - "Runtime environment = deterministic execution"
 - Maintain consistent docs for syntax and semantics.
 
 ## Suggested Next Steps

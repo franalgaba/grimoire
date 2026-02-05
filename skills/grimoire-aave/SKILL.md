@@ -13,6 +13,20 @@ Preferred:
 
 If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-aave`.
 
+## When to use
+
+- Fetch Aave V3 metadata or reserves for quick VM prototyping.
+- Produce snapshot `params` blocks with `--format spell` for VM runs.
+
+## Prerequisites
+
+- Global CLI: `npm i -g @grimoirelabs/cli`
+- No install: `npx -y @grimoirelabs/cli venue aave ...`
+
+## VM snapshot usage
+
+Use `--format spell` to emit a VM-ready `params:` block you can paste into a spell.
+
 ## Commands
 
 - `grimoire venue aave health [--format <json|table>]`

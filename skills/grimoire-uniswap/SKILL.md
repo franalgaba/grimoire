@@ -13,6 +13,20 @@ Preferred:
 
 If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-uniswap`.
 
+## When to use
+
+- Fetch Uniswap router metadata, tokens, or pools for quick VM prototyping.
+- Produce snapshot `params` blocks with `--format spell` for VM runs.
+
+## Prerequisites
+
+- Global CLI: `npm i -g @grimoirelabs/cli`
+- No install: `npx -y @grimoirelabs/cli venue uniswap ...`
+
+## VM snapshot usage
+
+Use `--format spell` to emit a VM-ready `params:` block you can paste into a spell.
+
 ## Commands
 
 - `grimoire venue uniswap info [--format <json|table>]`

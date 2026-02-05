@@ -13,6 +13,20 @@ Preferred:
 
 If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-morpho-blue`.
 
+## When to use
+
+- Fetch Morpho Blue addresses or vaults for quick VM prototyping.
+- Produce snapshot `params` blocks with `--format spell` for VM runs.
+
+## Prerequisites
+
+- Global CLI: `npm i -g @grimoirelabs/cli`
+- No install: `npx -y @grimoirelabs/cli venue morpho-blue ...`
+
+## VM snapshot usage
+
+Use `--format spell` to emit a VM-ready `params:` block you can paste into a spell.
+
 ## Commands
 
 - `grimoire venue morpho-blue info [--format <json|table>]`

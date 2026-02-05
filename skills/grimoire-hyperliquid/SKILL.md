@@ -13,6 +13,20 @@ Preferred:
 
 If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-hyperliquid`.
 
+## When to use
+
+- Fetch Hyperliquid mid prices, books, or metadata for quick VM prototyping.
+- Produce snapshot `params` blocks with `--format spell` for VM runs.
+
+## Prerequisites
+
+- Global CLI: `npm i -g @grimoirelabs/cli`
+- No install: `npx -y @grimoirelabs/cli venue hyperliquid ...`
+
+## VM snapshot usage
+
+Use `--format spell` to emit a VM-ready `params:` block you can paste into a spell.
+
 ## Commands
 
 - `grimoire venue hyperliquid mids [--format <json|table|spell>]`

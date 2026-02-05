@@ -1,24 +1,16 @@
 # Execute a spell with venues
 
-This tutorial runs a swap spell using the venues package.
+This tutorial runs a swap spell using the deterministic runtime (CLI). VM mode does not bundle adapters.
 
-## 0) Install dependencies
-
-If you are running from this repo:
+## 1) Install the CLI
 
 ```bash
-bun install
+npm i -g @grimoirelabs/cli
 ```
 
-If you are using published packages:
+## 2) Use a venue spell
 
-```bash
-npm i @grimoirelabs/core @grimoirelabs/venues
-```
-
-## 1) Use a venue spell
-
-Example: `spells/uniswap-swap-execute.spell`
+Example: `spells/uniswap-swap-execute.spell`. If you're not in this repo, create the file with the following content.
 
 ```spell
 spell UniswapSwapExecute
@@ -39,17 +31,16 @@ spell UniswapSwapExecute
     emit swap_submitted(asset_in=USDC, asset_out=WETH, amount=params.amount)
 ```
 
-## 2) Execute in simulation mode
+## 3) Simulate execution
 
 ```bash
-bun -e "import { compileFile, execute } from './packages/core/src/index.ts'; import { adapters } from './packages/venues/src/index.ts'; const res = await compileFile('spells/uniswap-swap-execute.spell'); if (res.success) { const exec = await execute({ spell: res.ir, vault: '0x0000000000000000000000000000000000000000', chain: 1, executionMode: 'simulate', adapters }); console.log(exec.success); }"
+grimoire simulate spells/uniswap-swap-execute.spell --chain 1 --rpc-url <rpc>
 ```
 
-## 3) Execute with a wallet
-
-Use the CLI when you have a wallet configured:
+## 4) Dry-run, then execute with a wallet
 
 ```bash
+grimoire cast spells/uniswap-swap-execute.spell --dry-run --key-env PRIVATE_KEY --rpc-url <rpc>
 grimoire cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url <rpc>
 ```
 
@@ -57,5 +48,6 @@ grimoire cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url 
 
 ## Next steps
 
-- Configure slippage controls: [how-to/configure-slippage.md](../how-to/configure-slippage.md)
-- Explore venue adapters: [reference/venues.md](../reference/venues.md)
+- Configure slippage controls: [configure-slippage.md](../how-to/configure-slippage.md)
+- Explore venue adapters: [venues.md](../reference/venues.md)
+- Programmatic usage: [core-api.md](../reference/core-api.md)
