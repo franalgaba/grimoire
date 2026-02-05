@@ -1,10 +1,21 @@
 # Execution modes
 
-This page covers execution modes in the **external runtime/executor**. For in-agent VM behavior, see [Grimoire VM spec](../reference/grimoire-vm.md).
+Grimoire has two **execution environments** that run the same spell syntax, plus separate **modes** inside the deterministic runtime.
 
-Grimoire supports multiple execution modes in the runtime/executor.
+## Execution environments (VM vs deterministic runtime)
 
-## Modes
+- **VM mode (in-agent, best-effort)**: a spell is interpreted inside an agent session. This is ideal for prototyping, reviews, and dry runs with snapshot data. It does **not** bundle adapters or guarantee determinism, and tool availability depends on the host agent.
+- **Deterministic runtime (CLI)**: a spell is compiled to IR and executed by the external runtime with adapters, explicit constraints, and persistent state. This is the mode for reproducible simulation and onchain safety.
+
+### VM mode and the CLI
+
+You can use the CLI in VM mode **only** to fetch metadata or snapshots (for example, `--format spell` outputs a `params:` block). This does not make VM execution deterministic; the spell still runs inside the agent session.
+
+For VM semantics, see the [Grimoire VM spec](../reference/grimoire-vm.md).
+
+## Deterministic runtime modes (CLI)
+
+Within the external runtime/executor, Grimoire supports multiple execution modes:
 
 - `simulate`: evaluate steps and emit events without sending transactions.
 - `dry-run`: build transactions, show confirmation output, but do not send.

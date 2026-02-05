@@ -6,321 +6,134 @@
 
 Grimoire is a language for agents to express financial intent with readable syntax and deterministic execution. Spells compile to an intermediate representation (IR) and run through protocol adapters, so you can swap venues by changing aliases and configuration instead of rewriting strategy logic.
 
-Agents are always-on, multi-service operators. What they need is a trustable execution layer: explicit constraints, auditable outcomes, and policy-bound actions that do not rely on opaque code or vague prompts. Grimoire makes those boundaries explicit in the language itself.
-
-[Docs](./docs/README.md) | [VM Mode](./docs/how-to/run-grimoire-vm.md) | [VM Quickstart](./docs/how-to/vm-quickstart.md) | [Deterministic Transition](./docs/how-to/transition-to-deterministic.md) | [VM Spec](./docs/reference/grimoire-vm.md) | [CLI](./docs/reference/cli.md) | [Examples](./spells) | [Skills](./skills)
+[Docs](./docs/README.md) | [Examples](./spells) | [Skills](./skills)
 
 ---
 
-```
-spell YieldOptimizer
+## Start here
 
-  assets: [USDC, USDT, DAI]
+Grimoire runs in two execution environments. The spell syntax is the same; the guarantees are different.
 
-  venues:
-    aave_v3: @aave_v3
-    morpho_blue: @morpho_blue
+### VM mode (in-agent, best-effort)
 
-  limits:
-    max_per_venue: 50%
-    min_rate_diff: 0.5%
+Use this when you want to run inside an agent session for prototyping and reviews. VM mode does not bundle adapters, but it can use real venue data when the agent is allowed to run tools (for example, `grimoire venue ...`).
 
-  params:
-    amount: 100000
-
-  advisors:
-    risk:
-      model: anthropic:sonnet
-      timeout: 30
-      fallback: true
-
-  on hourly:
-    if **gas costs justify the move** via risk:
-      amount_to_move = balance(USDC) * 50%
-      aave_v3.withdraw(USDC, amount_to_move)
-      morpho_blue.lend(USDC, amount_to_move)
-```
-
----
-
-## Install
-
-### VM mode (best-effort, no tools)
-
-This mode runs inside an agent session. It does not ship with venue adapters or data tools.
-
-#### skills.sh
+Install the VM skill:
 
 ```bash
 npx skills add https://github.com/franalgaba/grimoire
 ```
 
-#### Claude plugin
+Or copy it manually:
 
 ```bash
-claude plugin marketplace add franalgaba/grimoire
-claude plugin install grimoire-vm@grimoire
+SKILLS_DIR="$HOME/.config/agents/skills"
+mkdir -p "$SKILLS_DIR"
+cp -R skills/grimoire-vm "$SKILLS_DIR/grimoire-vm"
 ```
 
-### VM mode + venue tooling (metadata and discovery)
+Copy/paste demo (agent prompts):
 
-If you want venue metadata inside the agent (addresses, market lists), install the CLI and use `grimoire venue`:
+```
+Create a Grimoire VM spell named MorphoYieldOptimizer and save it to spells/morpho-yield-optimizer-vm.spell.
+Use a snapshot params block, ignore markets with TVL < 5,000,000, and recommend switching when the spread over the current market is > 0.5%. Include a demo snapshot with 3 Morpho USDC markets and emit candidate + recommendation/hold events. No side effects.
+```
+
+Run it in VM mode:
+
+```
+Run spells/morpho-yield-optimizer-vm.spell in the Grimoire VM with trigger manual. Use defaults and no side effects.
+```
+
+Want real data? Replace the `params:` block with live snapshots:
+
+```bash
+grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
+```
+
+For quick protocol prototyping, use the venue CLI to fetch metadata or snapshot `params:` blocks for VM runs. Execution still happens inside the agent session.
+
+Next steps: [run-grimoire-vm.md](./docs/how-to/run-grimoire-vm.md), [vm-quickstart.md](./docs/how-to/vm-quickstart.md)
+
+### Deterministic runtime (CLI)
+
+Use this for reproducible simulation and onchain execution with adapters and state persistence.
 
 ```bash
 npm i -g @grimoirelabs/cli
-grimoire venue morpho-blue info
 
-# Or without a global install:
-npx -y @grimoirelabs/cli venue morpho-blue info
+grimoire simulate spells/compute-only.spell --chain 1
+
+grimoire cast spells/uniswap-swap-execute.spell \
+  --dry-run \
+  --key-env PRIVATE_KEY \
+  --rpc-url <rpc>
 ```
 
-### Deterministic runtime (adapters + execution)
-
-The CLI bundles adapters from `@grimoirelabs/venues` and can simulate/cast spells:
+When you are ready to execute live:
 
 ```bash
-npm i -g @grimoirelabs/cli
-grimoire --help
+grimoire cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url <rpc>
 ```
+
+Next steps: [cli-cast.md](./docs/how-to/cli-cast.md), [transition-to-deterministic.md](./docs/how-to/transition-to-deterministic.md)
 
 ---
 
-## The Policy-Bound Inversion of Control
+## Example spell
 
-Traditional automation requires explicit coordination code. Grimoire inverts this: you declare intent, control flow, and constraints, and the runtime enforces them. The spell is the contract. The execution layer is the IoC container.
+```spell
+spell YieldOptimizer
 
-### 1. The Session as Runtime
+  assets: [USDC, DAI]
 
-Instead of orchestrating agents from the outside, Grimoire can run inside the agent session via the VM. The session becomes the interpreter, able to execute the spell while preserving context and intent.
+  venues:
+    aave_v3: @aave_v3
+    morpho_blue: @morpho_blue
 
-### 2. The Judgment Boundary (`**...**`)
+  params:
+    amount: 100000
 
-When you need AI judgment instead of strict execution, you break out of structure:
-
+  on hourly:
+    if **gas costs justify the move**:
+      amount_to_move = balance(USDC) * 50%
+      aave_v3.withdraw(USDC, amount_to_move)
+      morpho_blue.lend(USDC, amount_to_move)
 ```
-if **gas costs justify the move** via risk:
-  ...
-```
-
-The `**...**` syntax is an explicit boundary. Everything outside is deterministic. Everything inside is semantic judgment. This keeps flexibility where it helps and policy where it matters.
-
-### 3. Open Standard, Zero Lock-in
-
-Grimoire is a language specification. Any agent runtime can implement the VM, and any deterministic executor can run the compiled IR. You can switch platforms without rewriting spells.
-
-### 4. Structure + Flexibility
-
-Why not plain English? It is too ambiguous for control flow and constraints. Why not rigid frameworks? They are too inflexible for real-world decisions. Grimoire gives you structure for execution and constraints, and natural language for judgment inside explicit boundaries.
 
 ## Features
 
-- **Human-readable DSL** - Write strategies in a clean, Python-like syntax
-- **Compile-time validation** - Catch errors before execution
-- **Adapter-based venues** - Protocol SDKs live outside core (`@grimoirelabs/venues`)
-- **Multi-tx approvals** - Adapters return approval + action plans
-- **Onchain + offchain** - EVM transactions or offchain execution (Hyperliquid)
-- **Bridging support** - Across bridge integration
-- **Action constraints** - Slippage/deadlines/limits per action (`with` clause)
-- **Skills + advisors** - Routing defaults and AI advisory metadata
-- **Advisory AI integration** - Use `**prompts**` or `advise` for decisions (fallback by default; external handlers optional)
-- **Atomic transactions** - Group operations for all-or-nothing execution
-- **Structured control flow** - repeat/loop-until, try/catch, parallel, pipeline
-- **Scheduled triggers** - Run strategies via manual/hourly/daily/cron/condition/event
-- **State persistence** - Spell state survives across runs (SQLite-backed)
-- **Execution history** - Run history and ledger events stored per spell
-- **Two execution modes** - In-agent VM (best-effort) or external runtime (deterministic)
+- **Human-readable DSL** with Python-like indentation
+- **Explicit constraints** and limits via `with` and `limits`
+- **Adapter-based venues** (SDKs live in `@grimoirelabs/venues`)
+- **Onchain + offchain** actions (EVM + Hyperliquid)
+- **Judgment boundary** with `**...**` and `advise`
+- **Structured control flow** (loops, conditionals, try/catch, atomic)
+- **State persistence** and run history for deterministic execution
+- **Two execution environments**: in-agent VM and deterministic runtime
 
-## Quick Start
+## Documentation
 
-```bash
-# Install dependencies
-bun install
+- Start here: [docs/README.md](./docs/README.md)
+- Spell syntax: [docs/reference/spell-syntax.md](./docs/reference/spell-syntax.md)
+- CLI: [docs/reference/cli.md](./docs/reference/cli.md)
+- VM spec: [docs/reference/grimoire-vm.md](./docs/reference/grimoire-vm.md)
 
-# Validate a spell
-bun run packages/cli/src/index.ts validate spells/yield-optimizer.spell
+## Updating
 
-# Compile a spell to IR
-bun run packages/cli/src/index.ts compile spells/yield-optimizer.spell --pretty
-
-# Simulate a spell (dry run)
-bun run packages/cli/src/index.ts simulate spells/compute-only.spell
-
-# Execute a spell (requires wallet + RPC)
-bun run packages/cli/src/index.ts cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url <rpc>
-```
-
-## Syntax Highlights
-
-| Feature | Syntax | Description |
-|---------|--------|-------------|
-| Spell declaration | `spell Name` | Define a new strategy |
-| Assets | `assets: [USDC, DAI]` | Tokens the spell interacts with |
-| Venue references | `@aave_v3` | Reference to a venue adapter |
-| Skills | `skills:` | Capability modules and defaults |
-| Advisors | `advisors:` | AI advisory metadata and defaults |
-| Percentages | `50%` | Automatically converts to 0.5 |
-| Triggers | `on hourly:` | Schedule: `manual`, `hourly`, `daily`, cron, condition, event |
-| Loops | `for x in items:` | Iterate over collections |
-| Repeat/Until | `repeat N:` / `loop until cond max N:` | Safe looping |
-| Conditionals | `if condition:` | Branch logic with `elif`/`else` |
-| Advisory AI | `**prompt**` / `advise` | AI-assisted decision making |
-| Using skill | `using name` | Apply skill defaults/routing (optional when using a skill name) |
-| Constraints | `with k=v` | Slippage/deadline/min_output/max_input/max_gas/etc |
-| Output binding | `x = action()` | Capture action output |
-| Atomic blocks | `atomic:` | Transaction batching |
-| Try/catch | `try:` | Error handling + retry |
-| Parallel | `parallel:` | Concurrent branches |
-| Pipeline | `expr | map:` | Functional stages |
-| Block/do | `block` / `do` | Reusable statement blocks |
-| Events | `emit name(k=v)` | Emit events for monitoring |
-
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `grimoire init [--vm]` | Initialize a new .grimoire directory |
-| `grimoire compile <spell>` | Compile a .spell file to IR |
-| `grimoire compile-all [dir]` | Compile all .spell files in a directory |
-| `grimoire validate <spell>` | Validate a .spell file |
-| `grimoire simulate <spell>` | Simulate spell execution (dry run) |
-| `grimoire cast <spell>` | Execute a spell onchain |
-| `grimoire venues` | List adapters and supported chains |
-| `grimoire venue <adapter> [args...]` | Venue metadata (proxy to bundled venue CLIs) |
-| `grimoire history [spell]` | View execution history |
-| `grimoire log <spell> <runId>` | View ledger events for a run |
-
-## Supported Venues
-
-| Category | Protocols |
-|----------|-----------|
-| **Lending** | Aave V3, Morpho Blue |
-| **Swaps** | Uniswap V3, Uniswap V4 |
-| **Perps** | Hyperliquid |
-| **Bridge** | Across |
-
-## Venue Adapters
-
-Adapters live in `@grimoirelabs/venues` and are injected at execution time. Core stays SDK-free.
-
-```ts
-import { adapters } from "@grimoirelabs/venues";
-import { execute } from "@grimoirelabs/core";
-
-await execute({ spell, vault, chain: 1, adapters });
-```
-
-Adapters can return multi-transaction plans to handle ERC20 approvals.
+- Update the CLI: `npm i -g @grimoirelabs/cli@latest`
+- Use `npx` for latest without install: `npx -y @grimoirelabs/cli@latest <command>`
+- Update packages in your project: `npm i @grimoirelabs/core@latest @grimoirelabs/venues@latest`
+- Update the VM skill: re-install with `npx skills add https://github.com/franalgaba/grimoire` (or copy `skills/grimoire-vm` into your agent skills directory again)
 
 ## Development
 
 ```bash
-# Install dependencies (also sets up git hooks)
 bun install
-
-# Run tests
-bun test
-
-# Run tests with coverage
-bun test --coverage
-
-# Type check
-bun run typecheck
-
-# Lint
-bun run lint
-
-# Fix lint issues
-bun run lint:fix
-
-# Run full validation (lint + typecheck + tests)
 bun run validate
 ```
 
-## Architecture
-
-```
-Source (.spell) → Tokenizer → Parser → AST → Transformer → SpellSource → IR Generator → SpellIR
-```
-
-Execution:
-
-```
-SpellIR → Runtime → Executor → (Adapter Registry) → Venue Adapter → Transactions/Offchain
-```
-
-## Programmatic Usage
-
-```typescript
-import { compile, execute, SqliteStateStore, createRunRecord } from "@grimoirelabs/core";
-import { adapters } from "@grimoirelabs/venues";
-
-// Compile a spell
-const result = compile(spellSource);
-if (!result.success) {
-  console.error(result.errors);
-  process.exit(1);
-}
-
-// Load persisted state
-const store = new SqliteStateStore();
-const persistentState = await store.load(result.ir.id) ?? {};
-
-// Execute the compiled spell with state
-const execResult = await execute({
-  spell: result.ir,
-  vault: "0x...",
-  chain: 1,
-  params: { min_amount: 500 },
-  persistentState,
-  adapters,
-});
-
-// Persist results
-await store.save(result.ir.id, execResult.finalState);
-await store.addRun(result.ir.id, createRunRecord(execResult));
-store.close();
-```
-
-## Documentation
-
-Docs are organized with the [Diátaxis](https://diataxis.fr/) framework in `docs/`:
-
-- Tutorials
-- How-to guides
-- Reference
-- Explanation
-
-Start at [docs/README.md](./docs/README.md).
-
-## Skills
-
-Grimoire ships agent skills under `skills/`:
-
-- `grimoire` — core CLI commands (compile, validate, simulate, cast)
-- `grimoire-vm` — in-agent VM execution spec + conformance references
-- `grimoire-aave` — Aave V3 venue metadata (via `grimoire venue aave`)
-- `grimoire-uniswap` — Uniswap V3/V4 venue metadata (via `grimoire venue uniswap`)
-- `grimoire-morpho-blue` — Morpho Blue venue metadata (via `grimoire venue morpho-blue`)
-- `grimoire-hyperliquid` — Hyperliquid venue metadata (via `grimoire venue hyperliquid`)
-
-## More Examples
-
-See the [`spells/`](./spells) directory for more examples:
-
-- `simple-swap.spell` - Basic token swap
-- `uniswap-swap-execute.spell` - Uniswap V3 swap execution
-- `aave-supply-action.spell` - Aave V3 supply action
-- `morpho-blue-lend.spell` - Morpho Blue lend action
-- `across-bridge.spell` - Across bridge example
-- `yield-optimizer.spell` - Multi-venue yield optimization
-- `dca-trading.spell` - Dollar-cost averaging strategy
-- `lending-rebalancer.spell` - Lending position rebalancing
-- `momentum-trader.spell` - Momentum-based trading
-- `hyperliquid-perps.spell` - Perpetual futures trading
-
-## Contributing
-
-See `CONTRIBUTING.md` for contribution guidelines and `AGENTS.md` for project-specific rules (for both humans and agents).
+For onchain tests and advanced workflows, see [docs/how-to/run-tests.md](./docs/how-to/run-tests.md).
 
 ## License
 

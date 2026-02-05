@@ -7,6 +7,18 @@ description: Core Grimoire CLI for compiling, validating, simulating, and execut
 
 The Grimoire CLI compiles, validates, simulates, and executes `.spell` strategy files.
 
+## When to use
+
+- You want deterministic execution with adapters (`simulate`, `cast`).
+- You need CLI-only workflows (compile, validate, history, logs, wallet).
+
+## VM vs deterministic
+
+- **VM mode** runs inside an agent session and is best-effort. Use the `grimoire-vm` skill for in-agent execution.
+- **Deterministic runtime** runs via the CLI. This skill covers that runtime.
+
+For VM prototyping with snapshots, use the venue skills (`grimoire-aave`, `grimoire-uniswap`, `grimoire-morpho-blue`, `grimoire-hyperliquid`) with `--format spell`.
+
 ## Commands
 
 ### grimoire init

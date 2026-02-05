@@ -1,12 +1,30 @@
 # Grimoire Documentation
 
-This documentation follows the [Diátaxis](https://diataxis.fr/) framework. Use the sections below depending on what you need: learn by doing, solve a task, look up a fact, or understand the system.
+This documentation follows the [Diátaxis](https://diataxis.fr/) framework. If you're new, start with the execution mode you want to use.
+
+## Start here
+
+Grimoire uses the same spell syntax in both environments. The differences are guarantees and tooling.
+
+- VM mode (in-agent, best-effort): run spells inside an agent session with snapshot data and no adapters. For quick protocol prototyping, use venue CLI snapshots. Start with [Getting started](tutorials/getting-started.md#vm-mode-in-agent) and [Run spells in VM mode](how-to/run-grimoire-vm.md).
+- Deterministic runtime (CLI): compile, simulate, and cast with adapters and state persistence. Start with [Getting started](tutorials/getting-started.md#deterministic-runtime-cli) and [Run spells with the CLI](how-to/cli-cast.md).
+
+If you want the full comparison, see [Execution modes](explanation/execution-modes.md).
+
+If you are contributing to the repo, see [CONTRIBUTING.md](../CONTRIBUTING.md) and [Run tests and checks](how-to/run-tests.md).
+
+## Updating (user view)
+
+- Update the CLI: `npm i -g @grimoirelabs/cli@latest`
+- Use `npx` for latest without install: `npx -y @grimoirelabs/cli@latest <command>`
+- Update packages in your project: `npm i @grimoirelabs/core@latest @grimoirelabs/venues@latest`
+- Update the VM skill: re-install with `npx skills add https://github.com/franalgaba/grimoire` (or copy `skills/grimoire-vm` into your agent skills directory again)
 
 ## Tutorials
 
 Step-by-step guides for newcomers.
 
-- [Getting started](tutorials/getting-started.md)
+- [Getting started (choose a mode)](tutorials/getting-started.md)
 - [Write your first spell](tutorials/first-spell.md)
 - [Execute a spell with venues](tutorials/execute-with-venues.md)
 
@@ -15,21 +33,23 @@ Step-by-step guides for newcomers.
 Task-focused recipes.
 
 - [Run spells with the CLI](how-to/cli-cast.md)
-- [Add a new venue adapter](how-to/add-venue-adapter.md)
-- [Configure slippage and constraints](how-to/configure-slippage.md)
-- [Bridge with Across](how-to/bridge-with-across.md)
-- [Add and organize spells](how-to/add-spells.md)
-- [Run tests and checks](how-to/run-tests.md)
-- [Publish packages](how-to/publish.md)
 - [Run spells in VM mode](how-to/run-grimoire-vm.md)
 - [VM quickstart (snapshot-driven)](how-to/vm-quickstart.md)
 - [Transition to deterministic execution](how-to/transition-to-deterministic.md)
+- [Configure slippage and constraints](how-to/configure-slippage.md)
+- [Bridge with Across](how-to/bridge-with-across.md)
+- [Add and organize spells](how-to/add-spells.md)
+- [Add a new venue adapter](how-to/add-venue-adapter.md)
+- [Build spells programmatically](how-to/build-spells-programmatically.md)
+- [Run tests and checks](how-to/run-tests.md)
+- [Publish packages](how-to/publish.md)
 
 ## Reference
 
 Authoritative specifications.
 
 - [Spell syntax reference](reference/spell-syntax.md)
+- [Grimoire DSL spec](reference/grimoire-dsl-spec.md)
 - [Core API reference](reference/core-api.md)
 - [Venues package reference](reference/venues.md)
 - [CLI reference](reference/cli.md)

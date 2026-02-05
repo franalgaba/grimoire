@@ -2,6 +2,12 @@
 
 The Grimoire VM executes `.spell` files inside an agent session. It is best-effort and non-deterministic, intended for prototyping, reviews, and dry runs. For deterministic execution and onchain safety, use the external runtime (`grimoire simulate` / `grimoire cast`).
 
+## What VM mode is (and is not)
+
+- **VM mode** runs inside the agent session and uses the tools available to that agent. It is ideal for quick iteration and reviews.
+- **VM mode is not deterministic** and does not bundle adapters. If a spell needs live data, you must provide snapshots or allow tools.
+- **Deterministic runtime** runs outside the agent (CLI), compiles to IR, and executes with adapters and persistent state.
+
 For a shorter walkthrough, see [VM quickstart (snapshot-driven)](./vm-quickstart.md).
 
 ## 1) Install the VM skill
@@ -27,9 +33,11 @@ claude plugin marketplace add franalgaba/grimoire
 claude plugin install grimoire-vm@grimoire
 ```
 
-## VM mode and venue tools
+## VM mode and venue tools (CLI snapshots)
 
-VM mode ships with no adapters or data sources. If a spell needs live data (APY, TVL, positions), you must either:
+VM mode ships with no adapters or data sources. For quick prototyping in protocols, use the venue CLI to generate snapshot `params` blocks you can paste into your spell. If your agent allows tools, it can fetch real venue data on demand.
+
+If a spell needs live data (APY, TVL, positions), you must either:
 - Provide a data snapshot in `params` (recommended for VM prototyping).
 - Allow tools and install the CLI to access venue metadata (or expose your own data tools).
 
@@ -46,11 +54,36 @@ npx -y @grimoirelabs/cli venue hyperliquid mids --format spell
 
 Provide `--rpc-url` (or `RPC_URL`) to avoid The Graph. For non-mainnet chains, you must pass either a Graph endpoint (`--endpoint` or `--graph-key` + `--subgraph-id`) or an RPC URL.
 
+Using the CLI here only **fetches metadata or snapshots**. It does not make VM execution deterministic.
+
 For deterministic execution with adapters, use the CLI runtime (`grimoire simulate` / `grimoire cast`) which bundles `@grimoirelabs/venues`.
+
+## Using real data in VM mode
+
+VM mode can use real venue data when tools are allowed. Two common patterns:
+
+1) **Pre-fetch snapshots** (recommended): run `grimoire venue ... --format spell`, then paste the `params:` block into your spell.
+2) **In-agent fetch**: ask the agent to run `grimoire venue ...` and inject the snapshot into `params` before execution.
+
+Example prompt:
+
+```
+Fetch a Morpho USDC vault snapshot with `grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell`,
+then run spells/morpho-yield-optimizer-vm.spell in the Grimoire VM with trigger manual. No side effects.
+```
+
+Real data makes VM runs non-deterministic by nature. Use the deterministic runtime when you need reproducible results or onchain safety.
 
 ## 2) Provide a spell
 
 You can pass a file path or inline spell text. If you pass a file path, the agent must be able to read it. Imports are resolved relative to the spell file.
+
+Copy/paste demo (create a spell):
+
+```
+Create a Grimoire VM spell named MorphoYieldOptimizer and save it to spells/morpho-yield-optimizer-vm.spell.
+Use a snapshot params block, ignore markets with TVL < 5,000,000, and recommend switching when the spread over the current market is > 0.5%. Include a demo snapshot with 3 Morpho USDC markets and emit candidate + recommendation/hold events. No side effects.
+```
 
 ## 3) Choose a trigger
 
@@ -59,7 +92,7 @@ If a spell defines multiple triggers, specify which one to run (e.g., `manual`, 
 Example prompt:
 
 ```
-Run spells/test-state-counter.spell in the Grimoire VM with trigger manual. Use defaults and no side effects.
+Run spells/morpho-yield-optimizer-vm.spell in the Grimoire VM with trigger manual. Use defaults and no side effects.
 ```
 
 ## 4) Optional inputs
