@@ -119,6 +119,13 @@ spell YieldOptimizer
 - CLI: [docs/reference/cli.md](./docs/reference/cli.md)
 - VM spec: [docs/reference/grimoire-vm.md](./docs/reference/grimoire-vm.md)
 
+## Updating
+
+- Update the CLI: `npm i -g @grimoirelabs/cli@latest`
+- Use `npx` for latest without install: `npx -y @grimoirelabs/cli@latest <command>`
+- Update packages in your project: `npm i @grimoirelabs/core@latest @grimoirelabs/venues@latest`
+- Update the VM skill: re-install with `npx skills add https://github.com/franalgaba/grimoire` (or copy `skills/grimoire-vm` into your agent skills directory again)
+
 ## Development
 
 ```bash

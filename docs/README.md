@@ -13,6 +13,13 @@ If you want the full comparison, see [Execution modes](explanation/execution-mod
 
 If you are contributing to the repo, see [CONTRIBUTING.md](../CONTRIBUTING.md) and [Run tests and checks](how-to/run-tests.md).
 
+## Updating (user view)
+
+- Update the CLI: `npm i -g @grimoirelabs/cli@latest`
+- Use `npx` for latest without install: `npx -y @grimoirelabs/cli@latest <command>`
+- Update packages in your project: `npm i @grimoirelabs/core@latest @grimoirelabs/venues@latest`
+- Update the VM skill: re-install with `npx skills add https://github.com/franalgaba/grimoire` (or copy `skills/grimoire-vm` into your agent skills directory again)
+
 ## Tutorials
 
 Step-by-step guides for newcomers.
