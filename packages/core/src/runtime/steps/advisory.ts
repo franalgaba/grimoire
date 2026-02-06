@@ -3,13 +3,19 @@
  * Uses fallback outputs (no tool execution yet).
  */
 
-import type { AdvisorySchemaEvent, ExecutionContext, StepResult } from "../../types/execution.js";
+import type {
+  AdvisorySchemaEvent,
+  ExecutionContext,
+  LedgerEvent,
+  StepResult,
+} from "../../types/execution.js";
 import type { AdvisoryStep } from "../../types/steps.js";
 import { incrementAdvisoryCalls, setBinding } from "../context.js";
 import type { InMemoryLedger } from "../context.js";
 import { createEvalContext, evaluateAsync } from "../expression-evaluator.js";
 
 export interface AdvisoryHandlerInput {
+  stepId: string;
   advisor: string;
   prompt: string;
   model?: string;
@@ -18,6 +24,7 @@ export interface AdvisoryHandlerInput {
   skills?: string[];
   allowedTools?: string[];
   mcp?: string[];
+  emit?: (event: LedgerEvent) => void;
   context: {
     params: Record<string, unknown>;
     bindings: Record<string, unknown>;
@@ -44,6 +51,7 @@ export async function executeAdvisoryStep(
 
   ledger.emit({
     type: "advisory_started",
+    stepId: step.id,
     advisor: step.advisor,
     prompt: step.prompt,
     skills,
@@ -55,6 +63,7 @@ export async function executeAdvisoryStep(
 
   const advisorDef = ctx.spell.advisors.find((advisor) => advisor.name === step.advisor);
   const handlerInput: AdvisoryHandlerInput = {
+    stepId: step.id,
     advisor: step.advisor,
     prompt: step.prompt,
     model: advisorDef?.model,
@@ -63,6 +72,7 @@ export async function executeAdvisoryStep(
     skills,
     allowedTools,
     mcp,
+    emit: (event) => ledger.emit(event),
     context: {
       params: buildParamsSnapshot(ctx),
       bindings: Object.fromEntries(ctx.bindings),
@@ -96,6 +106,7 @@ export async function executeAdvisoryStep(
         usedFallback = true;
         ledger.emit({
           type: "advisory_failed",
+          stepId: step.id,
           advisor: step.advisor,
           error: message,
           fallback: fallbackValue,
@@ -105,6 +116,7 @@ export async function executeAdvisoryStep(
           fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
         ledger.emit({
           type: "advisory_failed",
+          stepId: step.id,
           advisor: step.advisor,
           error: fallbackMessage,
           fallback: fallbackValue,
@@ -119,6 +131,7 @@ export async function executeAdvisoryStep(
     } else {
       ledger.emit({
         type: "advisory_failed",
+        stepId: step.id,
         advisor: step.advisor,
         error: message,
         fallback: undefined,
@@ -134,7 +147,7 @@ export async function executeAdvisoryStep(
 
   setBinding(ctx, step.outputBinding, output);
 
-  ledger.emit({ type: "advisory_completed", advisor: step.advisor, output });
+  ledger.emit({ type: "advisory_completed", stepId: step.id, advisor: step.advisor, output });
   ledger.emit({ type: "step_completed", stepId: step.id, result: output });
 
   return {

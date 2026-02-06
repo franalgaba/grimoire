@@ -313,7 +313,7 @@ Notes:
 - Use quotes for namespaced model IDs (e.g. `"anthropic:sonnet"`).
 - `skills` here refers to **advisor skills** (Agent Skills directories), not the spell `skills` section.
 - `allowed_tools`, `skills`, and `mcp` are emitted in advisory ledger events for external orchestrators.
-- The runtime uses `fallback` values by default; external advisory handlers can override this via the Core API.
+- The runtime calls external advisory when configured (spell model, CLI model/provider, or Pi defaults). If no model is available, it uses `fallback`.
 
 ### `state`
 
@@ -837,7 +837,7 @@ decision = advise risk: "Assess trade"
   fallback: true
 ```
 
-Note: the runtime uses `fallback` values by default. You can supply an external advisory handler (see Core API `onAdvisory`) to execute agent judgments; skills/allowed tools/mcp are emitted for external orchestrators.
+Note: the runtime calls external advisory when configured (spell model, CLI model/provider, or Pi defaults). If no model is available, it uses `fallback`. You can supply an external advisory handler (see Core API `onAdvisory`) to execute agent judgments; skills/allowed tools/mcp are emitted for external orchestrators.
 
 ---
 

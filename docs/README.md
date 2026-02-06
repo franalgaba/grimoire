@@ -11,6 +11,10 @@ Grimoire uses the same spell syntax in both environments. The differences are gu
 
 If you want the full comparison, see [Execution modes](explanation/execution-modes.md).
 
+Advisory steps (`**...**` and `advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell fallback. See [CLI reference](reference/cli.md) and [Pi advisory execution spec](reference/pi-advisory-spec.md).
+
+Suggested flow: explore in VM → record advisory in CLI simulate → replay deterministically in cast. See [Run spells with the CLI](how-to/cli-cast.md).
+
 If you are contributing to the repo, see [CONTRIBUTING.md](../CONTRIBUTING.md) and [Run tests and checks](how-to/run-tests.md).
 
 ## Updating (user view)
@@ -57,6 +61,7 @@ Authoritative specifications.
 - [Action constraints reference](reference/action-constraints.md)
 - [Grimoire VM spec](reference/grimoire-vm.md)
 - [Grimoire VM conformance](reference/grimoire-vm-conformance.md)
+- [Pi advisory execution spec](reference/pi-advisory-spec.md)
 
 ## Explanation
 

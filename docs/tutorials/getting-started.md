@@ -70,6 +70,10 @@ grimoire simulate spells/compute-only.spell --chain 1
 
 Some adapters require RPC access; add `--rpc-url <rpc>` when needed.
 
+If your spell contains `**...**` or `advise` steps, advisory calls Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, it uses the spell fallback. See [Run spells with the CLI](../how-to/cli-cast.md) for OAuth and replay options.
+
+Tip: record advisory outputs with `simulate`, then replay them deterministically for `cast` by using `--advisory-replay <runId>`.
+
 ### 3) Dry-run, then execute onchain
 
 ```bash

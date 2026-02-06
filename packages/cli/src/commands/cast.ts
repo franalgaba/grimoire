@@ -28,6 +28,7 @@ import { adapters, createHyperliquidAdapter } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";
+import { resolveAdvisoryHandler } from "./advisory-handlers.js";
 import { withStatePersistence } from "./state-helpers.js";
 
 const DEFAULT_KEYSTORE_PATH = join(homedir(), ".grimoire", "keystore.json");
@@ -38,6 +39,13 @@ interface CastOptions {
   chain?: string;
   dryRun?: boolean;
   advisorSkillsDir?: string | string[];
+  advisoryPi?: boolean;
+  advisoryReplay?: string;
+  advisoryProvider?: string;
+  advisoryModel?: string;
+  advisoryThinking?: "off" | "low" | "medium" | "high";
+  advisoryTools?: "none" | "read" | "coding";
+  piAgentDir?: string;
   // Key options
   privateKey?: string;
   keyEnv?: string;
@@ -235,7 +243,20 @@ async function executeWithWallet(
 
   const executionMode: ExecutionMode = options.dryRun ? "dry-run" : "execute";
   const gasMultiplier = options.gasMultiplier ? Number.parseFloat(options.gasMultiplier) : 1.1;
-  const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir);
+  const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir) ?? [];
+  const onAdvisory = await resolveAdvisoryHandler(spell.id, {
+    advisoryPi: options.advisoryPi,
+    advisoryReplay: options.advisoryReplay,
+    advisoryProvider: options.advisoryProvider,
+    advisoryModel: options.advisoryModel,
+    advisoryThinking: options.advisoryThinking,
+    advisoryTools: options.advisoryTools,
+    advisorSkillsDirs,
+    stateDir: options.stateDir,
+    noState: options.noState,
+    agentDir: options.piAgentDir,
+    cwd: process.cwd(),
+  });
 
   const confirmCallback =
     options.skipConfirm || isTest
@@ -269,7 +290,8 @@ async function executeWithWallet(
         },
         skipTestnetConfirmation: options.skipConfirm ?? false,
         adapters: configuredAdapters,
-        advisorSkillsDirs,
+        advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
+        onAdvisory,
       });
     }
   );
@@ -315,7 +337,20 @@ async function executeSimulation(
   const spinner = ora("Running simulation...").start();
 
   const vault = (options.vault ?? "0x0000000000000000000000000000000000000000") as Address;
-  const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir);
+  const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir) ?? [];
+  const onAdvisory = await resolveAdvisoryHandler(spell.id, {
+    advisoryPi: options.advisoryPi,
+    advisoryReplay: options.advisoryReplay,
+    advisoryProvider: options.advisoryProvider,
+    advisoryModel: options.advisoryModel,
+    advisoryThinking: options.advisoryThinking,
+    advisoryTools: options.advisoryTools,
+    advisorSkillsDirs,
+    stateDir: options.stateDir,
+    noState: options.noState,
+    agentDir: options.piAgentDir,
+    cwd: process.cwd(),
+  });
 
   const result = await withStatePersistence(
     spell.id,
@@ -329,7 +364,8 @@ async function executeSimulation(
         persistentState,
         simulate: true,
         adapters,
-        advisorSkillsDirs,
+        advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
+        onAdvisory,
       });
     }
   );

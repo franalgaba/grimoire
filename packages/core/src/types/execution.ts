@@ -128,6 +128,10 @@ export type LedgerEvent =
   | AdvisoryCompletedEvent
   | AdvisoryFailedEvent
   | AdvisoryRateLimitedEvent
+  | AdvisoryModelUsedEvent
+  | AdvisoryToolExecutionStartEvent
+  | AdvisoryToolExecutionUpdateEvent
+  | AdvisoryToolExecutionEndEvent
   // Custom events
   | EventEmittedEvent
   | ConstraintEvaluatedEvent
@@ -269,6 +273,7 @@ interface BindingSetEvent {
 // Advisory events
 interface AdvisoryStartedEvent {
   type: "advisory_started";
+  stepId: string;
   advisor: string;
   prompt: string;
   skills?: string[];
@@ -279,12 +284,14 @@ interface AdvisoryStartedEvent {
 
 interface AdvisoryCompletedEvent {
   type: "advisory_completed";
+  stepId: string;
   advisor: string;
   output: unknown;
 }
 
 interface AdvisoryFailedEvent {
   type: "advisory_failed";
+  stepId: string;
   advisor: string;
   error: string;
   fallback: unknown;
@@ -292,7 +299,41 @@ interface AdvisoryFailedEvent {
 
 interface AdvisoryRateLimitedEvent {
   type: "advisory_rate_limited";
+  stepId: string;
   advisor: string;
+}
+
+interface AdvisoryModelUsedEvent {
+  type: "advisory_model_used";
+  stepId: string;
+  provider: string;
+  modelId: string;
+  thinkingLevel?: string;
+}
+
+interface AdvisoryToolExecutionStartEvent {
+  type: "advisory_tool_execution_start";
+  stepId: string;
+  toolCallId: string;
+  toolName: string;
+  args: unknown;
+}
+
+interface AdvisoryToolExecutionUpdateEvent {
+  type: "advisory_tool_execution_update";
+  stepId: string;
+  toolCallId: string;
+  toolName: string;
+  partial: unknown;
+}
+
+interface AdvisoryToolExecutionEndEvent {
+  type: "advisory_tool_execution_end";
+  stepId: string;
+  toolCallId: string;
+  toolName: string;
+  result: unknown;
+  isError?: boolean;
 }
 
 interface EventEmittedEvent {

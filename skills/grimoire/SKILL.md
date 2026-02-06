@@ -62,6 +62,8 @@ Simulate spell execution (dry run). State is loaded/saved between runs.
 ```bash
 grimoire simulate <spell> [-p <json>] [--vault <address>] [--chain <id>] [--state-dir <dir>] [--no-state]
   [--advisor-skills-dir <dir>...]
+  [--advisory-pi] [--advisory-replay <runId>] [--advisory-provider <name>] [--advisory-model <id>]
+  [--advisory-thinking <level>] [--advisory-tools <mode>] [--pi-agent-dir <dir>]
 ```
 
 ### grimoire cast
@@ -72,7 +74,9 @@ Execute a spell onchain. Supports dry-run and live modes.
 grimoire cast <spell> [-p <json>] [--vault <address>] [--chain <id>] \
   [--dry-run] [--key-env <name>] [--keystore <path>] [--password-env <name>] \
   [--rpc-url <url>] [--gas-multiplier <n>] [--skip-confirm] [-v] [--json] \
-  [--advisor-skills-dir <dir>...] [--state-dir <dir>] [--no-state]
+  [--advisor-skills-dir <dir>...] [--state-dir <dir>] [--no-state] \
+  [--advisory-pi] [--advisory-replay <runId>] [--advisory-provider <name>] [--advisory-model <id>] \
+  [--advisory-thinking <level>] [--advisory-tools <mode>] [--pi-agent-dir <dir>]
 ```
 
 ### grimoire venues
@@ -143,3 +147,34 @@ Simulate and cast automatically load/save spell state to `.grimoire/grimoire.db`
 ## Advisor Skills
 
 Use `--advisor-skills-dir <dir>` with `simulate` or `cast` to resolve advisor skills from directories containing `SKILL.md` files. The runtime emits `skills`/`allowedTools` metadata in advisory events for external orchestrators.
+
+## Advisory (Pi OAuth)
+
+Advisory steps (`**...**` and `advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell fallback. Use `--advisory-pi` to force Pi even if no model is configured.
+
+OAuth (OpenAI Codex) setup:
+
+```bash
+pi
+/login
+# select OpenAI Codex
+```
+
+If the `pi` CLI is not installed globally, you can run `npx @mariozechner/pi-coding-agent` instead. Credentials live under `~/.pi/agent` unless you pass `--pi-agent-dir`.
+
+Example:
+
+```bash
+grimoire simulate spells/my-spell.spell \
+  --advisory-pi \
+  --advisory-provider openai-codex \
+  --advisory-model gpt-5.2 \
+  --advisory-tools none
+```
+
+Record → replay (deterministic advisory outputs):
+
+```bash
+grimoire simulate spells/my-spell.spell --advisory-pi
+grimoire simulate spells/my-spell.spell --advisory-replay <runId>
+```

@@ -26,6 +26,8 @@ export type {
   CreateContextOptions,
   EvalContext,
   EvalValue,
+  AdvisoryHandler,
+  AdvisoryHandlerInput,
   StateStore,
   RunRecord,
   RunMetrics,
