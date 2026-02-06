@@ -51,6 +51,7 @@ interface ExecuteOptions {
 type AdvisoryHandler = (input: AdvisoryHandlerInput) => Promise<unknown>;
 
 interface AdvisoryHandlerInput {
+  stepId: string;
   advisor: string;
   prompt: string;
   model?: string;
@@ -59,6 +60,7 @@ interface AdvisoryHandlerInput {
   skills?: string[];
   allowedTools?: string[];
   mcp?: string[];
+  emit?: (event: LedgerEvent) => void;
   context: {
     params: Record<string, unknown>;
     bindings: Record<string, unknown>;
@@ -69,6 +71,8 @@ interface AdvisoryHandlerInput {
   };
 }
 ```
+
+`emit` can be used by external advisory handlers to record trace events (for example, model selection or tool calls) into the execution ledger.
 
 ### ExecutionResult
 

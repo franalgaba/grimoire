@@ -65,6 +65,75 @@ grimoire simulate spells/my-spell.spell \
   --advisor-skills-dir ~/.agents/skills
 ```
 
+## Advisory steps (AI judgments)
+
+The deterministic runtime calls Pi for `**...**` and `advise` steps when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, it uses the spell’s `fallback`. Use `--advisory-pi` to force Pi even if no model is configured.
+
+## Advisory workflow: explore → record → replay → execute
+
+Use this flow when you want probabilistic judgments once, then deterministic replays:
+
+1) **Explore** (cheap, safe):
+   - Run `simulate` while you iterate on the prompt/schema.
+2) **Record** (choose one):
+   - **`simulate`** when you only need the AI decision and a ledger record.
+   - **`cast --dry-run`** when you want the AI decision plus transaction planning.
+   - **`cast`** only when you are ready to execute onchain.
+3) **Replay** (deterministic):
+   - Re-run with `--advisory-replay <runId>` to reuse the recorded advisory outputs.
+
+Example:
+
+```bash
+# 1) explore + record advisory output (no txs)
+grimoire simulate spells/my-spell.spell --advisory-pi
+
+# 2) replay deterministically
+grimoire simulate spells/my-spell.spell --advisory-replay <runId>
+
+# 3) execute onchain using the same advisory outputs
+grimoire cast spells/my-spell.spell --advisory-replay <runId> --rpc-url <rpc> --key-env PRIVATE_KEY
+```
+
+### OAuth (OpenAI Codex)
+
+Run a one-time Pi login (stores tokens in `~/.pi/agent/auth.json`):
+
+```bash
+# If you already have the pi CLI:
+pi
+
+# Or run it once with npx:
+npx @mariozechner/pi-coding-agent
+
+/login
+# select OpenAI Codex
+```
+
+Then run your spell with the OAuth-backed provider:
+
+```bash
+grimoire simulate spells/my-spell.spell \
+  --advisory-pi \
+  --advisory-provider openai-codex \
+  --advisory-model gpt-5.2 \
+  --advisory-tools none
+```
+
+If you use a non-default Pi directory, pass it to Grimoire:
+
+```bash
+grimoire simulate spells/my-spell.spell --advisory-pi --pi-agent-dir /path/to/pi-agent
+```
+
+### Replay advisory outputs
+
+Use a prior run’s ledger to replay advisory outputs deterministically:
+
+```bash
+grimoire simulate spells/my-spell.spell --advisory-replay <runId> --state-dir /path/to/state
+```
+
 ## View execution history
 
 List all spells with saved state:

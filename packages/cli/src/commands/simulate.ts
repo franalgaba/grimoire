@@ -8,6 +8,7 @@ import { adapters } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";
+import { resolveAdvisoryHandler } from "./advisory-handlers.js";
 import { withStatePersistence } from "./state-helpers.js";
 
 interface SimulateOptions {
@@ -15,6 +16,13 @@ interface SimulateOptions {
   vault?: string;
   chain?: string;
   advisorSkillsDir?: string | string[];
+  advisoryPi?: boolean;
+  advisoryReplay?: string;
+  advisoryProvider?: string;
+  advisoryModel?: string;
+  advisoryThinking?: "off" | "low" | "medium" | "high";
+  advisoryTools?: "none" | "read" | "coding";
+  piAgentDir?: string;
   stateDir?: string;
   noState?: boolean;
 }
@@ -51,7 +59,20 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
     const vault = (options.vault ?? "0x0000000000000000000000000000000000000000") as Address;
     const chain = Number.parseInt(options.chain ?? "1", 10);
     const spell = compileResult.ir;
-    const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir);
+    const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir) ?? [];
+    const onAdvisory = await resolveAdvisoryHandler(spell.id, {
+      advisoryPi: options.advisoryPi,
+      advisoryReplay: options.advisoryReplay,
+      advisoryProvider: options.advisoryProvider,
+      advisoryModel: options.advisoryModel,
+      advisoryThinking: options.advisoryThinking,
+      advisoryTools: options.advisoryTools,
+      advisorSkillsDirs,
+      stateDir: options.stateDir,
+      noState: options.noState,
+      agentDir: options.piAgentDir,
+      cwd: process.cwd(),
+    });
 
     const result = await withStatePersistence(
       spell.id,
@@ -65,7 +86,8 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
           persistentState,
           simulate: true,
           adapters,
-          advisorSkillsDirs,
+          advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
+          onAdvisory,
         });
       }
     );

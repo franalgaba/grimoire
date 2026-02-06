@@ -60,8 +60,22 @@ Options:
 - `--vault <address>` — vault address
 - `--chain <id>` — chain ID (default: 1)
 - `--advisor-skills-dir <dir>` — directory to resolve advisor skills (repeatable)
+- `--advisory-pi` — force advisory steps via Pi SDK
+- `--advisory-replay <runId>` — replay advisory outputs from a previous run
+- `--advisory-provider <name>` — Pi provider for advisory (e.g., openai-codex, anthropic)
+- `--advisory-model <id>` — Pi model ID for advisory (e.g., gpt-5.2, claude-sonnet-4-20250514)
+- `--advisory-thinking <level>` — Pi thinking level (off|low|medium|high)
+- `--advisory-tools <mode>` — advisory tools: none|read|coding (default: read)
+- `--pi-agent-dir <dir>` — Pi agent directory (defaults to ~/.pi/agent)
 - `--state-dir <dir>` — directory for state database (default: `.grimoire/`)
 - `--no-state` — disable state persistence
+
+Notes:
+- Advisory runs automatically when a model is configured (spell model, CLI model/provider, or Pi defaults in `~/.pi/agent/settings.json`).
+- `--advisory-pi` forces the Pi SDK even if no model is configured (falls back to Pi’s first available model).
+- `--advisory-model` expects a Pi model ID (for example, `gpt-5.2`, `claude-sonnet-4-20250514`). Use `--advisory-provider` to pick the provider.
+- `--advisory-replay` requires state persistence (omit `--no-state`).
+- OAuth for `openai-codex` requires a Pi login (`pi` → `/login` → OpenAI Codex). Tokens are stored in `~/.pi/agent/auth.json` (or the directory passed via `--pi-agent-dir`).
 
 ## grimoire cast
 
@@ -86,8 +100,22 @@ Options:
 - `-v, --verbose` — show verbose output
 - `--json` — machine-readable output
 - `--advisor-skills-dir <dir>` — directory to resolve advisor skills (repeatable)
+- `--advisory-pi` — force advisory steps via Pi SDK
+- `--advisory-replay <runId>` — replay advisory outputs from a previous run
+- `--advisory-provider <name>` — Pi provider for advisory (e.g., openai-codex, anthropic)
+- `--advisory-model <id>` — Pi model ID for advisory (e.g., gpt-5.2, claude-sonnet-4-20250514)
+- `--advisory-thinking <level>` — Pi thinking level (off|low|medium|high)
+- `--advisory-tools <mode>` — advisory tools: none|read|coding (default: read)
+- `--pi-agent-dir <dir>` — Pi agent directory (defaults to ~/.pi/agent)
 - `--state-dir <dir>` — directory for state database (default: `.grimoire/`)
 - `--no-state` — disable state persistence
+
+Notes:
+- Advisory runs automatically when a model is configured (spell model, CLI model/provider, or Pi defaults in `~/.pi/agent/settings.json`).
+- `--advisory-pi` forces the Pi SDK even if no model is configured (falls back to Pi’s first available model).
+- `--advisory-model` expects a Pi model ID (for example, `gpt-5.2`, `claude-sonnet-4-20250514`). Use `--advisory-provider` to pick the provider.
+- `--advisory-replay` requires state persistence (omit `--no-state`).
+- OAuth for `openai-codex` requires a Pi login (`pi` → `/login` → OpenAI Codex). Tokens are stored in `~/.pi/agent/auth.json` (or the directory passed via `--pi-agent-dir`).
 
 ## grimoire history
 

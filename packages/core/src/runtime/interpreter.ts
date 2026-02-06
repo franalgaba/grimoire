@@ -477,6 +477,7 @@ async function checkGuards(
       incrementAdvisoryCalls(ctx);
       ledger.emit({
         type: "advisory_started",
+        stepId: guard.id,
         advisor: guard.advisor,
         prompt: guard.check,
         skills,
@@ -487,6 +488,7 @@ async function checkGuards(
 
       ledger.emit({
         type: "advisory_completed",
+        stepId: guard.id,
         advisor: guard.advisor,
         output: decision,
       });

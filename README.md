@@ -59,6 +59,8 @@ Next steps: [run-grimoire-vm.md](./docs/how-to/run-grimoire-vm.md), [vm-quicksta
 
 Use this for reproducible simulation and onchain execution with adapters and state persistence.
 
+Suggested flow: explore in VM → record advisory in CLI simulate → replay deterministically in cast.
+
 ```bash
 npm i -g @grimoirelabs/cli
 
@@ -75,6 +77,8 @@ When you are ready to execute live:
 ```bash
 grimoire cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url <rpc>
 ```
+
+Advisory steps (`**...**` and `advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell’s fallback. Record advisory outputs with `simulate` (or `cast --dry-run`), then replay deterministically with `--advisory-replay` for live execution.
 
 Next steps: [cli-cast.md](./docs/how-to/cli-cast.md), [transition-to-deterministic.md](./docs/how-to/transition-to-deterministic.md)
 

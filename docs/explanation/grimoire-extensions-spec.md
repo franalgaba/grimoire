@@ -48,7 +48,7 @@ Rules:
 
 - `skills`, `allowed_tools`, and `mcp` are **metadata only** in core.
 - They must be emitted into advisory events for external orchestrators.
-- `fallback` is the in-core default; external tooling can override via `onAdvisory`.
+- `fallback` is the in-core safety net when no advisory model is configured or when advisory fails; external tooling can override via `onAdvisory`.
 
 ### Advisory prompts
 
@@ -110,9 +110,8 @@ output:
 
 ### Advisory behavior in `cast`
 
-- `cast` runs advisory steps using `fallback` by default.
-- `simulate` always uses `fallback`.
-- External orchestrators can supply advisory outputs via the Core API `onAdvisory` hook.
+- `cast` and `simulate` call external advisory when configured (spell model, CLI model/provider, or Pi defaults). If no model is available, they use `fallback`.
+- External orchestrators can supply advisory outputs via the Core API `onAdvisory` hook or via replay.
 
 ### Validation rules
 

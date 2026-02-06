@@ -21,6 +21,22 @@ Within the external runtime/executor, Grimoire supports multiple execution modes
 - `dry-run`: build transactions, show confirmation output, but do not send.
 - `execute`: send transactions through the wallet/executor.
 
+## Advisory execution (deterministic runtime)
+
+AI judgments (`**...**` and `advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell’s `fallback`.
+
+- `--advisory-pi` — force Pi’s SDK for advisory steps (uses Pi auth/settings from `~/.pi/agent` or `--pi-agent-dir`).
+- `--advisory-replay <runId>` — replay advisory outputs from a prior run’s ledger for deterministic runs.
+
+If the advisory handler fails or times out, the runtime still falls back to the spell’s `fallback`.
+
+### When to record vs replay
+
+- Use `simulate` to **record** advisory outputs cheaply (no transactions).
+- Use `cast --dry-run` to record advisory outputs **plus** transaction planning.
+- Use `cast` only for live execution.
+- Use `--advisory-replay <runId>` in `simulate` or `cast` to **reuse** the recorded outputs deterministically.
+
 ## Confirmation behavior
 
 - Testnets auto-confirm unless `skipTestnetConfirmation` is false.

@@ -136,6 +136,18 @@ See the VM spec for detailed semantics: `docs/reference/grimoire-vm.md`.
 
 When a spell is ready for production execution, run it through the external runtime:
 
+1) Record advisory outputs (optional but recommended):
+
+```bash
+bun run packages/cli/src/index.ts simulate spells/yield-optimizer.spell --advisory-pi
+```
+
+2) Replay advisory outputs deterministically (optional):
+
+```bash
+bun run packages/cli/src/index.ts simulate spells/yield-optimizer.spell --advisory-replay <runId>
+```
+
 1) Validate and compile:
 
 ```bash
@@ -143,19 +155,19 @@ bun run packages/cli/src/index.ts validate spells/yield-optimizer.spell
 bun run packages/cli/src/index.ts compile spells/yield-optimizer.spell --pretty
 ```
 
-2) Simulate with the same params you used in VM mode:
+3) Simulate with the same params you used in VM mode:
 
 ```bash
 bun run packages/cli/src/index.ts simulate spells/yield-optimizer.spell -p '{"amount":100000}'
 ```
 
-3) Dry-run onchain execution (builds transactions, does not send):
+4) Dry-run onchain execution (builds transactions, does not send):
 
 ```bash
 bun run packages/cli/src/index.ts cast spells/yield-optimizer.spell --dry-run --key-env PRIVATE_KEY --rpc-url <rpc>
 ```
 
-4) Execute live when ready:
+5) Execute live when ready:
 
 ```bash
 bun run packages/cli/src/index.ts cast spells/yield-optimizer.spell --key-env PRIVATE_KEY --rpc-url <rpc>
