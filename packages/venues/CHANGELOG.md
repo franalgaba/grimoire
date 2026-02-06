@@ -1,5 +1,12 @@
 # @grimoirelabs/venues
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [15c805b]
+  - @grimoirelabs/core@0.2.0
+
 ## 0.2.0
 
 ### Minor Changes

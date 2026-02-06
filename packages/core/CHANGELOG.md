@@ -1,6 +1,6 @@
-# @grimoirelabs/cli
+# @grimoirelabs/core
 
-## 0.3.0
+## 0.2.0
 
 ### Minor Changes
 
@@ -9,20 +9,3 @@
   - CLI: enable advisory by default when a model is configured (spell, CLI flags, or Pi defaults), keep `--advisory-pi` as force mode, and add replay-first resolution behavior.
   - Core: extend advisory handler interfaces for step-level traceability (`stepId`, `emit`) and emit advisory/tool trace ledger events for audit and replay.
   - Docs/skills: clarify VM vs deterministic runtime and document the exploration -> record -> replay -> execute workflow.
-
-### Patch Changes
-
-- Updated dependencies [15c805b]
-  - @grimoirelabs/core@0.2.0
-  - @grimoirelabs/venues@0.2.1
-
-## 0.2.0
-
-### Minor Changes
-
-- 88719f7: Add VM quickstart scaffold, improve venue CLI help, and add Hyperliquid spell snapshots + tests.
-
-### Patch Changes
-
-- Updated dependencies [88719f7]
-  - @grimoirelabs/venues@0.2.0
