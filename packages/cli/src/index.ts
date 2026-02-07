@@ -63,6 +63,7 @@ program
   .option("-p, --params <json>", "Parameters as JSON")
   .option("--vault <address>", "Vault address")
   .option("--chain <id>", "Chain ID", "1")
+  .option("--json", "Output results as JSON")
   .option("--advisor-skills-dir <dir...>", "Directory to load advisor skills (default: ./skills)")
   .option("--advisory-pi", "Force advisory steps via Pi SDK (auto when configured)")
   .option("--advisory-replay <runId>", "Replay advisory outputs from a previous run")
@@ -71,6 +72,12 @@ program
   .option("--advisory-thinking <level>", "Pi thinking level (off|low|medium|high)")
   .option("--advisory-tools <mode>", "Advisory tools: none|read|coding (default: read)")
   .option("--pi-agent-dir <dir>", "Pi agent directory (defaults to ~/.pi/agent)")
+  .option(
+    "--data-replay <mode>",
+    "Replay external data by runId/snapshotId (or off|auto, default: auto)"
+  )
+  .option("--data-max-age <sec>", "Maximum external data age in seconds (default: 3600)")
+  .option("--on-stale <policy>", "Stale data policy: fail|warn (default: fail)")
   .option("--state-dir <dir>", "Directory for state database")
   .option("--no-state", "Disable state persistence")
   .action(simulateCommand);
@@ -100,6 +107,12 @@ program
   .option("--advisory-thinking <level>", "Pi thinking level (off|low|medium|high)")
   .option("--advisory-tools <mode>", "Advisory tools: none|read|coding (default: read)")
   .option("--pi-agent-dir <dir>", "Pi agent directory (defaults to ~/.pi/agent)")
+  .option(
+    "--data-replay <mode>",
+    "Replay external data by runId/snapshotId (or off|auto; default: auto for dry-run/simulate, off for live cast)"
+  )
+  .option("--data-max-age <sec>", "Maximum external data age in seconds (default: 3600)")
+  .option("--on-stale <policy>", "Stale data policy: fail|warn (default: fail)")
   .option("--state-dir <dir>", "Directory for state database")
   .option("--no-state", "Disable state persistence")
   .action(castCommand);

@@ -31,6 +31,7 @@ export type {
   StateStore,
   RunRecord,
   RunMetrics,
+  RunProvenance,
   SqliteStateStoreOptions,
   BreakerState,
   BreakerRecord,

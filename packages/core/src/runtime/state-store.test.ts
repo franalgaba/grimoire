@@ -93,4 +93,17 @@ describe("createRunRecord", () => {
     expect(record.metrics.errors).toBe(1);
     expect(record.metrics.retries).toBe(3);
   });
+
+  test("attaches optional provenance metadata", () => {
+    const result = makeExecutionResult();
+    const record = createRunRecord(result, {
+      schema_version: "grimoire.runtime.provenance.v1",
+      chain_id: 1,
+    });
+
+    expect(record.provenance).toEqual({
+      schema_version: "grimoire.runtime.provenance.v1",
+      chain_id: 1,
+    });
+  });
 });

@@ -74,6 +74,29 @@ then run spells/morpho-yield-optimizer-vm.spell in the Grimoire VM with trigger 
 
 Real data makes VM runs non-deterministic by nature. Use the deterministic runtime when you need reproducible results or onchain safety.
 
+### Snapshot freshness, fallback, and replay
+
+For real-data VM runs, configure policy fields explicitly:
+
+- `max_snapshot_age_sec` (default: `3600`)
+- `on_stale=fail|warn` (default: `warn`)
+- `on_fetch_error=fail|last_good` (default: `fail`)
+- `snapshot_store=off|on` (default: `off`)
+
+Required behavior:
+
+- VM computes and reports `snapshot_age_sec`.
+- If `snapshot_age_sec > max_snapshot_age_sec`:
+  - `on_stale=fail`: stop before execution.
+  - `on_stale=warn`: continue and record warning.
+- If fetch fails and `on_fetch_error=last_good`, VM may use a compatible last-good snapshot and MUST record fallback in run output.
+
+Replay flow when `snapshot_store=on`:
+
+1. Fetch/save snapshot (assign `snapshot_id`).
+2. Execute spell with that snapshot.
+3. Re-run later with the same `snapshot_id`.
+
 ## 2) Provide a spell
 
 You can pass a file path or inline spell text. If you pass a file path, the agent must be able to read it. Imports are resolved relative to the spell file.
@@ -108,21 +131,34 @@ The VM returns a structured run log including:
 - status (`success` or `failed`)
 - emitted events
 - final bindings
+- data provenance for real-data runs
 
 Example output:
 
 ```
 Run:
-  spell: TestStateCounter
+  spell: MorphoYieldOptimizer
   trigger: manual
   status: success
 
+Data:
+  mode: real_snapshot
+  snapshot_id: 01H...
+  snapshot_at: 2026-02-07T12:34:56Z
+  snapshot_age_sec: 120
+  snapshot_source: grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --limit 3 --format spell
+  units: net_apy=decimal, net_apy_pct=percent, tvl_usd=usd
+  selection_policy: max(net_apy)
+  fallback_used: none
+  rejected_count: 1
+
 Events:
-  - counter_updated(run_count=1, total_amount=100)
+  - candidate(market="A", net_apy=0.0408, net_apy_pct=4.08)
+  - recommendation(action="switch", reason="spread_above_threshold")
 
 Bindings:
-  run_count: 1
-  total_amount: 100
+  best_market: "A"
+  spread_pct: 0.61
 ```
 
 ## VM vs runtime

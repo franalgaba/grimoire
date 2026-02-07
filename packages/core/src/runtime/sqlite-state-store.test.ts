@@ -145,6 +145,28 @@ describe("SqliteStateStore", () => {
       const runs = await store.getRuns("my-spell");
       expect(runs[0].metrics).toEqual(metrics);
     });
+
+    test("preserves provenance through round-trip", async () => {
+      await store.addRun(
+        "my-spell",
+        makeRunRecord({
+          runId: "run-provenance",
+          provenance: {
+            schema_version: "grimoire.runtime.provenance.v1",
+            chain_id: 8453,
+            input_params_hash: "sha256:test",
+          },
+        })
+      );
+
+      const runs = await store.getRuns("my-spell");
+      expect(runs[0].runId).toBe("run-provenance");
+      expect(runs[0].provenance).toEqual({
+        schema_version: "grimoire.runtime.provenance.v1",
+        chain_id: 8453,
+        input_params_hash: "sha256:test",
+      });
+    });
   });
 
   describe("run pruning", () => {
