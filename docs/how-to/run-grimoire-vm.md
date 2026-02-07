@@ -80,7 +80,6 @@ For real-data VM runs, configure policy fields explicitly:
 
 - `max_snapshot_age_sec` (default: `3600`)
 - `on_stale=fail|warn` (default: `warn`)
-- `on_fetch_error=fail|last_good` (default: `fail`)
 - `snapshot_store=off|on` (default: `off`)
 
 Required behavior:
@@ -89,7 +88,9 @@ Required behavior:
 - If `snapshot_age_sec > max_snapshot_age_sec`:
   - `on_stale=fail`: stop before execution.
   - `on_stale=warn`: continue and record warning.
-- If fetch fails and `on_fetch_error=last_good`, VM may use a compatible last-good snapshot and MUST record fallback in run output.
+- VM resolves real data with a provider-first ladder: primary provider, provider fallback, approved command fallback, then deterministic failure.
+- If fallback is used, VM reports `fallback_used` as `provider_fallback` or `command_fallback`.
+- If no data path is available, VM fails with `VM_DATA_SOURCE_UNAVAILABLE` and remediation guidance.
 
 Replay flow when `snapshot_store=on`:
 
@@ -146,7 +147,11 @@ Data:
   snapshot_id: 01H...
   snapshot_at: 2026-02-07T12:34:56Z
   snapshot_age_sec: 120
-  snapshot_source: grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --limit 3 --format spell
+  snapshot_source: grimoire://venue/morpho-blue/vaults?chain=8453&asset=USDC
+  source_type: provider
+  source_id: grimoire.venue.morpho-blue
+  fetch_attempts: 1
+  command_source: none
   units: net_apy=decimal, net_apy_pct=percent, tvl_usd=usd
   selection_policy: max(net_apy)
   fallback_used: none

@@ -51,6 +51,7 @@ A VM host SHOULD satisfy the following:
 - Advisory: schema coercion + fallback behavior.
 - Emits: event data preserved and returned.
 - Errors: step failures reported with step IDs or locations.
+- Purity boundary: strategy semantics stay in VM; tools/commands remain I/O substrate.
 
 ## Test matrix (recommended)
 
@@ -307,6 +308,51 @@ A conformance report SHOULD include:
 
 ## Alignment checks (required for this spec revision)
 
+### VMP-1: No strategy execution outside VM semantics
+
+Pass criteria:
+
+1. Control flow (branching, loops, retries, step ordering) is executed by VM semantics.
+2. External tools/commands are used only for action execution, data retrieval, diagnostics, or environment checks.
+3. Transcript evidence shows step-level VM progression, not an external script replacing evaluation.
+
+Fail criteria:
+
+1. Host runs spell control flow in Python/Node/bash (or equivalent) and returns only final outputs.
+2. Host bypasses VM step semantics for action selection or branching.
+
+Minimal transcript:
+
+```text
+User: Run spells/compute-only.spell in VM mode.
+VM: step_started(id=1)
+VM: step_completed(id=1)
+VM: Run:
+  status: success
+```
+
+### VMP-2: Strict structure + bounded judgment
+
+Pass criteria:
+
+1. VM follows spell structure exactly for step ordering and control flow.
+2. Model judgment is used only at explicit semantic boundaries (for example `**...**` advisory decisions).
+3. Output trace maps decisions and results back to VM steps.
+
+Fail criteria:
+
+1. Host reorders or skips spell steps without control-flow justification.
+2. Model judgment is used to replace deterministic step execution.
+
+Minimal transcript:
+
+```text
+User: Run spells/test-ai-judgment.spell manually.
+VM: advisory_started(step=if_advisory_1)
+VM: advisory_completed(step=if_advisory_1, decision=false)
+VM: event_emitted(ai_rejected_swap)
+```
+
 ### FP-1: Fast path compliance
 
 Pass criteria:
@@ -446,7 +492,7 @@ Pass criteria:
 
 1. VM rejects `record_count=0`.
 2. VM rejects chain/asset mismatch.
-3. VM rejects missing required fields (`snapshot_at`, `snapshot_source`, `records`).
+3. VM rejects missing required fields (`snapshot_at`, `snapshot_source`, `records`, `source_type`, `source_id`).
 4. VM rejects unrecognized schema version.
 
 Fail criteria:
@@ -464,7 +510,7 @@ VM: failed - snapshot validation: record_count must be > 0
 Pass criteria:
 
 1. Report includes `Run`, `Data`, `Events`, and `Bindings` blocks.
-2. `Data` includes `selection_policy`, `fallback_used`, and `rejected_count`.
+2. `Data` includes `source_type`, `source_id`, `fetch_attempts`, `selection_policy`, `fallback_used`, and `rejected_count`.
 
 Fail criteria:
 
@@ -476,6 +522,9 @@ Minimal transcript:
 Run:
   status: success
 Data:
+  source_type: provider
+  source_id: grimoire.venue.morpho-blue
+  fetch_attempts: 1
   selection_policy: max(net_apy)
   fallback_used: none
   rejected_count: 1
@@ -483,6 +532,73 @@ Events:
   - candidate(...)
 Bindings:
   best_market: ...
+```
+
+### RD-7: Real-data provenance completeness
+
+Pass criteria:
+
+1. Real-data runs report `snapshot_source`, `source_type`, `source_id`, `fetch_attempts`, and `fallback_used`.
+2. When `source_type=command`, output also includes `command_source`.
+3. `fallback_used` is one of `none|provider_fallback|command_fallback`.
+
+Fail criteria:
+
+1. Any required provenance field is omitted.
+2. `source_type=command` without `command_source`.
+
+Minimal transcript:
+
+```text
+Data:
+  snapshot_source: grimoire://venue/morpho-blue/vaults?chain=8453&asset=USDC
+  source_type: provider
+  source_id: grimoire.venue.morpho-blue
+  fetch_attempts: 1
+  fallback_used: none
+```
+
+### RD-8: Script/runtime usage does not replace VM control flow
+
+Pass criteria:
+
+1. Any command/script usage is limited to data/tooling operations.
+2. VM trace still shows spell-driven steps, branches, and loop boundaries.
+
+Fail criteria:
+
+1. Script output is treated as strategy execution result without VM step evaluation.
+2. Host cannot provide step-level evidence for control flow.
+
+Minimal transcript:
+
+```text
+VM: command_fetch_started(alias=grimoire-venue-morpho)
+VM: command_fetch_completed(alias=grimoire-venue-morpho)
+VM: step_started(id=for_assets_1)
+VM: step_completed(id=for_assets_1)
+```
+
+### RD-9: Deterministic failure when no data path is available
+
+Pass criteria:
+
+1. If provider and approved command paths are unavailable, run ends with `status: failed`.
+2. Error includes deterministic code `VM_DATA_SOURCE_UNAVAILABLE`.
+3. Error includes remediation guidance (provider configuration or snapshot params).
+
+Fail criteria:
+
+1. Run proceeds with missing data path.
+2. Failure lacks deterministic code or remediation.
+
+Minimal transcript:
+
+```text
+Run:
+  status: failed
+  error_code: VM_DATA_SOURCE_UNAVAILABLE
+  error: Configure a VM data provider or provide snapshot params.
 ```
 
 ## VM harness checklist (agent skill)
