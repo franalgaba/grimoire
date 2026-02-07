@@ -47,6 +47,7 @@ Task-focused recipes.
 - [Build spells programmatically](how-to/build-spells-programmatically.md)
 - [Run tests and checks](how-to/run-tests.md)
 - [Publish packages](how-to/publish.md)
+- [DefiHack multi-track spec](how-to/defihack-multitrack-spec.md)
 
 ## Reference
 
