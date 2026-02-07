@@ -35,12 +35,30 @@ The Grimoire VM does **not** guarantee:
 
 ## Execution environment
 
-The VM host is the agent session (or a wrapper around it). The VM executes steps by:
+The VM host is the agent session (or a wrapper around it). In VM mode, the session is the runtime.
+
+The VM executes steps by:
 - Evaluating expressions directly.
-- Invoking tools for actions or external data.
-- Producing a run log.
+- Invoking tools/providers/approved commands for actions or external data.
+- Producing a run log with provenance.
 
 The host MUST make tool usage explicit and SHOULD confirm side effects before executing them.
+
+## VM purity boundary (required)
+
+During VM execution, the host MUST NOT execute strategy semantics outside VM rules.
+
+Disallowed examples:
+- Running spell control flow in Python/Node/bash instead of VM step semantics.
+- Evaluating conditions/loops/branching externally and only returning a final answer.
+- Performing action-selection logic in non-VM code paths that bypass VM steps.
+
+Allowed operations:
+- Parse/validate/execute steps with VM semantics.
+- Operational shell/tool commands for data retrieval, adapter metadata, diagnostics, or environment checks.
+- Auxiliary script usage only when it does not evaluate or replace spell control flow.
+
+Operational commands and scripts are I/O substrate only. They MUST NOT become the strategy execution engine.
 
 ## Inputs
 
@@ -84,6 +102,14 @@ A VM host SHOULD also produce:
 7. **Finalize**:
    - Produce run status, events, final bindings, and state snapshot.
 
+## Execution boundary (strict structure + bounded judgment)
+
+The VM host MUST:
+- Follow spell structure exactly for control flow and step ordering.
+- Use model judgment only at explicit semantic boundaries (for example advisory or `**...**` decisions).
+- Treat tools/commands as input/output substrate, not as the strategy executor.
+- Keep an execution trace that maps outputs back to VM step semantics.
+
 ## Trigger selection
 
 A spell can define multiple `on <trigger>:` blocks. The VM MUST execute exactly one trigger per run.
@@ -124,8 +150,11 @@ The VM SHOULD log which backend is used for persistence.
 Actions and some built-in functions require tools. A VM host SHOULD provide a tooling catalog that maps:
 - **Venue actions** (e.g., `uniswap_v3.swap`) to tool calls.
 - **External data** (e.g., price or balance queries) to tool calls.
+- **Approved command-based data sources** (for provider gaps) to explicit command templates.
 
 If a required tool is missing, the VM MUST fail the step with a clear error.
+
+Operational commands MAY be used for data/tooling access, but MUST NOT execute strategy semantics outside VM rules.
 
 For side effects (onchain or external actions), the host SHOULD:
 - Require explicit confirmation.
@@ -453,7 +482,15 @@ The VM host MUST NOT read/write outside scope except:
 1. Skill reference files needed to execute VM logic.
 2. Explicitly user-approved locations.
 
-### Discovery budget (fast-path tasks)
+### Discovery budget (VM artifacts)
+
+For VM runs, discovery SHOULD be bounded and purposeful.
+
+The discovery budget applies only to:
+
+1. Target spell path.
+2. Required VM references/skills.
+3. Direct import paths in scope.
 
 For fast-path-eligible tasks:
 
@@ -462,16 +499,79 @@ For fast-path-eligible tasks:
    1. A real parse/transform/runtime error is observed, and
    2. It cannot be resolved from DSL spec or known examples.
 
-## Real-data snapshot contract
+## Real-data provider and provenance contract
 
-When VM mode uses real venue data, hosts MUST normalize provenance into the following schema:
+Real-data fetch SHOULD prefer VM-native provider calls. Command-based fetches are allowed when they preserve VM semantics and are captured in provenance.
+
+### Provider interface (required)
+
+```ts
+interface VmDataProvider {
+  id: string; // e.g. "grimoire.venue.morpho-blue"
+  fetch(input: {
+    venue: string;
+    dataset: string;
+    chainId?: number;
+    asset?: string;
+    filters?: Record<string, unknown>;
+  }): Promise<{
+    schema_version: string;
+    snapshot_id?: string;
+    snapshot_at: string;
+    snapshot_source: string; // data source reference
+    records: unknown[];
+    record_count: number;
+    units?: Record<string, string>;
+    warnings?: string[];
+  }>;
+}
+```
+
+### Data-source provenance shape (required)
+
+```ts
+type VmDataSource =
+  | {
+      source_type: "provider";
+      source_id: string; // provider id
+      source_ref: string; // provider URI/reference
+    }
+  | {
+      source_type: "command";
+      source_id: string; // command alias
+      source_ref: string; // stable command reference string
+      command_source: string; // exact executed command
+    };
+```
+
+### Data source resolution ladder
+
+VM hosts SHOULD resolve real data using this order:
+
+1. Primary configured VM provider.
+2. Explicitly configured provider fallback.
+3. Approved command-based fetch path.
+4. Deterministic failure.
+
+If command-based fetch is used, VM control flow MUST still execute in VM semantics.
+
+Approved command paths SHOULD be templated/allowlisted by the host to avoid execution drift.
+
+### Real-data provenance payload
+
+When VM mode uses real data, hosts MUST normalize provenance into a snapshot payload that includes source metadata:
 
 ```json
 {
-  "schema_version": "grimoire.vm.snapshot.v1",
+  "schema_version": "grimoire.vm.snapshot.v2",
   "snapshot_id": "ulid",
   "snapshot_at": "2026-02-07T12:34:56Z",
-  "snapshot_source": "grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --limit 3 --format spell",
+  "snapshot_source": "grimoire://venue/morpho-blue/vaults?chain=8453&asset=USDC",
+  "source_type": "provider",
+  "source_id": "grimoire.venue.morpho-blue",
+  "source_ref": "grimoire://venue/morpho-blue/vaults?chain=8453&asset=USDC",
+  "fetch_attempts": 1,
+  "fallback_used": "none",
   "venue": "morpho-blue",
   "dataset": "vaults",
   "chain_id": 8453,
@@ -495,16 +595,7 @@ When VM mode uses real venue data, hosts MUST normalize provenance into the foll
 }
 ```
 
-### Snapshot lifecycle
-
-VM snapshot lifecycle semantics:
-
-1. `fetch`: acquire fresh data from venue source.
-2. `save`: write normalized snapshot artifact.
-3. `list`: enumerate snapshots by key + age.
-4. `use`: bind a specific snapshot to execution.
-5. `refresh`: re-fetch using previous snapshot query metadata.
-6. `replay`: re-run with exact `snapshot_id`.
+If `source_type=command`, hosts MUST include `command_source` with the exact command executed.
 
 ### Snapshot storage mode (opt-in)
 
@@ -514,7 +605,7 @@ Behavior:
 
 1. `snapshot_store=off`
    1. VM MAY fetch and use real data.
-   2. VM MUST still emit provenance (`snapshot_at`, `snapshot_source`, units, age) in run output.
+   2. VM MUST still emit provenance in run output.
    3. VM MUST NOT persist `.grimoire/vm-snapshots/*`.
 2. `snapshot_store=on`
    1. VM MUST persist snapshot artifacts.
@@ -552,13 +643,14 @@ VM policy fields:
 
 1. `max_snapshot_age_sec` (default `3600`)
 2. `on_stale`: `fail|warn` (default `warn`)
-3. `on_fetch_error`: `fail|last_good` (default `fail`)
 
 Required behavior:
 
 1. VM MUST compute and emit `snapshot_age_sec`.
 2. If stale and `on_stale=fail`, VM MUST stop before execution.
-3. If fetch fails and `on_fetch_error=last_good`, VM MAY use latest compatible snapshot and MUST record fallback in the run report.
+3. VM MUST emit `fetch_attempts`.
+4. VM MUST emit `fallback_used` as `none|provider_fallback|command_fallback`.
+5. If command fallback is used, VM MUST emit `command_source`.
 
 ### Validation gates before real-data run
 
@@ -566,7 +658,7 @@ Before executing against real data, VM hosts MUST validate:
 
 1. `record_count > 0`
 2. Snapshot `chain_id` and `asset` match the requested run scope
-3. Required fields exist: `snapshot_at`, `snapshot_source`, `records`
+3. Required fields exist: `snapshot_at`, `snapshot_source`, `records`, `source_type`, `source_id`
 4. Critical ranking fields are non-null for the selected strategy
 5. Snapshot schema version is recognized
 
@@ -585,10 +677,14 @@ Data:
   snapshot_id: <id>
   snapshot_at: <iso>
   snapshot_age_sec: <n>
-  snapshot_source: <command>
+  snapshot_source: <provider_uri_or_command_ref>
+  source_type: <provider|command>
+  source_id: <provider_id_or_command_alias>
+  fetch_attempts: <n>
+  fallback_used: <none|provider_fallback|command_fallback>
+  command_source: <exact_command_or_none>
   units: net_apy=decimal, net_apy_pct=percent, tvl_usd=usd
   selection_policy: <formula/criteria>
-  fallback_used: <none|last_good>
   rejected_count: <n>
 
 Events:
@@ -597,6 +693,24 @@ Events:
 Bindings:
   <key>: <value>
 ```
+
+### Failure semantics when no data path is available
+
+If no provider or approved command path can satisfy the request, the VM MUST fail with:
+
+1. `status: failed`
+2. `error_code: VM_DATA_SOURCE_UNAVAILABLE`
+3. A concrete remediation (for example: configure a VM provider or provide snapshot params).
+
+### Scripting prohibition
+
+VM hosts MUST NOT use ad-hoc scripts to execute spell semantics.
+
+Ad-hoc scripts MAY be used for auxiliary data handling only when:
+
+1. They do not evaluate or replace spell control flow.
+2. Provenance captures script/tool source and purpose.
+3. Equivalent VM execution semantics remain authoritative.
 
 ### APY unit rules
 
