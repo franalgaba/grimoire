@@ -1,6 +1,6 @@
 {
   "name": "@grimoirelabs/cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "CLI for Grimoire spell execution",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,8 +19,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@grimoirelabs/core": "0.2.0",
-    "@grimoirelabs/venues": "0.2.1",
+    "@grimoirelabs/core": "0.3.0",
+    "@grimoirelabs/venues": "0.2.2",
     "@mariozechner/pi-coding-agent": "0.51.2",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",

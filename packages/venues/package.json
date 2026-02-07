@@ -1,6 +1,6 @@
 {
   "name": "@grimoirelabs/venues",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Official Grimoire venue adapters",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,7 +25,7 @@
   "dependencies": {
     "@aave/client": "^0.7.0",
     "@across-protocol/app-sdk": "^0.4.4",
-    "@grimoirelabs/core": "0.2.0",
+    "@grimoirelabs/core": "0.3.0",
     "@morpho-org/blue-sdk": "^2.0.0",
     "@morpho-org/blue-sdk-viem": "^2.0.0",
     "@nktkas/hyperliquid": "^0.30.3",
