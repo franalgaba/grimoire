@@ -421,6 +421,186 @@ The Grimoire VM is best-effort and non-deterministic by default. Sources of nond
 
 For deterministic execution, use the external runtime (`simulate` / `cast`).
 
+## Fast path and path guardrails
+
+### Fast path prompts (required)
+
+The VM host MUST execute a fast path for the following prompts:
+
+1. `Create a Grimoire VM spell named <X> and save it to <path>`
+2. `Run <path> in the Grimoire VM with trigger manual. Use defaults and no side effects`
+
+Fast path behavior:
+
+1. Read only required skill/reference files and the target spell path.
+2. Skip broad filesystem discovery unless a concrete parse/transform/runtime error occurs.
+3. Produce output directly from the VM spec + user inputs.
+
+### Execution scope root
+
+If the user provides explicit file path(s), the VM host MUST set `execution_scope_root` to:
+
+1. The provided path parent(s), and
+2. The current working directory only when needed for relative resolution.
+
+The VM host MUST NOT read/write outside scope except:
+
+1. Skill reference files needed to execute VM logic.
+2. Explicitly user-approved locations.
+
+### Discovery budget (fast-path tasks)
+
+For fast-path-eligible tasks:
+
+1. Maximum 3 discovery commands before the first draft or run result.
+2. No compiler/runtime internals (`dist/compiler/*`, parser/tokenizer internals) unless:
+   1. A real parse/transform/runtime error is observed, and
+   2. It cannot be resolved from DSL spec or known examples.
+
+## Real-data snapshot contract
+
+When VM mode uses real venue data, hosts MUST normalize provenance into the following schema:
+
+```json
+{
+  "schema_version": "grimoire.vm.snapshot.v1",
+  "snapshot_id": "ulid",
+  "snapshot_at": "2026-02-07T12:34:56Z",
+  "snapshot_source": "grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --limit 3 --format spell",
+  "venue": "morpho-blue",
+  "dataset": "vaults",
+  "chain_id": 8453,
+  "asset": "USDC",
+  "filters": {
+    "min_tvl": 5000000,
+    "limit": 3,
+    "sort": "netApy",
+    "order": "desc"
+  },
+  "units": {
+    "net_apy": "decimal",
+    "net_apy_pct": "percent",
+    "tvl_usd": "usd"
+  },
+  "record_count": 3,
+  "records": [],
+  "source_hash": "sha256:...",
+  "status": "ok",
+  "warnings": []
+}
+```
+
+### Snapshot lifecycle
+
+VM snapshot lifecycle semantics:
+
+1. `fetch`: acquire fresh data from venue source.
+2. `save`: write normalized snapshot artifact.
+3. `list`: enumerate snapshots by key + age.
+4. `use`: bind a specific snapshot to execution.
+5. `refresh`: re-fetch using previous snapshot query metadata.
+6. `replay`: re-run with exact `snapshot_id`.
+
+### Snapshot storage mode (opt-in)
+
+Snapshot storage is controlled by `snapshot_store: off|on` and defaults to `off`.
+
+Behavior:
+
+1. `snapshot_store=off`
+   1. VM MAY fetch and use real data.
+   2. VM MUST still emit provenance (`snapshot_at`, `snapshot_source`, units, age) in run output.
+   3. VM MUST NOT persist `.grimoire/vm-snapshots/*`.
+2. `snapshot_store=on`
+   1. VM MUST persist snapshot artifacts.
+   2. VM MUST support replay by `snapshot_id`.
+
+Storage paths when enabled:
+
+1. `.grimoire/vm-snapshots/index.json`
+2. `.grimoire/vm-snapshots/<snapshot_id>.json`
+
+`index.json` minimum shape:
+
+```json
+{
+  "schema_version": "grimoire.vm.snapshot.index.v1",
+  "latest_by_key": {
+    "morpho-blue|vaults|8453|USDC|<filters_hash>": "01H..."
+  },
+  "snapshots": [
+    {
+      "snapshot_id": "01H...",
+      "snapshot_at": "2026-02-07T12:34:56Z",
+      "key": "morpho-blue|vaults|8453|USDC|<filters_hash>",
+      "status": "ok",
+      "record_count": 3,
+      "path": ".grimoire/vm-snapshots/01H....json"
+    }
+  ]
+}
+```
+
+### Freshness and fallback policy
+
+VM policy fields:
+
+1. `max_snapshot_age_sec` (default `3600`)
+2. `on_stale`: `fail|warn` (default `warn`)
+3. `on_fetch_error`: `fail|last_good` (default `fail`)
+
+Required behavior:
+
+1. VM MUST compute and emit `snapshot_age_sec`.
+2. If stale and `on_stale=fail`, VM MUST stop before execution.
+3. If fetch fails and `on_fetch_error=last_good`, VM MAY use latest compatible snapshot and MUST record fallback in the run report.
+
+### Validation gates before real-data run
+
+Before executing against real data, VM hosts MUST validate:
+
+1. `record_count > 0`
+2. Snapshot `chain_id` and `asset` match the requested run scope
+3. Required fields exist: `snapshot_at`, `snapshot_source`, `records`
+4. Critical ranking fields are non-null for the selected strategy
+5. Snapshot schema version is recognized
+
+### Required real-data run output extension
+
+Real-data VM runs MUST include a `Data` block:
+
+```text
+Run:
+  spell: <name>
+  trigger: <trigger>
+  status: <success|failed>
+
+Data:
+  mode: real_snapshot
+  snapshot_id: <id>
+  snapshot_at: <iso>
+  snapshot_age_sec: <n>
+  snapshot_source: <command>
+  units: net_apy=decimal, net_apy_pct=percent, tvl_usd=usd
+  selection_policy: <formula/criteria>
+  fallback_used: <none|last_good>
+  rejected_count: <n>
+
+Events:
+  - <event>(...)
+
+Bindings:
+  <key>: <value>
+```
+
+### APY unit rules
+
+For Morpho and any APY-like fields:
+
+1. `net_apy` and `apy` are decimal rates.
+2. `0.0408` means `4.08%`.
+3. Reports SHOULD include both decimal and percent display values.
+
 ## Security and responsibility
 
 The VM executes inside an agent session and may use tools with side effects. The host and user are responsible for:

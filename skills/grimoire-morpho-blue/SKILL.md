@@ -27,6 +27,13 @@ If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-mor
 
 Use `--format spell` to emit a VM-ready `params:` block you can paste into a spell.
 
+The snapshot includes provenance fields (`snapshot_at`, `snapshot_source`) and APY data.
+
+APY semantics:
+
+- `apy` / `net_apy` are decimal rates (for example `0.0408` = `4.08%`).
+- When reporting, include both decimal and percent display when possible.
+
 ## Commands
 
 - `grimoire venue morpho-blue info [--format <json|table>]`
@@ -42,6 +49,12 @@ grimoire venue morpho-blue addresses --chain 8453
 grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format table
 grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
 ```
+
+Example VM provenance output fields to preserve:
+
+- `snapshot_at`
+- `snapshot_source`
+- `units` (for example `net_apy=decimal`, `net_apy_pct=percent`, `tvl_usd=usd`)
 
 ## Default Markets (Base)
 

@@ -49,6 +49,39 @@ Trigger this skill on prompts like:
 - "simulate in-agent"
 - "validate this spell without the CLI"
 
+## Fast-path decision tree (required)
+
+Fast path MUST be used for:
+
+1. `Create a Grimoire VM spell named <X> and save it to <path>`
+2. `Run <path> in the Grimoire VM with trigger manual. Use defaults and no side effects`
+
+Decision flow:
+
+1. If prompt matches either pattern:
+   - Read only `references/VM.md`, `references/CONFORMANCE.md`, and target spell path.
+   - Skip broad repository scans.
+   - Produce draft/run output directly.
+2. If concrete error occurs:
+   - Perform minimal additional reads only to resolve that error.
+3. If prompt does not match fast path:
+   - Follow normal VM runbook.
+
+## Path guardrails (required)
+
+- If user provides explicit path(s), set `execution_scope_root` to path parent(s).
+- Use cwd only for relative resolution.
+- Do not read/write outside scope except:
+  - required skill reference files
+  - explicitly user-approved locations
+
+## Discovery budget (required)
+
+For fast-path tasks:
+
+- Max 3 discovery commands before first draft/run output.
+- Do not inspect compiler internals (`dist/compiler/*`, tokenizer/parser internals) unless an actual parse/runtime error requires it.
+
 ## Inputs you must collect
 
 Before execution, ask for or infer:
@@ -87,7 +120,7 @@ If any of these are missing, ask concise follow-up questions.
 8. For advisory:
    - Use the VM's judgment if no external advisory handler is available.
    - Enforce schema and fallback as specified.
-9. Emit a final run log with status, events, and bindings.
+9. Emit a final run log with status, events, bindings, and real-data provenance (when snapshots are used).
 
 ## Tool mapping (common cases)
 
@@ -124,6 +157,36 @@ Bindings:
   <key>: <value>
 ```
 
+When real data is used, include a `Data` block:
+
+```
+Data:
+  mode: real_snapshot
+  snapshot_id: <id>
+  snapshot_at: <iso>
+  snapshot_age_sec: <n>
+  snapshot_source: <command>
+  units: net_apy=decimal, net_apy_pct=percent, tvl_usd=usd
+  selection_policy: <formula/criteria>
+  fallback_used: <none|last_good>
+  rejected_count: <n>
+```
+
+Snapshot policy defaults:
+
+- `max_snapshot_age_sec=3600`
+- `on_stale=warn`
+- `on_fetch_error=fail`
+- `snapshot_store=off` (opt-in persistence)
+
+Validation gates before real-data execution:
+
+1. `record_count > 0`
+2. chain/asset match requested scope
+3. required fields: `snapshot_at`, `snapshot_source`, `records`
+4. ranking fields needed by selection are non-null
+5. schema version is recognized
+
 If the run fails, include:
 - Step id and reason
 - Whether fallback or retries were used
@@ -133,6 +196,11 @@ If the run fails, include:
 - VM execution is best-effort and non-deterministic.
 - External data and model judgments can change results.
 - For deterministic outcomes, use the external runtime.
+
+APY semantics:
+
+- `net_apy` and `apy` are decimal rates (`0.0408` means `4.08%`).
+- Prefer reporting both decimal and percent values.
 
 ## Conformance shortcuts
 

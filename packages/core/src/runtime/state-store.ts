@@ -17,6 +17,8 @@ export interface RunMetrics {
   retries: number;
 }
 
+export type RunProvenance = object;
+
 /**
  * Record of a single spell execution
  */
@@ -28,6 +30,7 @@ export interface RunRecord {
   duration: number;
   metrics: RunMetrics;
   finalState: Record<string, unknown>;
+  provenance?: RunProvenance;
 }
 
 /**
@@ -73,7 +76,7 @@ function serializeMetrics(metrics: ExecutionMetrics): RunMetrics {
 /**
  * Create a RunRecord from an ExecutionResult
  */
-export function createRunRecord(result: ExecutionResult): RunRecord {
+export function createRunRecord(result: ExecutionResult, provenance?: RunProvenance): RunRecord {
   return {
     runId: result.runId,
     timestamp: new Date(result.startTime).toISOString(),
@@ -82,5 +85,6 @@ export function createRunRecord(result: ExecutionResult): RunRecord {
     duration: result.duration,
     metrics: serializeMetrics(result.metrics),
     finalState: result.finalState,
+    provenance,
   };
 }

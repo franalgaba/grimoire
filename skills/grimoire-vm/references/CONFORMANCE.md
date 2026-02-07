@@ -310,6 +310,186 @@ A conformance report SHOULD include:
 - Spells executed and outcomes.
 - Any deviations from the expected semantics.
 
+## Alignment checks (required for this spec revision)
+
+### FP-1: Fast path compliance
+
+Pass criteria:
+
+1. For prompt `Create a Grimoire VM spell named <X> and save it to <path>`, VM reads only required references + target path.
+2. For prompt `Run <path> in the Grimoire VM with trigger manual. Use defaults and no side effects`, VM returns run output without broad discovery.
+
+Fail criteria:
+
+1. Broad repository scans before first draft/run output with no concrete error.
+2. Accessing unrelated files when the target path is explicit.
+
+Minimal transcript:
+
+```text
+User: Run spells/vm.spell in the Grimoire VM with trigger manual. Use defaults and no side effects.
+VM: Run:
+  spell: ...
+  trigger: manual
+  status: success
+```
+
+### PATH-1: Path scope compliance
+
+Pass criteria:
+
+1. `execution_scope_root` contains explicit path parent(s), and cwd only if needed for relative resolution.
+2. No read/write outside scope unless skill references or user-approved paths.
+
+Fail criteria:
+
+1. Reads unrelated sibling directories or home paths without approval.
+
+Minimal transcript:
+
+```text
+User: Run ./spells/a.spell in VM mode.
+VM: (reads ./spells/a.spell and its relative imports only)
+```
+
+### DISC-1: Discovery budget compliance
+
+Pass criteria:
+
+1. Fast-path tasks use at most 3 discovery commands before first draft/run output.
+2. No compiler internals exploration unless an actual parser/runtime error requires it.
+
+Fail criteria:
+
+1. More than 3 discovery operations in fast path with no error.
+2. Inspecting parser/tokenizer internals preemptively.
+
+Minimal transcript:
+
+```text
+User: Create VM spell X at spells/x.spell.
+VM: (<=3 discovery commands)
+VM: file written
+```
+
+### RD-1: Snapshot provenance required
+
+Pass criteria:
+
+1. Real-data runs include `snapshot_at`, `snapshot_source`, `snapshot_age_sec`, and units in output.
+2. Snapshot schema fields are present in provenance artifacts when stored.
+
+Fail criteria:
+
+1. Real-data run output omits provenance fields.
+
+Minimal transcript:
+
+```text
+Data:
+  mode: real_snapshot
+  snapshot_at: 2026-02-07T12:34:56Z
+  snapshot_source: grimoire venue ...
+```
+
+### RD-2: Unit semantics required
+
+Pass criteria:
+
+1. APY-like fields are interpreted as decimal rates.
+2. Output clarifies decimal vs percent display (`net_apy=decimal`, `net_apy_pct=percent`).
+
+Fail criteria:
+
+1. Treating `0.0408` as 0.0408% instead of 4.08%.
+
+Minimal transcript:
+
+```text
+units: net_apy=decimal, net_apy_pct=percent, tvl_usd=usd
+```
+
+### RD-3: Freshness policy enforced
+
+Pass criteria:
+
+1. VM computes `snapshot_age_sec`.
+2. `on_stale=fail` stops execution before run.
+3. `on_stale=warn` continues with warning.
+
+Fail criteria:
+
+1. Stale snapshot ignored under `fail`.
+
+Minimal transcript:
+
+```text
+VM: failed - snapshot stale (age=5400, max=3600)
+```
+
+### RD-4: Replay by snapshot_id
+
+Pass criteria:
+
+1. When `snapshot_store=on`, VM can replay by exact `snapshot_id`.
+2. When `snapshot_store=off`, check is `N/A`.
+
+Fail criteria:
+
+1. `snapshot_store=on` and replay cannot locate/execute snapshot.
+
+Minimal transcript:
+
+```text
+User: Replay snapshot 01H...
+VM: using snapshot_id=01H...
+```
+
+### RD-5: Validation gates enforced
+
+Pass criteria:
+
+1. VM rejects `record_count=0`.
+2. VM rejects chain/asset mismatch.
+3. VM rejects missing required fields (`snapshot_at`, `snapshot_source`, `records`).
+4. VM rejects unrecognized schema version.
+
+Fail criteria:
+
+1. Any invalid snapshot executes without explicit warning/failure.
+
+Minimal transcript:
+
+```text
+VM: failed - snapshot validation: record_count must be > 0
+```
+
+### RD-6: Extended real-data run report required
+
+Pass criteria:
+
+1. Report includes `Run`, `Data`, `Events`, and `Bindings` blocks.
+2. `Data` includes `selection_policy`, `fallback_used`, and `rejected_count`.
+
+Fail criteria:
+
+1. Partial report shape in real-data mode.
+
+Minimal transcript:
+
+```text
+Run:
+  status: success
+Data:
+  selection_policy: max(net_apy)
+  fallback_used: none
+  rejected_count: 1
+Events:
+  - candidate(...)
+Bindings:
+  best_market: ...
+```
+
 ## VM harness checklist (agent skill)
 
 Use this when embedding the Grimoire VM inside an agent skill or prompt.

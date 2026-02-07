@@ -59,6 +59,7 @@ Options:
 - `-p, --params <json>` — parameters as JSON
 - `--vault <address>` — vault address
 - `--chain <id>` — chain ID (default: 1)
+- `--json` — machine-readable run envelope (includes data provenance)
 - `--advisor-skills-dir <dir>` — directory to resolve advisor skills (repeatable)
 - `--advisory-pi` — force advisory steps via Pi SDK
 - `--advisory-replay <runId>` — replay advisory outputs from a previous run
@@ -67,6 +68,9 @@ Options:
 - `--advisory-thinking <level>` — Pi thinking level (off|low|medium|high)
 - `--advisory-tools <mode>` — advisory tools: none|read|coding (default: read)
 - `--pi-agent-dir <dir>` — Pi agent directory (defaults to ~/.pi/agent)
+- `--data-replay <mode>` — external data replay mode: `off`, `auto`, or `<runId|snapshotId>` (default: `auto`)
+- `--data-max-age <sec>` — maximum external data age in seconds (default: `3600`)
+- `--on-stale <fail|warn>` — stale data policy (default: `fail`)
 - `--state-dir <dir>` — directory for state database (default: `.grimoire/`)
 - `--no-state` — disable state persistence
 
@@ -75,6 +79,8 @@ Notes:
 - `--advisory-pi` forces the Pi SDK even if no model is configured (falls back to Pi’s first available model).
 - `--advisory-model` expects a Pi model ID (for example, `gpt-5.2`, `claude-sonnet-4-20250514`). Use `--advisory-provider` to pick the provider.
 - `--advisory-replay` requires state persistence (omit `--no-state`).
+- `--data-replay <runId|snapshotId>` requires state persistence (omit `--no-state`).
+- `--data-replay auto` records provenance by default and keeps replay metadata ready for deterministic debugging.
 - OAuth for `openai-codex` requires a Pi login (`pi` → `/login` → OpenAI Codex). Tokens are stored in `~/.pi/agent/auth.json` (or the directory passed via `--pi-agent-dir`).
 
 ## grimoire cast
@@ -107,6 +113,9 @@ Options:
 - `--advisory-thinking <level>` — Pi thinking level (off|low|medium|high)
 - `--advisory-tools <mode>` — advisory tools: none|read|coding (default: read)
 - `--pi-agent-dir <dir>` — Pi agent directory (defaults to ~/.pi/agent)
+- `--data-replay <mode>` — external data replay mode: `off`, `auto`, or `<runId|snapshotId>` (default: `auto` for dry-run/simulate mode, `off` for live execution)
+- `--data-max-age <sec>` — maximum external data age in seconds (default: `3600`)
+- `--on-stale <fail|warn>` — stale data policy (default: `fail`)
 - `--state-dir <dir>` — directory for state database (default: `.grimoire/`)
 - `--no-state` — disable state persistence
 
@@ -115,7 +124,28 @@ Notes:
 - `--advisory-pi` forces the Pi SDK even if no model is configured (falls back to Pi’s first available model).
 - `--advisory-model` expects a Pi model ID (for example, `gpt-5.2`, `claude-sonnet-4-20250514`). Use `--advisory-provider` to pick the provider.
 - `--advisory-replay` requires state persistence (omit `--no-state`).
+- `--data-replay <runId|snapshotId>` requires state persistence (omit `--no-state`).
+- Data replay defaults to `auto` for `cast --dry-run` and cast-simulation, and defaults to `off` for live `cast`.
 - OAuth for `openai-codex` requires a Pi login (`pi` → `/login` → OpenAI Codex). Tokens are stored in `~/.pi/agent/auth.json` (or the directory passed via `--pi-agent-dir`).
+
+## Run provenance output
+
+`simulate` and `cast` now emit a shared run envelope with:
+
+- `Run` block (`spell`, `trigger`, `status`, `run_id`, `duration_ms`)
+- `Data` block (provenance + replay + freshness policy)
+- `Events` block (emitted `emit` events)
+- `Bindings` block (final binding values)
+
+With `--json`, stdout contains full structured output including:
+
+- `data.provenance.schema_version` (`grimoire.runtime.provenance.v1`)
+- `data.provenance.input_params_hash`
+- `data.provenance.snapshot_hash` (when snapshot-like sources exist)
+- `data.provenance.chain_id` and optional `block_number`
+- `data.provenance.data_replay` metadata
+
+Provenance is also stored in persistent run records (when state is enabled), enabling `--data-replay`.
 
 ## grimoire history
 

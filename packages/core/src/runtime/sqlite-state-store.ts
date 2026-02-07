@@ -137,6 +137,7 @@ export class SqliteStateStore implements StateStore {
         error TEXT,
         duration INTEGER NOT NULL,
         metrics TEXT NOT NULL,
+        provenance TEXT,
         final_state TEXT NOT NULL,
         UNIQUE(spell_id, run_id)
       );
@@ -149,6 +150,16 @@ export class SqliteStateStore implements StateStore {
         UNIQUE(spell_id, run_id)
       );
     `);
+
+    this.ensureRunsSchema();
+  }
+
+  private ensureRunsSchema(): void {
+    const columns = this.db.query<{ name: string }, []>("PRAGMA table_info(runs)").all();
+    const hasProvenance = columns.some((column) => column.name === "provenance");
+    if (!hasProvenance) {
+      this.db.exec("ALTER TABLE runs ADD COLUMN provenance TEXT");
+    }
   }
 
   async load(spellId: string): Promise<Record<string, unknown> | null> {
@@ -174,8 +185,8 @@ export class SqliteStateStore implements StateStore {
     const tx = this.db.transaction(() => {
       this.db
         .query(
-          `INSERT INTO runs (spell_id, run_id, timestamp, success, error, duration, metrics, final_state)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO runs (spell_id, run_id, timestamp, success, error, duration, metrics, provenance, final_state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           spellId,
@@ -185,6 +196,7 @@ export class SqliteStateStore implements StateStore {
           run.error ?? null,
           run.duration,
           JSON.stringify(run.metrics),
+          run.provenance ? JSON.stringify(run.provenance) : null,
           JSON.stringify(run.finalState)
         );
 
@@ -257,6 +269,7 @@ interface RunRow {
   error: string | null;
   duration: number;
   metrics: string;
+  provenance: string | null;
   final_state: string;
 }
 
@@ -268,6 +281,7 @@ function rowToRunRecord(row: RunRow): RunRecord {
     error: row.error ?? undefined,
     duration: row.duration,
     metrics: JSON.parse(row.metrics),
+    provenance: row.provenance ? JSON.parse(row.provenance) : undefined,
     finalState: JSON.parse(row.final_state),
   };
 }

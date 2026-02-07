@@ -3,11 +3,18 @@
  */
 
 import { join } from "node:path";
-import { type ExecutionResult, SqliteStateStore, createRunRecord } from "@grimoirelabs/core";
+import {
+  type ExecutionResult,
+  type RunProvenance,
+  type RunRecord,
+  SqliteStateStore,
+  createRunRecord,
+} from "@grimoirelabs/core";
 
 interface StatePersistenceOptions {
   stateDir?: string;
   noState?: boolean;
+  buildRunProvenance?: (result: ExecutionResult) => RunProvenance | undefined;
 }
 
 /**
@@ -39,10 +46,23 @@ export async function withStatePersistence(
 
     // Persist results
     await store.save(spellId, result.finalState);
-    await store.addRun(spellId, createRunRecord(result));
+    await store.addRun(spellId, createRunRecord(result, options.buildRunProvenance?.(result)));
     await store.saveLedger(spellId, result.runId, result.ledgerEvents);
 
     return result;
+  } finally {
+    store.close();
+  }
+}
+
+export async function loadRunRecords(
+  spellId: string,
+  options: Pick<StatePersistenceOptions, "stateDir">
+): Promise<RunRecord[]> {
+  const dbPath = options.stateDir ? join(options.stateDir, "grimoire.db") : undefined;
+  const store = new SqliteStateStore({ dbPath });
+  try {
+    return await store.getRuns(spellId);
   } finally {
     store.close();
   }

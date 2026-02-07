@@ -36,6 +36,7 @@ export {
   type StateStore,
   type RunRecord,
   type RunMetrics,
+  type RunProvenance,
   createRunRecord,
 } from "./state-store.js";
 export { SqliteStateStore, type SqliteStateStoreOptions } from "./sqlite-state-store.js";

@@ -23,12 +23,22 @@ import {
   isTestnet,
   loadPrivateKey,
 } from "@grimoirelabs/core";
-import type { VenueAdapter } from "@grimoirelabs/core";
+import type { Provider, VenueAdapter } from "@grimoirelabs/core";
 import { adapters, createHyperliquidAdapter } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";
 import { resolveAdvisoryHandler } from "./advisory-handlers.js";
+import {
+  type ReplayResolution,
+  type RuntimeDataPolicy,
+  type RuntimeFlow,
+  buildRuntimeProvenanceManifest,
+  enforceFreshnessPolicy,
+  resolveDataPolicy,
+  resolveReplayParams,
+} from "./data-provenance.js";
+import { buildRunReportEnvelope, formatRunReportText } from "./run-report.js";
 import { withStatePersistence } from "./state-helpers.js";
 
 const DEFAULT_KEYSTORE_PATH = join(homedir(), ".grimoire", "keystore.json");
@@ -62,13 +72,17 @@ interface CastOptions {
   // State options
   stateDir?: string;
   noState?: boolean;
+  // Data replay and freshness options
+  dataReplay?: string;
+  dataMaxAge?: string;
+  onStale?: string;
+  state?: boolean;
 }
 
 export async function castCommand(spellPath: string, options: CastOptions): Promise<void> {
   const spinner = ora(`Loading ${spellPath}...`).start();
 
   try {
-    // Parse params
     let params: Record<string, unknown> = {};
     if (options.params) {
       try {
@@ -79,7 +93,6 @@ export async function castCommand(spellPath: string, options: CastOptions): Prom
       }
     }
 
-    // Compile spell
     spinner.text = "Compiling spell...";
     const compileResult = await compileFile(spellPath);
 
@@ -93,13 +106,30 @@ export async function castCommand(spellPath: string, options: CastOptions): Prom
 
     const spell = compileResult.ir;
     spinner.succeed(chalk.green("Spell compiled successfully"));
+    const noState = resolveNoState(options);
 
-    // Determine execution mode
     const hasExplicitKey = !!(options.privateKey || options.mnemonic || options.keystore);
     const hasEnvKey = !!(options.keyEnv && process.env[options.keyEnv]);
     const hasDefaultKeystore = !hasExplicitKey && !hasEnvKey && existsSync(DEFAULT_KEYSTORE_PATH);
     const hasKey = hasExplicitKey || hasEnvKey || hasDefaultKeystore;
     const mode: ExecutionMode = options.dryRun ? "dry-run" : hasKey ? "execute" : "simulate";
+
+    const defaultReplay = mode === "execute" ? "off" : "auto";
+    const dataPolicy = resolveDataPolicy({
+      defaultReplay,
+      dataReplay: options.dataReplay,
+      dataMaxAge: options.dataMaxAge,
+      onStale: options.onStale,
+    });
+
+    const replayResolution = await resolveReplayParams({
+      spellId: spell.id,
+      params,
+      stateDir: options.stateDir,
+      noState,
+      policy: dataPolicy,
+    });
+    params = replayResolution.params;
 
     if (options.privateKey || options.mnemonic) {
       console.log(
@@ -109,7 +139,6 @@ export async function castCommand(spellPath: string, options: CastOptions): Prom
       );
     }
 
-    // Show spell info
     console.log();
     console.log(chalk.cyan("📜 Spell Info:"));
     console.log(`  ${chalk.dim("Name:")} ${spell.meta.name}`);
@@ -117,7 +146,6 @@ export async function castCommand(spellPath: string, options: CastOptions): Prom
     console.log(`  ${chalk.dim("Steps:")} ${spell.steps.length}`);
     console.log(`  ${chalk.dim("Mode:")} ${mode}`);
 
-    // Show params being used
     if (spell.params.length > 0) {
       console.log();
       console.log(chalk.cyan("📊 Parameters:"));
@@ -136,12 +164,29 @@ export async function castCommand(spellPath: string, options: CastOptions): Prom
     console.log(`  ${chalk.dim("Chain:")} ${chainName} (${chainId})`);
     console.log(`  ${chalk.dim("Testnet:")} ${isTest ? "Yes" : "No"}`);
 
-    // If we have a key, set up wallet execution
     if (hasKey && mode !== "simulate") {
-      await executeWithWallet(spell, params, options, chainId, isTest);
+      await executeWithWallet(
+        spell,
+        params,
+        options,
+        noState,
+        chainId,
+        isTest,
+        dataPolicy,
+        replayResolution
+      );
     } else {
-      // Simulation mode (existing behavior)
-      await executeSimulation(spell, params, options, chainId);
+      const runtimeFlow: RuntimeFlow = mode === "dry-run" ? "cast_dry_run" : "simulate";
+      await executeSimulation(
+        spell,
+        params,
+        options,
+        noState,
+        chainId,
+        runtimeFlow,
+        dataPolicy,
+        replayResolution
+      );
     }
   } catch (error) {
     spinner.fail(chalk.red(`Cast failed: ${(error as Error).message}`));
@@ -152,19 +197,18 @@ export async function castCommand(spellPath: string, options: CastOptions): Prom
   }
 }
 
-/**
- * Execute spell with wallet (live execution)
- */
 async function executeWithWallet(
   spell: SpellIR,
   params: Record<string, unknown>,
   options: CastOptions,
+  noState: boolean,
   chainId: number,
-  isTest: boolean
+  isTest: boolean,
+  dataPolicy: RuntimeDataPolicy,
+  replayResolution: ReplayResolution
 ): Promise<void> {
   const spinner = ora("Setting up wallet...").start();
 
-  // Load wallet
   let keyConfig: KeyConfig;
   if (options.privateKey) {
     keyConfig = { type: "raw", source: options.privateKey };
@@ -173,7 +217,6 @@ async function executeWithWallet(
   } else if (options.mnemonic) {
     keyConfig = { type: "mnemonic", source: options.mnemonic };
   } else {
-    // Resolve keystore: explicit --keystore or default path
     const keystorePath = options.keystore ?? DEFAULT_KEYSTORE_PATH;
     if (!existsSync(keystorePath)) {
       spinner.fail(chalk.red(`No key provided and no keystore found at ${keystorePath}`));
@@ -191,36 +234,32 @@ async function executeWithWallet(
     keyConfig = { type: "keystore", source: keystoreJson, password };
   }
 
-  // Wire Hyperliquid adapter with extracted private key
   let configuredAdapters: VenueAdapter[] = adapters;
   try {
     const rawKey = loadPrivateKey(keyConfig);
-    configuredAdapters = adapters.map((a) => {
-      if (a.meta.name === "hyperliquid") {
+    configuredAdapters = adapters.map((adapter) => {
+      if (adapter.meta.name === "hyperliquid") {
         return createHyperliquidAdapter({
           privateKey: rawKey,
           assetMap: { ETH: 4 },
         });
       }
-      return a;
+      return adapter;
     });
   } catch {
-    // If key extraction fails (e.g. mnemonic), keep default adapters
+    // Keep default adapters if key extraction fails.
   }
 
-  // Get RPC URL
   const rpcUrl = options.rpcUrl ?? process.env.RPC_URL;
   if (!rpcUrl) {
     spinner.warn(chalk.yellow("No RPC URL provided, using default public RPC"));
   }
 
-  // Create provider and wallet
   const provider = createProvider(chainId, rpcUrl);
   const wallet = createWalletFromConfig(keyConfig, chainId, provider.rpcUrl);
 
   spinner.succeed(chalk.green(`Wallet loaded: ${wallet.address}`));
 
-  // Check wallet balance
   const balance = await provider.getBalance(wallet.address);
   console.log(
     `  ${chalk.dim("Balance:")} ${formatWei(balance)} ${getNativeCurrencySymbol(chainId)}`
@@ -230,11 +269,9 @@ async function executeWithWallet(
     console.log(chalk.yellow(`  ⚠️  Wallet has no ${getNativeCurrencySymbol(chainId)} for gas`));
   }
 
-  // Vault address (use wallet address if not provided)
   const vault = (options.vault ?? wallet.address) as Address;
   console.log(`  ${chalk.dim("Vault:")} ${vault}`);
 
-  // Mainnet warning
   if (!isTest) {
     console.log();
     console.log(chalk.red("⚠️  WARNING: This is MAINNET"));
@@ -242,6 +279,7 @@ async function executeWithWallet(
   }
 
   const executionMode: ExecutionMode = options.dryRun ? "dry-run" : "execute";
+  const runtimeMode = executionMode === "dry-run" ? "cast_dry_run" : "cast_execute";
   const gasMultiplier = options.gasMultiplier ? Number.parseFloat(options.gasMultiplier) : 1.1;
   const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir) ?? [];
   const onAdvisory = await resolveAdvisoryHandler(spell.id, {
@@ -253,10 +291,25 @@ async function executeWithWallet(
     advisoryTools: options.advisoryTools,
     advisorSkillsDirs,
     stateDir: options.stateDir,
-    noState: options.noState,
+    noState,
     agentDir: options.piAgentDir,
     cwd: process.cwd(),
   });
+
+  const provenance = buildRuntimeProvenanceManifest({
+    runtimeMode,
+    chainId,
+    policy: dataPolicy,
+    replay: replayResolution,
+    params,
+    blockNumber: await safeGetBlockNumber(provider),
+    rpcUrl: provider.rpcUrl,
+  });
+
+  const freshnessWarnings = enforceFreshnessPolicy(provenance);
+  for (const warning of freshnessWarnings) {
+    console.log(chalk.yellow(`Warning: ${warning}`));
+  }
 
   const confirmCallback =
     options.skipConfirm || isTest
@@ -271,7 +324,11 @@ async function executeWithWallet(
 
   const execResult = await withStatePersistence(
     spell.id,
-    { stateDir: options.stateDir, noState: options.noState },
+    {
+      stateDir: options.stateDir,
+      noState,
+      buildRunProvenance: () => provenance,
+    },
     async (persistentState) => {
       return execute({
         spell,
@@ -302,39 +359,48 @@ async function executeWithWallet(
     console.log(chalk.red(`Execution failed: ${execResult.error}`));
   }
 
-  // Show execution summary
+  const report = buildRunReportEnvelope({
+    spellName: spell.meta.name,
+    result: execResult,
+    provenance,
+  });
+
   console.log();
-  console.log(chalk.cyan("📊 Execution Summary:"));
-  console.log(`  ${chalk.dim("Run ID:")} ${execResult.runId}`);
-  console.log(`  ${chalk.dim("Duration:")} ${execResult.duration}ms`);
-  console.log(`  ${chalk.dim("Steps executed:")} ${execResult.metrics.stepsExecuted}`);
-  console.log(`  ${chalk.dim("Actions executed:")} ${execResult.metrics.actionsExecuted}`);
-
-  if (execResult.metrics.gasUsed > 0n) {
-    console.log(`  ${chalk.dim("Gas used:")} ${execResult.metrics.gasUsed.toString()}`);
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(formatRunReportText(report));
   }
-
-  if (execResult.metrics.errors > 0) {
-    console.log(`  ${chalk.red("Errors:")} ${execResult.metrics.errors}`);
-  }
-
-  showFinalState(execResult.finalState);
 
   if (!execResult.success) {
     process.exit(1);
   }
 }
 
-/**
- * Execute spell in simulation mode (no wallet)
- */
 async function executeSimulation(
   spell: SpellIR,
   params: Record<string, unknown>,
   options: CastOptions,
-  chainId: number
+  noState: boolean,
+  chainId: number,
+  runtimeMode: RuntimeFlow,
+  dataPolicy: RuntimeDataPolicy,
+  replayResolution: ReplayResolution
 ): Promise<void> {
   const spinner = ora("Running simulation...").start();
+
+  const provenance = buildRuntimeProvenanceManifest({
+    runtimeMode,
+    chainId,
+    policy: dataPolicy,
+    replay: replayResolution,
+    params,
+  });
+
+  const freshnessWarnings = enforceFreshnessPolicy(provenance);
+  for (const warning of freshnessWarnings) {
+    console.log(chalk.yellow(`Warning: ${warning}`));
+  }
 
   const vault = (options.vault ?? "0x0000000000000000000000000000000000000000") as Address;
   const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir) ?? [];
@@ -347,14 +413,18 @@ async function executeSimulation(
     advisoryTools: options.advisoryTools,
     advisorSkillsDirs,
     stateDir: options.stateDir,
-    noState: options.noState,
+    noState,
     agentDir: options.piAgentDir,
     cwd: process.cwd(),
   });
 
   const result = await withStatePersistence(
     spell.id,
-    { stateDir: options.stateDir, noState: options.noState },
+    {
+      stateDir: options.stateDir,
+      noState,
+      buildRunProvenance: () => provenance,
+    },
     async (persistentState) => {
       return execute({
         spell,
@@ -376,45 +446,32 @@ async function executeSimulation(
     spinner.fail(chalk.red(`Simulation failed: ${result.error}`));
   }
 
-  // Show execution summary
+  const report = buildRunReportEnvelope({
+    spellName: spell.meta.name,
+    result,
+    provenance,
+  });
+
   console.log();
-  console.log(chalk.cyan("📊 Execution Summary:"));
-  console.log(`  ${chalk.dim("Run ID:")} ${result.runId}`);
-  console.log(`  ${chalk.dim("Duration:")} ${result.duration}ms`);
-  console.log(`  ${chalk.dim("Steps executed:")} ${result.metrics.stepsExecuted}`);
-  console.log(`  ${chalk.dim("Actions executed:")} ${result.metrics.actionsExecuted}`);
-
-  if (result.metrics.gasUsed > 0n) {
-    console.log(`  ${chalk.dim("Gas used:")} ${result.metrics.gasUsed.toString()}`);
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(formatRunReportText(report));
   }
-
-  if (result.metrics.errors > 0) {
-    console.log(`  ${chalk.red("Errors:")} ${result.metrics.errors}`);
-  }
-
-  showFinalState(result.finalState);
 
   if (!result.success) {
     process.exit(1);
   }
 }
 
-/**
- * Show final state if any
- */
-function showFinalState(finalState: Record<string, unknown>): void {
-  if (Object.keys(finalState).length > 0) {
-    console.log();
-    console.log(chalk.cyan("📦 Final State:"));
-    for (const [key, value] of Object.entries(finalState)) {
-      console.log(`  ${chalk.dim(key)}: ${JSON.stringify(value)}`);
-    }
+async function safeGetBlockNumber(provider: Provider): Promise<bigint | undefined> {
+  try {
+    return await provider.getBlockNumber();
+  } catch {
+    return undefined;
   }
 }
 
-/**
- * Resolve keystore password from env, interactive prompt, or error
- */
 async function resolveKeystorePassword(
   options: CastOptions,
   spinner: ReturnType<typeof ora>
@@ -438,9 +495,6 @@ async function resolveKeystorePassword(
   return null;
 }
 
-/**
- * Prompt for a password interactively (hides input)
- */
 async function promptPassword(message: string): Promise<string> {
   return new Promise((resolve) => {
     process.stdout.write(message);
@@ -465,9 +519,6 @@ async function promptPassword(message: string): Promise<string> {
   });
 }
 
-/**
- * Prompt for confirmation
- */
 async function confirmPrompt(message: string): Promise<boolean> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -481,4 +532,10 @@ async function confirmPrompt(message: string): Promise<boolean> {
       resolve(normalized === "yes" || normalized === "y");
     });
   });
+}
+
+function resolveNoState(options: { noState?: boolean; state?: boolean }): boolean {
+  if (typeof options.noState === "boolean") return options.noState;
+  if (options.state === false) return true;
+  return false;
 }
