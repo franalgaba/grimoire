@@ -253,6 +253,12 @@ const lifi = createLifiAdapter({
 
 Action constraints (`max_slippage`, `min_output`, `max_gas`) are enforced against quote/route metadata before execution.
 
+For custom `compose_execute`, `routeRequest.toAddress` is safety-checked:
+
+- defaults to `walletAddress` when omitted
+- must match `walletAddress` by default
+- can be intentionally overridden by setting `allowExternalToAddress: true` (or `allow_external_to_address: true`) in the request
+
 ## Execution types
 
 - `executionType: "evm"` for on-chain transactions (Aave, Morpho, Uniswap, Across)

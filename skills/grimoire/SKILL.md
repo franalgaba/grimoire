@@ -17,7 +17,7 @@ The Grimoire CLI compiles, validates, simulates, and executes `.spell` strategy 
 - **VM mode** runs inside an agent session and is best-effort. Use the `grimoire-vm` skill for in-agent execution.
 - **Deterministic runtime** runs via the CLI. This skill covers that runtime.
 
-For VM prototyping with snapshots, use the venue skills (`grimoire-aave`, `grimoire-uniswap`, `grimoire-morpho-blue`, `grimoire-hyperliquid`) with `--format spell`.
+For VM prototyping with snapshots, use the venue skills (`grimoire-aave`, `grimoire-uniswap`, `grimoire-morpho-blue`, `grimoire-hyperliquid`) with `--format spell`. For adapter-execution venue guidance, also use `grimoire-yellow` and `grimoire-lifi`.
 
 ## Commands
 
@@ -64,6 +64,7 @@ grimoire simulate <spell> [-p <json>] [--vault <address>] [--chain <id>] [--stat
   [--advisor-skills-dir <dir>...]
   [--advisory-pi] [--advisory-replay <runId>] [--advisory-provider <name>] [--advisory-model <id>]
   [--advisory-thinking <level>] [--advisory-tools <mode>] [--pi-agent-dir <dir>]
+  [--ens-name <name>] [--ens-rpc-url <url>]
 ```
 
 ### grimoire cast
@@ -76,7 +77,8 @@ grimoire cast <spell> [-p <json>] [--vault <address>] [--chain <id>] \
   [--rpc-url <url>] [--gas-multiplier <n>] [--skip-confirm] [-v] [--json] \
   [--advisor-skills-dir <dir>...] [--state-dir <dir>] [--no-state] \
   [--advisory-pi] [--advisory-replay <runId>] [--advisory-provider <name>] [--advisory-model <id>] \
-  [--advisory-thinking <level>] [--advisory-tools <mode>] [--pi-agent-dir <dir>]
+  [--advisory-thinking <level>] [--advisory-tools <mode>] [--pi-agent-dir <dir>] \
+  [--ens-name <name>] [--ens-rpc-url <url>]
 ```
 
 ### grimoire venues
@@ -139,6 +141,7 @@ bun run packages/cli/src/index.ts <command> [args]
 - `PRIVATE_KEY` - Wallet private key (default for `--key-env`)
 - `KEYSTORE_PASSWORD` - Keystore password (default for `--password-env`)
 - `RPC_URL` - JSON-RPC endpoint (fallback for `--rpc-url`)
+- `ENS_RPC_URL` - RPC endpoint used for ENS profile lookups (fallback for `--ens-rpc-url`)
 
 ## State Persistence
 

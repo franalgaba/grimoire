@@ -96,6 +96,8 @@ packages/
       morpho-blue.ts
       hyperliquid.ts
       across.ts
+      yellow.ts
+      lifi.ts
       cli/                   # per-venue CLIs
   cli/                       # Grimoire CLI
   sdk/                       # (WIP) SDK for external integrations
@@ -222,6 +224,8 @@ Supported adapters:
 - `morpho_blue` - isolated lending markets
 - `hyperliquid` (offchain) - spot + perps via API
 - `across` (bridge) - cross-chain bridging
+- `yellow` (offchain) - NitroRPC app-session lifecycle
+- `lifi` (offchain) - route-based swap and bridging
 
 Adapters can return multi-transaction plans to handle approvals. Offchain venues implement `executeAction`.
 
@@ -331,6 +335,8 @@ Skills live in `skills/` and provide LLM-consumable context:
 - `skills/grimoire-uniswap/` - Uniswap V3/V4 venue CLI
 - `skills/grimoire-morpho-blue/` - Morpho Blue venue CLI + default markets
 - `skills/grimoire-hyperliquid/` - Hyperliquid venue CLI
+- `skills/grimoire-yellow/` - Yellow session lifecycle adapter usage
+- `skills/grimoire-lifi/` - LI.FI swap/bridge/compose adapter usage
 
 Keep docs and skills in sync with code changes:
 

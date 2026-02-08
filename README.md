@@ -110,7 +110,7 @@ spell YieldOptimizer
 - **Human-readable DSL** with Python-like indentation
 - **Explicit constraints** and limits via `with` and `limits`
 - **Adapter-based venues** (SDKs live in `@grimoirelabs/venues`)
-- **Onchain + offchain** actions (EVM + Hyperliquid)
+- **Onchain + offchain** actions (EVM + Hyperliquid + Yellow + LI.FI)
 - **Judgment boundary** with `**...**` and `advise`
 - **Structured control flow** (loops, conditionals, try/catch, atomic)
 - **State persistence** and run history for deterministic execution
@@ -122,25 +122,22 @@ The `spells/defihack/` folder provides one coherent flow that maps to multiple t
 
 | Track | Integration | Spell path |
 |---|---|---|
-| Yellow Network | `yellow` offchain app-session lifecycle | `spells/defihack/yellow-session-only.spell` |
-| Uniswap Foundation (v4) | `uniswap_v4.swap` with explicit constraints | `spells/defihack/uniswap-v4-rebalance.spell` |
-| LI.FI | `lifi.bridge` / `lifi` custom compose flow | `spells/defihack/lifi-crosschain-rebalance.spell` |
-| ENS | CLI ENS profile hydration (`--ens-name`) | `spells/defihack/session-vault.spell` |
+| Yellow Network | `yellow` offchain app-session lifecycle | `spells/defihack/yellow-session-track.spell` |
+| Uniswap Foundation (v4) + LI.FI | unified liquidity flow with shared skill | `spells/defihack/liquidity-mesh-track.spell` |
+| Prompt-first E2E | VM creation prompts + deterministic CLI validation | `spells/defihack/README.md` |
 
 Primary end-to-end runbook:
 
 ```bash
-grimoire simulate spells/defihack/session-vault.spell \
-  --ens-name <name.eth> \
-  --ens-rpc-url <rpc>
-
-grimoire cast spells/defihack/session-vault.spell \
-  --dry-run \
-  --ens-name <name.eth> \
-  --ens-rpc-url <rpc> \
-  --key-env PRIVATE_KEY \
-  --rpc-url <rpc>
+cd packages/cli
+bun run --filter @grimoirelabs/cli dev compile-all ../../spells/defihack --json
+bun run --filter @grimoirelabs/cli dev simulate ../../spells/defihack/yellow-session-track.spell --no-state --json
+bun run --filter @grimoirelabs/cli dev simulate ../../spells/defihack/liquidity-mesh-track.spell --no-state --json
+bun run --filter @grimoirelabs/cli dev cast ../../spells/defihack/yellow-session-track.spell --dry-run --no-state --json
+bun run --filter @grimoirelabs/cli dev cast ../../spells/defihack/liquidity-mesh-track.spell --dry-run --no-state --json
 ```
+
+ENS profile hydration is available on CLI runs via `--ens-name` and `--ens-rpc-url`.
 
 ## Documentation
 
