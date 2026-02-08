@@ -71,6 +71,8 @@ Options:
 - `--data-replay <mode>` — external data replay mode: `off`, `auto`, or `<runId|snapshotId>` (default: `auto`)
 - `--data-max-age <sec>` — maximum external data age in seconds (default: `3600`)
 - `--on-stale <fail|warn>` — stale data policy (default: `fail`)
+- `--ens-name <name>` — ENS name to hydrate params from ENS text records and resolved address
+- `--ens-rpc-url <url>` — RPC URL for ENS lookups (default: `ENS_RPC_URL`, fallback: `RPC_URL`)
 - `--state-dir <dir>` — directory for state database (default: `.grimoire/`)
 - `--no-state` — disable state persistence
 
@@ -116,6 +118,8 @@ Options:
 - `--data-replay <mode>` — external data replay mode: `off`, `auto`, or `<runId|snapshotId>` (default: `auto` for dry-run/simulate mode, `off` for live execution)
 - `--data-max-age <sec>` — maximum external data age in seconds (default: `3600`)
 - `--on-stale <fail|warn>` — stale data policy (default: `fail`)
+- `--ens-name <name>` — ENS name to hydrate params from ENS text records and resolved address
+- `--ens-rpc-url <url>` — RPC URL for ENS lookups (default: `ENS_RPC_URL`, fallback: `RPC_URL`)
 - `--state-dir <dir>` — directory for state database (default: `.grimoire/`)
 - `--no-state` — disable state persistence
 

@@ -643,6 +643,15 @@ describe("Transformer", () => {
       const result = transform(ast);
       const actionStep = findStep(result.steps, "action");
       expect(actionStep).toBeDefined();
+      const action = actionStep?.action as
+        | { type?: string; op?: string; args?: Record<string, unknown> }
+        | undefined;
+      expect(action?.type).toBe("custom");
+      expect(action?.op).toBe("custom_action");
+      expect(action?.args).toEqual({
+        arg0: "arg1",
+        arg1: "arg2",
+      });
     });
 
     test("transforms query method call to compute", () => {

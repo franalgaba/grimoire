@@ -116,6 +116,32 @@ spell YieldOptimizer
 - **State persistence** and run history for deterministic execution
 - **Two execution environments**: in-agent VM and deterministic runtime
 
+## DefiHack Multi-Track
+
+The `spells/defihack/` folder provides one coherent flow that maps to multiple tracks:
+
+| Track | Integration | Spell path |
+|---|---|---|
+| Yellow Network | `yellow` offchain app-session lifecycle | `spells/defihack/yellow-session-only.spell` |
+| Uniswap Foundation (v4) | `uniswap_v4.swap` with explicit constraints | `spells/defihack/uniswap-v4-rebalance.spell` |
+| LI.FI | `lifi.bridge` / `lifi` custom compose flow | `spells/defihack/lifi-crosschain-rebalance.spell` |
+| ENS | CLI ENS profile hydration (`--ens-name`) | `spells/defihack/session-vault.spell` |
+
+Primary end-to-end runbook:
+
+```bash
+grimoire simulate spells/defihack/session-vault.spell \
+  --ens-name <name.eth> \
+  --ens-rpc-url <rpc>
+
+grimoire cast spells/defihack/session-vault.spell \
+  --dry-run \
+  --ens-name <name.eth> \
+  --ens-rpc-url <rpc> \
+  --key-env PRIVATE_KEY \
+  --rpc-url <rpc>
+```
+
 ## Documentation
 
 - Start here: [docs/README.md](./docs/README.md)

@@ -115,6 +115,76 @@ describe("Action Step", () => {
     }
   });
 
+  test("resolves custom action args recursively", async () => {
+    const step: ActionStep = {
+      kind: "action",
+      id: "action_custom",
+      action: {
+        type: "custom",
+        venue: "yellow",
+        op: "session_update",
+        args: {
+          version: {
+            kind: "binary",
+            op: "+",
+            left: { kind: "param", name: "version" },
+            right: { kind: "literal", value: 1, type: "int" },
+          },
+          payload: { kind: "param", name: "payload" },
+        },
+      },
+      constraints: {},
+      dependsOn: [],
+      onFailure: "revert",
+    };
+
+    const spell = {
+      ...createSpell(),
+      params: [
+        { name: "version", type: "number" as const, default: 2 },
+        {
+          name: "payload",
+          type: "string" as const,
+          default: {
+            intent: "operate",
+            allocations: [{ account: "0xabc", amount: "100" }],
+          },
+        },
+      ],
+    };
+
+    const ctx = createContext({
+      spell,
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+      params: {
+        version: 2,
+        payload: {
+          intent: "operate",
+          allocations: [{ account: "0xabc", amount: "100" }],
+        },
+      },
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+
+    const result = await executeActionStep(step, ctx, ledger, { mode: "simulate" });
+    expect(result.success).toBe(true);
+
+    const simulated = ledger.getEntries().find((entry) => entry.event.type === "action_simulated");
+    if (!simulated || simulated.event.type !== "action_simulated") {
+      throw new Error("Missing simulated action event");
+    }
+
+    expect(simulated.event.action.type).toBe("custom");
+    if (simulated.event.action.type === "custom") {
+      expect(simulated.event.action.args.version).toBe(3);
+      expect(simulated.event.action.args.payload).toEqual({
+        intent: "operate",
+        allocations: [{ account: "0xabc", amount: "100" }],
+      });
+    }
+  });
+
   test("executes action through executor", async () => {
     const step: ActionStep = {
       kind: "action",

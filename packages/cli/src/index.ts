@@ -78,6 +78,8 @@ program
   )
   .option("--data-max-age <sec>", "Maximum external data age in seconds (default: 3600)")
   .option("--on-stale <policy>", "Stale data policy: fail|warn (default: fail)")
+  .option("--ens-name <name>", "ENS name to hydrate strategy params from text records")
+  .option("--ens-rpc-url <url>", "RPC URL for ENS lookups (defaults to ENS_RPC_URL or RPC_URL)")
   .option("--state-dir <dir>", "Directory for state database")
   .option("--no-state", "Disable state persistence")
   .action(simulateCommand);
@@ -113,6 +115,8 @@ program
   )
   .option("--data-max-age <sec>", "Maximum external data age in seconds (default: 3600)")
   .option("--on-stale <policy>", "Stale data policy: fail|warn (default: fail)")
+  .option("--ens-name <name>", "ENS name to hydrate strategy params from text records")
+  .option("--ens-rpc-url <url>", "RPC URL for ENS lookups (defaults to ENS_RPC_URL or RPC_URL)")
   .option("--state-dir <dir>", "Directory for state database")
   .option("--no-state", "Disable state persistence")
   .action(castCommand);

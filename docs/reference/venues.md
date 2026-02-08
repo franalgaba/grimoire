@@ -37,6 +37,8 @@ npm i @grimoirelabs/venues
 - `uniswap_v4` — Uniswap V4 swaps via Universal Router + Permit2
 - `hyperliquid` — Hyperliquid spot/perps (offchain)
 - `across` — Across cross-chain bridge
+- `yellow` — Yellow NitroRPC app-session lifecycle (offchain)
+- `lifi` — LI.FI route/quote execution for swap + bridge (offchain)
 
 ## Usage
 
@@ -210,7 +212,48 @@ const hyperliquid = createHyperliquidAdapter({
 
 > Hyperliquid requires a private key and executes offchain orders via the Hyperliquid API. No gas needed.
 
+### Yellow (offchain)
+
+Yellow adapter supports custom session operations:
+
+- `session_open` -> `create_app_session`
+- `session_update` -> `submit_app_state`
+- `session_close_settle` -> `close_app_session`
+- `session_transfer` helper -> allocation update + submit
+
+State update invariants enforced by the adapter:
+
+- `intent` must be one of `operate`, `deposit`, `withdraw`
+- `version` must increment by exactly 1 for updates
+- `allocations` must be non-empty for updates
+- signatures must satisfy configured quorum/signer set
+
+```ts
+import { createYellowAdapter } from "@grimoirelabs/venues";
+
+const yellow = createYellowAdapter({
+  rpcUrl: process.env.YELLOW_RPC_URL,
+  appId: process.env.YELLOW_APP_ID,
+});
+```
+
+### LI.FI (offchain)
+
+LI.FI adapter supports native Grimoire `swap` and `bridge` actions and optional custom `compose_execute`.
+
+```ts
+import { createLifiAdapter } from "@grimoirelabs/venues";
+
+const lifi = createLifiAdapter({
+  apiUrl: process.env.LIFI_API_URL, // default: https://li.quest/v1
+  apiKey: process.env.LIFI_API_KEY,
+  integrator: process.env.LIFI_INTEGRATOR,
+});
+```
+
+Action constraints (`max_slippage`, `min_output`, `max_gas`) are enforced against quote/route metadata before execution.
+
 ## Execution types
 
 - `executionType: "evm"` for on-chain transactions (Aave, Morpho, Uniswap, Across)
-- `executionType: "offchain"` for venues like Hyperliquid
+- `executionType: "offchain"` for venues like Hyperliquid, Yellow, and LI.FI

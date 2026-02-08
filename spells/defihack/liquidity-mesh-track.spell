@@ -1,0 +1,43 @@
+# Track-focused liquidity spell:
+# unifies Uniswap v4 + LI.FI under one skill, independent of Yellow session logic
+
+spell LiquidityMeshTrack
+
+  version: "1.0.0"
+  description: "Unified Uniswap/LI.FI liquidity routing with shared skill defaults"
+  assets: [USDC, ETH]
+
+  params:
+    rebalance_amount: 1200000
+    min_swap_out: 1020000
+    bridge_amount: 600000
+    bridge_to_chain: 8453
+    min_bridge_out: 540000
+    should_bridge: true
+
+  state:
+    ephemeral:
+      cycle: 0
+
+  venues:
+    uniswap_v4: @uniswap_v4
+    lifi: @lifi
+
+  skills:
+    liquidity_mesh:
+      type: bridge
+      adapters: [uniswap_v4, lifi]
+      default_constraints:
+        max_slippage: 80
+
+  on manual:
+    repeat 2:
+      cycle = cycle + 1
+      uniswap_v4.swap(USDC, ETH, params.rebalance_amount) using liquidity_mesh with min_out=params.min_swap_out
+      emit mesh_swap(cycle=cycle, amount=params.rebalance_amount, min_out=params.min_swap_out)
+
+      if params.should_bridge:
+        lifi.bridge(USDC, params.bridge_amount, params.bridge_to_chain) using liquidity_mesh with min_out=params.min_bridge_out
+        emit mesh_bridge(cycle=cycle, amount=params.bridge_amount, to_chain=params.bridge_to_chain)
+
+    emit mesh_summary(cycles=cycle)

@@ -781,6 +781,7 @@ export class Transformer {
     // Determine action type from method name
     const method = stmt.method.toLowerCase();
     let actionType = method;
+    let customOp: string | undefined;
 
     // Map common method names to action types
     const methodMap: Record<string, string> = {
@@ -799,12 +800,19 @@ export class Transformer {
       get_rates: "query",
     };
 
-    actionType = methodMap[method] ?? method;
+    const mappedActionType = methodMap[method];
+    if (mappedActionType) {
+      actionType = mappedActionType;
+    } else {
+      actionType = "custom";
+      customOp = stmt.method;
+    }
 
     // Build action object
-    const action: Record<string, unknown> = {
-      type: actionType,
-    };
+    const action: Record<string, unknown> = { type: actionType };
+    if (actionType === "custom" && customOp) {
+      action.op = customOp;
+    }
 
     // Extract venue from object
     if (stmt.object.kind === "identifier") {
@@ -900,11 +908,12 @@ export class Transformer {
           },
         },
       ];
-    } else {
-      // Generic mapping
+    } else if (actionType === "custom") {
+      const args: Record<string, unknown> = {};
       stmt.args.forEach((arg, i) => {
-        action[`arg${i}`] = this.exprToString(arg);
+        args[`arg${i}`] = this.exprToString(arg);
       });
+      action.args = args;
     }
 
     const step: Record<string, unknown> = {

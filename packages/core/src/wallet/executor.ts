@@ -263,6 +263,59 @@ export class Executor {
   }
 
   private async buildAction(action: Action): Promise<BuiltTransaction[]> {
+    if (action.type === "custom") {
+      const adapter = this.adapterRegistry.get(action.venue);
+      if (!adapter) {
+        throw new Error(`No adapter registered for custom action '${action.venue}.${action.op}'.`);
+      }
+
+      if (!adapter.meta.supportedChains.includes(this.provider.chainId)) {
+        throw new Error(
+          `Adapter '${adapter.meta.name}' does not support chain ${this.provider.chainId} for custom action '${action.op}'.`
+        );
+      }
+
+      if (adapter.meta.executionType === "offchain") {
+        if (adapter.buildAction) {
+          return this.normalizeBuildResult(
+            await adapter.buildAction(action, {
+              provider: this.provider,
+              walletAddress: this.wallet.address,
+              chainId: this.provider.chainId,
+              mode: this.options.mode,
+            })
+          );
+        }
+
+        if (!adapter.executeAction) {
+          throw new Error(
+            `Adapter '${adapter.meta.name}' cannot execute custom action '${action.op}'.`
+          );
+        }
+
+        return [
+          {
+            tx: {},
+            description: `Offchain custom action via ${adapter.meta.name}`,
+            action,
+          } as BuiltTransaction,
+        ];
+      }
+
+      if (!adapter.buildAction) {
+        throw new Error(`Adapter '${adapter.meta.name}' does not build custom EVM actions.`);
+      }
+
+      return this.normalizeBuildResult(
+        await adapter.buildAction(action, {
+          provider: this.provider,
+          walletAddress: this.wallet.address,
+          chainId: this.provider.chainId,
+          mode: this.options.mode,
+        })
+      );
+    }
+
     if ("venue" in action && action.venue) {
       const adapter = this.adapterRegistry.get(action.venue);
       if (adapter?.meta.supportedChains.includes(this.provider.chainId)) {

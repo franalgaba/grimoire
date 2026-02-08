@@ -115,12 +115,16 @@ describe("IR Generator", () => {
         { id: "stake", action: { type: "stake", venue: "aave", asset: "USDC", amount: "1" } },
         { id: "unstake", action: { type: "unstake", venue: "aave", asset: "USDC", amount: "1" } },
         { id: "claim", action: { type: "claim", venue: "aave" } },
+        {
+          id: "custom",
+          action: { type: "custom", venue: "aave", op: "session_open", args: { arg0: "1" } },
+        },
       ],
     };
 
     const result = generateIR(source);
     expect(result.success).toBe(true);
-    expect(result.ir?.steps.length).toBe(8);
+    expect(result.ir?.steps.length).toBe(9);
   });
 
   test("parses bridge to_chain expressions", () => {
@@ -266,5 +270,26 @@ describe("IR Generator", () => {
     const result = generateIR(source);
     expect(result.success).toBe(false);
     expect(result.errors.some((e) => e.code === "EXPRESSION_PARSE_ERROR")).toBe(true);
+  });
+
+  test("reports invalid custom actions", () => {
+    const missingVenue: SpellSource = {
+      ...baseSource,
+      steps: [{ id: "custom_missing_venue", action: { type: "custom", op: "x", args: {} } }],
+    };
+    const missingOp: SpellSource = {
+      ...baseSource,
+      steps: [
+        { id: "custom_missing_op", action: { type: "custom", venue: "aave", args: { arg0: "1" } } },
+      ],
+    };
+
+    const venueResult = generateIR(missingVenue);
+    const opResult = generateIR(missingOp);
+
+    expect(venueResult.success).toBe(false);
+    expect(venueResult.errors.some((e) => e.code === "MISSING_CUSTOM_VENUE")).toBe(true);
+    expect(opResult.success).toBe(false);
+    expect(opResult.errors.some((e) => e.code === "MISSING_CUSTOM_OP")).toBe(true);
   });
 });

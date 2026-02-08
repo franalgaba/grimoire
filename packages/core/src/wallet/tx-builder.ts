@@ -63,6 +63,10 @@ export class TransactionBuilder {
         return this.buildLend(action);
       case "withdraw":
         return this.buildWithdraw(action);
+      case "custom":
+        throw new Error(
+          `Custom action '${action.venue}.${action.op}' requires a matching venue adapter`
+        );
       default:
         throw new Error(`Unsupported action type: ${action.type}`);
     }
