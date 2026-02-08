@@ -228,4 +228,64 @@ describe("Executor", () => {
     expect(result.transactions[0]?.builtTx.description).toBe("Approve");
     expect(result.transactions[1]?.builtTx.description).toBe("Supply");
   });
+
+  test("fails custom action when no adapter handles it", async () => {
+    const executor = new Executor({
+      wallet: walletStub,
+      provider: providerStub,
+      mode: "simulate",
+      adapters: [],
+    });
+
+    const result = await executor.executeActions([
+      {
+        type: "custom",
+        venue: "yellow",
+        op: "session_open",
+        args: { arg0: 1 },
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("No adapter registered for custom action");
+  });
+
+  test("routes custom actions through venue adapters", async () => {
+    const adapter: VenueAdapter = {
+      meta: {
+        name: "yellow",
+        supportedChains: [1],
+        actions: ["custom"],
+        executionType: "offchain",
+      },
+      buildAction: async (action: Action) => ({
+        tx: { to: fromAddress, data: "0x", value: 0n },
+        description: `Custom ${"op" in action ? action.op : "unknown"}`,
+        action,
+      }),
+      executeAction: async () => ({
+        id: "yellow-1",
+        status: "submitted",
+      }),
+    };
+
+    const executor = new Executor({
+      wallet: walletStub,
+      provider: providerStub,
+      mode: "simulate",
+      adapters: [adapter],
+    });
+
+    const result = await executor.executeActions([
+      {
+        type: "custom",
+        venue: "yellow",
+        op: "session_open",
+        args: { arg0: 1 },
+      },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(result.transactions[0]?.builtTx.description).toContain("Custom session_open");
+  });
 });

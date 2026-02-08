@@ -148,5 +148,14 @@ describe("TransactionBuilder", () => {
         amount: amount1,
       })
     ).rejects.toThrow("Withdraw transactions require venue adapters");
+
+    await expect(
+      builder.buildAction({
+        type: "custom",
+        venue: "yellow",
+        op: "session_open",
+        args: { arg0: amount1 },
+      })
+    ).rejects.toThrow("requires a matching venue adapter");
   });
 });

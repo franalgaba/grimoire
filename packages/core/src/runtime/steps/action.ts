@@ -9,8 +9,10 @@ import type {
   ActionChainId,
   ActionConstraints,
   ActionConstraintsResolved,
+  CustomActionValue,
 } from "../../types/actions.js";
 import type { ExecutionContext, StepResult } from "../../types/execution.js";
+import type { Expression } from "../../types/expressions.js";
 import type { VenueAlias } from "../../types/primitives.js";
 import type { ActionStep } from "../../types/steps.js";
 import type { Executor } from "../../wallet/executor.js";
@@ -26,6 +28,21 @@ export interface ActionExecutionOptions {
   executor?: Executor;
   circuitBreakerManager?: CircuitBreakerManager;
 }
+
+const EXPRESSION_KINDS = new Set([
+  "literal",
+  "param",
+  "state",
+  "binding",
+  "item",
+  "index",
+  "binary",
+  "unary",
+  "ternary",
+  "call",
+  "array_access",
+  "property_access",
+]);
 
 export async function executeActionStep(
   step: ActionStep,
@@ -373,9 +390,59 @@ async function resolveAction(
     case "claim":
       return action;
 
+    case "custom":
+      return {
+        ...action,
+        args: await resolveCustomArgs(action.args, evalCtx),
+      } as Action;
+
     default:
       return action;
   }
+}
+
+async function resolveCustomArgs(
+  args: Record<string, CustomActionValue>,
+  evalCtx: ReturnType<typeof createEvalContext>
+): Promise<Record<string, CustomActionValue>> {
+  const resolved: Record<string, CustomActionValue> = {};
+  for (const [key, value] of Object.entries(args)) {
+    resolved[key] = await resolveCustomValue(value, evalCtx);
+  }
+  return resolved;
+}
+
+async function resolveCustomValue(
+  value: CustomActionValue,
+  evalCtx: ReturnType<typeof createEvalContext>
+): Promise<CustomActionValue> {
+  if (Array.isArray(value)) {
+    return Promise.all(value.map((item) => resolveCustomValue(item, evalCtx)));
+  }
+
+  if (isExpressionValue(value)) {
+    const evaluated = await evaluateAsync(value, evalCtx);
+    return evaluated as CustomActionValue;
+  }
+
+  if (value && typeof value === "object") {
+    const nested: Record<string, CustomActionValue> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      nested[key] = await resolveCustomValue(entry as CustomActionValue, evalCtx);
+    }
+    return nested;
+  }
+
+  return value;
+}
+
+function isExpressionValue(value: CustomActionValue): value is Expression {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    EXPRESSION_KINDS.has((value as { kind?: unknown }).kind as string)
+  );
 }
 
 async function resolveAmount(

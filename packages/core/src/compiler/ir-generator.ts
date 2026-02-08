@@ -3,7 +3,7 @@
  * Transforms SpellSource AST into SpellIR
  */
 
-import type { Action, ActionConstraints } from "../types/actions.js";
+import type { Action, ActionConstraints, CustomActionValue } from "../types/actions.js";
 import type { Expression } from "../types/expressions.js";
 import type {
   AdvisorDef,
@@ -763,10 +763,79 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
       } as Action;
     }
 
+    case "custom": {
+      const venue = raw.venue as string | undefined;
+      const op = raw.op as string | undefined;
+      const rawArgs = raw.args;
+
+      if (!venue) {
+        errors.push({
+          code: "MISSING_CUSTOM_VENUE",
+          message: "Custom action requires venue",
+        });
+        return null;
+      }
+
+      if (!op) {
+        errors.push({
+          code: "MISSING_CUSTOM_OP",
+          message: "Custom action requires op",
+        });
+        return null;
+      }
+
+      const args: Record<string, CustomActionValue> = {};
+      if (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)) {
+        for (const [key, value] of Object.entries(rawArgs)) {
+          args[key] = parseCustomActionValue(value, errors);
+        }
+      }
+
+      return {
+        type: "custom",
+        venue,
+        op,
+        args,
+      } as Action;
+    }
+
     default:
       errors.push({ code: "UNKNOWN_ACTION_TYPE", message: `Unknown action type '${type}'` });
       return null;
   }
+}
+
+function parseCustomActionValue(input: unknown, errors: CompilationError[]): CustomActionValue {
+  if (input === null) {
+    return null;
+  }
+
+  if (typeof input === "string" || typeof input === "number" || typeof input === "boolean") {
+    return parseExpressionSafe(input, errors);
+  }
+
+  if (typeof input === "bigint") {
+    return { kind: "literal", value: input, type: "int" };
+  }
+
+  if (Array.isArray(input)) {
+    return input.map((item) => parseCustomActionValue(item, errors));
+  }
+
+  if (typeof input === "object") {
+    // Preserve parsed expressions if already present.
+    if ("kind" in input && typeof (input as { kind?: unknown }).kind === "string") {
+      return input as CustomActionValue;
+    }
+
+    const out: Record<string, CustomActionValue> = {};
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      out[key] = parseCustomActionValue(value, errors);
+    }
+    return out;
+  }
+
+  return { kind: "literal", value: String(input), type: "string" };
 }
 
 /**

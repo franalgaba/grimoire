@@ -7,6 +7,7 @@ import { type Address, compileFile, execute } from "@grimoirelabs/core";
 import { adapters } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
+import { hydrateParamsFromEnsProfile, resolveEnsProfile } from "../lib/ens-profile.js";
 import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";
 import { resolveAdvisoryHandler } from "./advisory-handlers.js";
 import {
@@ -36,6 +37,8 @@ interface SimulateOptions {
   dataReplay?: string;
   dataMaxAge?: string;
   onStale?: string;
+  ensName?: string;
+  ensRpcUrl?: string;
   state?: boolean;
 }
 
@@ -51,6 +54,17 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
         spinner.fail(chalk.red("Invalid params JSON"));
         process.exit(1);
       }
+    }
+
+    if (options.ensName) {
+      spinner.text = `Resolving ENS profile ${options.ensName}...`;
+      const profile = await resolveEnsProfile(options.ensName, { rpcUrl: options.ensRpcUrl });
+      params = hydrateParamsFromEnsProfile(params, profile);
+      console.log(
+        chalk.dim(
+          `ENS profile ${profile.name} -> ${profile.address ?? "unresolved"} (risk=${profile.riskProfile ?? "n/a"}, slippage=${profile.maxSlippageBps ?? "n/a"})`
+        )
+      );
     }
 
     spinner.text = "Compiling spell...";

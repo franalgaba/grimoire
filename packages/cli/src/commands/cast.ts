@@ -27,6 +27,7 @@ import type { Provider, VenueAdapter } from "@grimoirelabs/core";
 import { adapters, createHyperliquidAdapter } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
+import { hydrateParamsFromEnsProfile, resolveEnsProfile } from "../lib/ens-profile.js";
 import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";
 import { resolveAdvisoryHandler } from "./advisory-handlers.js";
 import {
@@ -76,6 +77,9 @@ interface CastOptions {
   dataReplay?: string;
   dataMaxAge?: string;
   onStale?: string;
+  // ENS profile options
+  ensName?: string;
+  ensRpcUrl?: string;
   state?: boolean;
 }
 
@@ -91,6 +95,17 @@ export async function castCommand(spellPath: string, options: CastOptions): Prom
         spinner.fail(chalk.red("Invalid params JSON"));
         process.exit(1);
       }
+    }
+
+    if (options.ensName) {
+      spinner.text = `Resolving ENS profile ${options.ensName}...`;
+      const profile = await resolveEnsProfile(options.ensName, { rpcUrl: options.ensRpcUrl });
+      params = hydrateParamsFromEnsProfile(params, profile);
+      console.log(
+        chalk.dim(
+          `ENS profile ${profile.name} -> ${profile.address ?? "unresolved"} (risk=${profile.riskProfile ?? "n/a"}, slippage=${profile.maxSlippageBps ?? "n/a"})`
+        )
+      );
     }
 
     spinner.text = "Compiling spell...";

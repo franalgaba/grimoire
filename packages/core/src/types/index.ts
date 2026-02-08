@@ -73,6 +73,8 @@ export type {
   BridgeAction,
   ClaimAction,
   TransferAction,
+  CustomAction,
+  CustomActionValue,
   ActionConstraints,
   CalldataBundle,
   SimulationResult,

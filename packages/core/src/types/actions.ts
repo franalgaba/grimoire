@@ -32,6 +32,15 @@ export interface ActionConstraintsResolved {
 
 export type ActionAmount = Expression | bigint;
 export type ActionChainId = Expression | ChainId;
+export type CustomActionValue =
+  | Expression
+  | string
+  | number
+  | boolean
+  | bigint
+  | null
+  | CustomActionValue[]
+  | { [key: string]: CustomActionValue };
 
 type ActionBase =
   | SwapAction
@@ -44,7 +53,8 @@ type ActionBase =
   | BridgeAction
   | ClaimAction
   | TransferAction
-  | ApproveAction;
+  | ApproveAction
+  | CustomAction;
 
 /** All action types */
 export type Action = ActionBase & { constraints?: ActionConstraintsResolved };
@@ -141,6 +151,14 @@ export interface ApproveAction {
   asset: AssetId;
   amount: ActionAmount;
   spender: Address;
+}
+
+/** Generic custom action routed to venue adapters */
+export interface CustomAction {
+  type: "custom";
+  venue: string;
+  op: string;
+  args: Record<string, CustomActionValue>;
 }
 
 /** Result of building calldata */
