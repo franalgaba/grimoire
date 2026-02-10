@@ -1,5 +1,12 @@
 # @grimoirelabs/venues
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [969710a]
+  - @grimoirelabs/core@0.6.0
+
 ## 0.3.1
 
 ### Patch Changes
