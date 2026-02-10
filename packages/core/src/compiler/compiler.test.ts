@@ -107,13 +107,14 @@ describe("Expression Parser", () => {
 
 describe("Spell Compiler (Grimoire Syntax)", () => {
   test("compiles minimal spell", () => {
-    const source = `spell TestSpell
+    const source = `spell TestSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 42
-`;
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -127,18 +128,20 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles min_output/max_input constraints into IR", () => {
-    const source = `spell TestSpell
+    const source = `spell TestSpell {
 
   version: "1.0.0"
 
   assets: [USDC, ETH]
 
-  venues:
+  venues: {
     uniswap_v3: @uniswap_v3
+  }
 
-  on manual:
+  on manual: {
     uniswap_v3.swap(USDC, ETH, 1000) with min_output=900, max_input=1100
-`;
+  }
+}`;
     const result = compile(source);
     if (!result.success || !result.ir) {
       console.log("Errors:", result.errors);
@@ -162,18 +165,20 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles spell with venues and assets", () => {
-    const source = `spell SwapSpell
+    const source = `spell SwapSpell {
 
   version: "1.0.0"
 
   assets: [USDC, ETH]
 
-  venues:
+  venues: {
     swap: @uniswap
+  }
 
-  on manual:
+  on manual: {
     x = 100
-`;
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -185,17 +190,19 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles spell with params", () => {
-    const source = `spell ParamSpell
+    const source = `spell ParamSpell {
 
   version: "1.0.0"
 
-  params:
+  params: {
     amount: 1000
     threshold: 500
+  }
 
-  on manual:
+  on manual: {
     x = params.amount + params.threshold
-`;
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -208,17 +215,19 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles spell with limits", () => {
-    const source = `spell LimitSpell
+    const source = `spell LimitSpell {
 
   version: "1.0.0"
 
-  limits:
+  limits: {
     max_allocation: 50%
     min_threshold: 0.5%
+  }
 
-  on manual:
+  on manual: {
     x = 100
-`;
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -229,17 +238,19 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles spell with conditional", () => {
-    const source = `spell ConditionalSpell
+    const source = `spell ConditionalSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 100
-    if x > 50:
+    if x > 50 {
       y = 1
-    else:
+    } else {
       y = 0
-`;
+    }
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -250,14 +261,16 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles spell with for loop", () => {
-    const source = `spell LoopSpell
+    const source = `spell LoopSpell {
 
   version: "1.0.0"
 
-  on manual:
-    for item in items:
+  on manual: {
+    for item in items {
       x = item
-`;
+    }
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -268,13 +281,14 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles spell with emit", () => {
-    const source = `spell EmitSpell
+    const source = `spell EmitSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     emit done(value=42)
-`;
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -285,13 +299,14 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles spell with wait", () => {
-    const source = `spell WaitSpell
+    const source = `spell WaitSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     wait 60
-`;
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -302,13 +317,14 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles spell with halt", () => {
-    const source = `spell HaltSpell
+    const source = `spell HaltSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     halt "stopped"
-`;
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -319,13 +335,14 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles spell with hourly trigger", () => {
-    const source = `spell HourlySpell
+    const source = `spell HourlySpell {
 
   version: "1.0.0"
 
-  on hourly:
+  on hourly: {
     x = 1
-`;
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -336,13 +353,14 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles spell with daily trigger", () => {
-    const source = `spell DailySpell
+    const source = `spell DailySpell {
 
   version: "1.0.0"
 
-  on daily:
+  on daily: {
     x = 1
-`;
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);
@@ -367,31 +385,36 @@ describe("Spell Compiler (Grimoire Syntax)", () => {
   });
 
   test("compiles complex spell with multiple sections", () => {
-    const source = `spell ComplexSpell
+    const source = `spell ComplexSpell {
 
   version: "2.0.0"
   description: "A complex test spell"
   assets: [USDC, DAI, USDT]
 
-  params:
+  params: {
     min_amount: 100
     max_amount: 10000
+  }
 
-  limits:
+  limits: {
     max_per_venue: 50%
+  }
 
-  venues:
+  venues: {
     lending: [@aave, @compound]
     swap: @uniswap
+  }
 
-  on hourly:
+  on hourly: {
     x = params.min_amount * 2
-    if x > 100:
+    if x > 100 {
       y = x + 50
       emit success(value=y)
-    else:
+    } else {
       emit failure(value=x)
-`;
+    }
+  }
+}`;
     const result = compile(source);
     if (!result.success) {
       console.log("Errors:", result.errors);

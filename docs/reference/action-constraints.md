@@ -35,15 +35,17 @@ Adapters can use resolved values via `Action.constraints` at runtime.
 Constraints are attached to an action using the `with` clause:
 
 ```spell
-on manual:
+on manual: {
   uniswap_v3.swap(USDC, WETH, params.amount) with slippage=50, deadline=300
+}
 ```
 
 You can also use expressions:
 
 ```spell
-on manual:
+on manual: {
   uniswap_v3.swap(USDC, WETH, params.amount) with min_output=params.min_out
+}
 ```
 
 ### Supported keys in `.spell`
@@ -65,22 +67,27 @@ on manual:
 Skills can provide default constraints that apply when an action does not specify them:
 
 ```spell
-skills:
-  dex:
+skills: {
+  dex: {
     type: swap
     adapters: [uniswap_v3]
-    default_constraints:
+    default_constraints: {
       max_slippage: 50
+    }
+  }
+}
 
-on manual:
+on manual: {
   dex.swap(USDC, WETH, params.amount) using dex
+}
 ```
 
 ## Spell example
 
 ```spell
-on manual:
+on manual: {
   uniswap_v3.swap(USDC, WETH, params.amount) with max_slippage=50, deadline=300
+}
 ```
 
 ## Programmatic constraints

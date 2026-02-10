@@ -7,18 +7,21 @@ This tutorial builds a minimal spell and runs it in either VM mode or the determ
 Create `spells/hello-world.spell`:
 
 ```spell
-spell HelloWorld
+spell HelloWorld {
 
   version: "1.0.0"
   description: "Simple compute + emit"
 
-  params:
+  params: {
     x: 1
     y: 2
+  }
 
-  on manual:
+  on manual: {
     sum = params.x + params.y
     emit done(sum=sum)
+  }
+}
 ```
 
 ## 2) Run the spell

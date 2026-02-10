@@ -30,15 +30,18 @@ best_apy = max(
 Deterministic runs require concrete venues, assets, and constraints.
 
 ```spell
-venues:
+venues: {
   aave_v3: @aave_v3
   morpho_blue: @morpho_blue
+}
 
-assets:
+assets: {
   USDC: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+}
 
-limits:
+limits: {
   max_per_venue: 50%
+}
 ```
 
 ## 3) Add hard execution constraints
@@ -46,9 +49,10 @@ limits:
 For swaps, define both slippage and a min output (or max input). This prevents loss during execution.
 
 ```spell
-constraints:
+constraints: {
   max_slippage: 50
   min_output: 990000000  # 990 USDC out
+}
 ```
 
 ## 4) Simulate first

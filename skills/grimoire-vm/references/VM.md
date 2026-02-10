@@ -221,12 +221,13 @@ result = venue.action(...)
 ### Conditionals
 
 ```
-if <condition>:
+if condition {
   ...
-elif <condition>:
+} elif condition {
   ...
-else:
+} else {
   ...
+}
 ```
 
 - Evaluate conditions in order.
@@ -235,8 +236,9 @@ else:
 ### For loops
 
 ```
-for item in collection:
+for item in collection {
   ...
+}
 ```
 
 - Evaluate `collection`.
@@ -245,8 +247,9 @@ for item in collection:
 ### Repeat loops
 
 ```
-repeat N:
+repeat N {
   ...
+}
 ```
 
 - Execute the body exactly `N` times.
@@ -255,8 +258,9 @@ repeat N:
 ### Loop until
 
 ```
-loop until <condition> max N:
+loop until condition max N {
   ...
+}
 ```
 
 - Execute the body until the condition is true or the max is reached.
@@ -265,12 +269,13 @@ loop until <condition> max N:
 ### Try / catch / finally
 
 ```
-try:
+try {
   ...
-catch <error_type>:
+} catch error_type: {
   ...
-finally:
+} finally {
   ...
+}
 ```
 
 - Execute `try` block.
@@ -282,11 +287,14 @@ If a catch block defines a `retry` policy, the VM SHOULD honor it.
 ### Parallel
 
 ```
-parallel join=all on_fail=abort:
-  left:
+parallel join=all on_fail=abort {
+  left: {
     ...
-  right:
+  }
+  right: {
     ...
+  }
+}
 ```
 
 In-agent hosts MAY execute branches sequentially, but MUST preserve:
@@ -298,10 +306,11 @@ If true concurrency is unavailable, the VM MUST log that execution was sequentia
 ### Pipeline
 
 ```
-result = items | filter:
-  keep = <condition>
-| map:
-  out = <expression>
+result = items | filter: {
+  keep = condition
+} | map: {
+  out = expression
+}
 ```
 
 - Evaluate the source array.
@@ -312,8 +321,9 @@ result = items | filter:
 ### Blocks and imports
 
 ```
-block name(a, b):
+block name(a, b) {
   ...
+}
 
 do name(1, 2)
 ```
@@ -339,8 +349,9 @@ Imported blocks are namespaced by alias (or file stem).
 ### Atomic blocks
 
 ```
-atomic:
+atomic {
   ...
+}
 ```
 
 The VM SHOULD treat atomic blocks as all-or-nothing. If atomicity is not possible in the host, the VM MUST:
@@ -387,8 +398,9 @@ pass
 ### Inline advisory prompt
 
 ```
-if **should we proceed?** via risk:
+if **should we proceed?** via risk {
   ...
+}
 ```
 
 - Evaluate an advisory prompt to a boolean.
@@ -397,12 +409,14 @@ if **should we proceed?** via risk:
 ### Advise statement (structured output)
 
 ```
-result = advise risk: "Assess risk"
-  output:
+result = advise risk: "Assess risk" {
+  output: {
     type: enum
     values: [low, medium, high]
+  }
   timeout: 30
   fallback: "medium"
+}
 ```
 
 - The VM MUST respect the output schema.

@@ -1,14 +1,19 @@
-spell TestConstraints
+spell TestConstraints {
 
   version: "1.0.0"
   description: "Test action constraints with clause"
   assets: [USDC, ETH]
 
-  params:
+  params: {
     amount: 100000
 
-  venues:
+  }
+  venues: {
     dex: @uniswap_v3
 
-  on manual:
+  }
+  on manual: {
     uniswap_v3.swap(USDC, ETH, params.amount) with slippage=50, deadline=300
+
+  }
+}

@@ -1,15 +1,20 @@
-spell TestOutputBinding
+spell TestOutputBinding {
 
   version: "1.0.0"
   description: "Test output binding from action"
   assets: [USDC, ETH]
 
-  params:
+  params: {
     amount: 100000
 
-  venues:
+  }
+  venues: {
     dex: @uniswap_v3
 
-  on manual:
+  }
+  on manual: {
     result = uniswap_v3.swap(USDC, ETH, params.amount)
     emit swapped(output=result)
+
+  }
+}

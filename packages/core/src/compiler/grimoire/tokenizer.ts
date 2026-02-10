@@ -1,8 +1,8 @@
 /**
- * Indentation-aware tokenizer for Grimoire syntax
+ * Brace-delimited tokenizer for Grimoire syntax
  */
 
-import { IndentationError, type SourceLocation, TokenizeError, loc } from "./errors.js";
+import { type SourceLocation, TokenizeError, loc } from "./errors.js";
 
 // =============================================================================
 // TOKEN TYPES
@@ -11,8 +11,6 @@ import { IndentationError, type SourceLocation, TokenizeError, loc } from "./err
 export type TokenType =
   // Structural
   | "NEWLINE"
-  | "INDENT"
-  | "DEDENT"
   | "EOF"
   // Literals
   | "NUMBER"
@@ -123,10 +121,9 @@ export class Tokenizer {
   private pos = 0;
   private line = 1;
   private column = 1;
-  private indentStack: number[] = [0];
-  private bracketDepth = 0;
+  private parenDepth = 0; // () and [] — suppresses NEWLINEs
+  private braceDepth = 0; // {} — does NOT suppress NEWLINEs
   private tokens: Token[] = [];
-  private atLineStart = true;
 
   constructor(source: string) {
     this.source = source;
@@ -134,21 +131,30 @@ export class Tokenizer {
 
   /** Tokenize the entire source */
   tokenize(): Token[] {
+    // Skip leading whitespace/blank lines/comments
+    this.skipWhitespaceLines();
     while (this.pos < this.source.length) {
-      if (this.atLineStart) {
-        this.handleLineStart();
-      }
       this.scanToken();
-    }
-
-    // Emit final DEDENTs
-    while (this.indentStack.length > 1) {
-      this.indentStack.pop();
-      this.emit("DEDENT", "");
     }
 
     this.emit("EOF", "");
     return this.tokens;
+  }
+
+  /** Skip blank lines, comment-only lines, and leading whitespace (cosmetic indentation) */
+  private skipWhitespaceLines(): void {
+    while (this.pos < this.source.length) {
+      const char = this.current();
+      if (char === " " || char === "\t") {
+        this.advance();
+      } else if (char === "\n") {
+        this.advance();
+      } else if (char === "#") {
+        this.skipComment();
+      } else {
+        break;
+      }
+    }
   }
 
   /** Get current character */
@@ -188,83 +194,6 @@ export class Tokenizer {
     });
   }
 
-  /** Handle indentation at line start */
-  private handleLineStart(): void {
-    this.atLineStart = false;
-
-    // Skip blank lines and comment-only lines
-    while (this.pos < this.source.length) {
-      const _lineStart = this.pos;
-      const startLocation = this.location();
-
-      // Count leading whitespace
-      let spaces = 0;
-      while (this.current() === " ") {
-        spaces++;
-        this.advance();
-      }
-      // Tabs are 2 spaces
-      while (this.current() === "\t") {
-        spaces += 2;
-        this.advance();
-      }
-
-      // Skip blank line
-      if (this.current() === "\n") {
-        this.advance();
-        continue;
-      }
-
-      // Skip comment line
-      if (this.current() === "#") {
-        this.skipComment();
-        if (this.current() === "\n") {
-          this.advance();
-          continue;
-        }
-        break;
-      }
-
-      // EOF
-      if (this.pos >= this.source.length) {
-        break;
-      }
-
-      // Inside brackets, ignore indentation
-      if (this.bracketDepth > 0) {
-        break;
-      }
-
-      // Compare with current indent level
-      const currentIndent = this.indentStack[this.indentStack.length - 1] ?? 0;
-
-      if (spaces > currentIndent) {
-        // Deeper indent
-        this.indentStack.push(spaces);
-        this.emit("INDENT", "", startLocation);
-      } else if (spaces < currentIndent) {
-        // Dedent - may be multiple levels
-        while (this.indentStack.length > 1) {
-          const lastIndent = this.indentStack[this.indentStack.length - 1] ?? 0;
-          if (spaces >= lastIndent) break;
-          this.indentStack.pop();
-          this.emit("DEDENT", "", startLocation);
-        }
-
-        const finalIndent = this.indentStack[this.indentStack.length - 1] ?? 0;
-        // Check for mismatched indent
-        if (spaces !== finalIndent) {
-          throw new IndentationError(
-            `Indentation does not match any outer level (got ${spaces}, expected ${finalIndent})`,
-            { location: startLocation, source: this.source }
-          );
-        }
-      }
-
-      break;
-    }
-  }
-
   /** Skip a comment (# to end of line) */
   private skipComment(): void {
     while (this.current() !== "\n" && this.pos < this.source.length) {
@@ -295,11 +224,27 @@ export class Tokenizer {
 
     // Newline
     if (char === "\n") {
-      if (this.bracketDepth === 0) {
+      if (this.parenDepth === 0) {
         this.emit("NEWLINE", "\n", startLocation);
       }
       this.advance();
-      this.atLineStart = true;
+      // Skip cosmetic whitespace at the start of the next line
+      while (this.pos < this.source.length) {
+        const c = this.current();
+        if (c === " " || c === "\t") {
+          this.advance();
+        } else if (c === "\n") {
+          // Blank line — emit NEWLINE if not inside parens, then keep skipping
+          if (this.parenDepth === 0) {
+            this.emit("NEWLINE", "\n", this.location());
+          }
+          this.advance();
+        } else if (c === "#") {
+          this.skipComment();
+        } else {
+          break;
+        }
+      }
       return;
     }
 
@@ -356,37 +301,37 @@ export class Tokenizer {
     // Punctuation and brackets
     if (char === "(") {
       this.advance();
-      this.bracketDepth++;
+      this.parenDepth++;
       this.emit("LPAREN", "(", startLocation);
       return;
     }
     if (char === ")") {
       this.advance();
-      this.bracketDepth = Math.max(0, this.bracketDepth - 1);
+      this.parenDepth = Math.max(0, this.parenDepth - 1);
       this.emit("RPAREN", ")", startLocation);
       return;
     }
     if (char === "[") {
       this.advance();
-      this.bracketDepth++;
+      this.parenDepth++;
       this.emit("LBRACKET", "[", startLocation);
       return;
     }
     if (char === "]") {
       this.advance();
-      this.bracketDepth = Math.max(0, this.bracketDepth - 1);
+      this.parenDepth = Math.max(0, this.parenDepth - 1);
       this.emit("RBRACKET", "]", startLocation);
       return;
     }
     if (char === "{") {
       this.advance();
-      this.bracketDepth++;
+      this.braceDepth++;
       this.emit("LBRACE", "{", startLocation);
       return;
     }
     if (char === "}") {
       this.advance();
-      this.bracketDepth = Math.max(0, this.bracketDepth - 1);
+      this.braceDepth = Math.max(0, this.braceDepth - 1);
       this.emit("RBRACE", "}", startLocation);
       return;
     }

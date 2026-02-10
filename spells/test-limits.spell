@@ -1,23 +1,29 @@
 # Test: Limits section — spell-level allocation caps
 
-spell TestLimits
+spell TestLimits {
 
   version: "1.0.0"
   description: "Test limits section — caps stored as params"
   assets: [USDC]
 
-  params:
+  params: {
     amount: 500000
 
-  limits:
+  }
+  limits: {
     max_allocation: 1000000
     min_trade_size: 100000
     max_slippage: 50
 
-  on manual:
-    if params.amount > limit_max_allocation:
+  }
+  on manual: {
+    if params.amount > limit_max_allocation {
       halt "Exceeds max allocation"
-    elif params.amount < limit_min_trade_size:
+    } elif params.amount < limit_min_trade_size {
       halt "Below minimum trade size"
-    else:
+    } else {
       emit within_limits(amount=params.amount, cap=limit_max_allocation, floor=limit_min_trade_size)
+
+    }
+  }
+}

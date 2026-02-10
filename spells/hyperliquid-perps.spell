@@ -1,13 +1,13 @@
 # Hyperliquid Perpetuals Trading Strategy
 
-spell HyperliquidPerps
+spell HyperliquidPerps {
 
   version: "1.0.0"
   description: "Trade perpetual futures on Hyperliquid with risk management"
 
   assets: [USDC]
 
-  params:
+  params: {
     max_position_size: 10000
     leverage: 3
     position_size_pct: 10%
@@ -17,21 +17,24 @@ spell HyperliquidPerps
     take_profit: 500
     max_drawdown: 1000
 
-  limits:
+  }
+  limits: {
     max_open_positions: 3
     max_daily_trades: 10
     max_leverage: 5
     min_equity: 1000
 
-  venues:
+  }
+  venues: {
     perps: @hyperliquid
 
-  on hourly:
+  }
+  on hourly: {
     equity = balance(USDC)
 
-    if equity < limits.min_equity:
+    if equity < limits.min_equity {
       emit low_equity(equity=equity, minimum=limits.min_equity)
-    else:
+    } else {
       btc_price = price(BTC, USDC)
       eth_price = price(ETH, USDC)
 
@@ -39,17 +42,22 @@ spell HyperliquidPerps
       position_value = min(position_value, params.max_position_size)
 
       emit position_check(
-        equity=equity,
-        position_value=position_value,
-        btc_price=btc_price,
-        eth_price=eth_price
+      equity=equity,
+      position_value=position_value,
+      btc_price=btc_price,
+      eth_price=eth_price
       )
 
-  on daily:
+    }
+  }
+  on daily: {
     equity = balance(USDC)
 
     emit daily_summary(
-      equity=equity,
-      max_position=params.max_position_size,
-      leverage=params.leverage
+    equity=equity,
+    max_position=params.max_position_size,
+    leverage=params.leverage
     )
+
+  }
+}

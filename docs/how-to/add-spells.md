@@ -5,21 +5,25 @@ Spells live in the top-level `spells/` directory.
 ## Create a new spell
 
 ```spell
-spell MySpell
+spell MySpell {
 
   version: "1.0.0"
   description: "Describe the strategy"
 
   assets: [USDC]
 
-  params:
+  params: {
     amount: 1000000
+  }
 
-  venues:
+  venues: {
     uniswap_v3: @uniswap_v3
+  }
 
-  on manual:
+  on manual: {
     uniswap_v3.swap(USDC, WETH, params.amount)
+  }
+}
 ```
 
 ## Organize by intent

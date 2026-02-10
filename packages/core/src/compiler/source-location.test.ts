@@ -3,28 +3,32 @@ import { parse } from "./grimoire/parser.js";
 import { transform } from "./grimoire/transformer.js";
 import { compile } from "./index.js";
 
-const SPELL_SOURCE = `spell TestSpell
+const SPELL_SOURCE = `spell TestSpell {
 
   version: "1.0.0"
   description: "Test spell for source locations"
 
   assets: [USDC, WETH]
 
-  params:
+  params: {
     amount: 1000
+  }
 
-  on manual:
+  on manual: {
     x = 42
     y = x + 1
 
-    if x > 10:
+    if x > 10 {
       emit high_value(val=x)
-    else:
+    } else {
       halt "too low"
+    }
 
-    for asset in assets:
+    for asset in assets {
       wait 10
-`;
+    }
+  }
+}`;
 
 describe("Source Location Propagation", () => {
   describe("Parser: AST nodes have spans", () => {

@@ -43,7 +43,7 @@ Required capabilities:
 
 A VM host SHOULD satisfy the following:
 
-- Parse/validate: spell name, sections, indentation, references.
+- Parse/validate: spell name, sections, syntax, references.
 - Guards: evaluate pre-run guards and halt on failure.
 - Triggers: select a single trigger per run.
 - Bindings: params, state, and output bindings tracked.

@@ -1,18 +1,23 @@
 # Test: Send a tiny ETH amount to self (tests basic transfer action)
 
-spell TestSendEthToSelf
+spell TestSendEthToSelf {
 
   version: "1.0.0"
   description: "Send ETH to self — tests wallet transfer"
   assets: [ETH]
 
-  params:
+  params: {
     amount: 100000000000000
     to: "0x0000000000000000000000000000000000000000"
 
-  venues:
+  }
+  venues: {
     wallet: @wallet
 
-  on manual:
+  }
+  on manual: {
     wallet.transfer(ETH, params.amount, params.to)
     emit transfer_done(asset=ETH, amount=params.amount, to=params.to)
+
+  }
+}

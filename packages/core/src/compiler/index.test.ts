@@ -8,13 +8,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compile, compileFile, parseSpell, parseSpellFile } from "./index.js";
 
-const spellSource = `spell TestSpell
+const spellSource = `spell TestSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 1
-`;
+  }
+}`;
 
 describe("Compiler index", () => {
   test("parseSpell returns SpellSource", () => {
@@ -58,27 +59,29 @@ describe("Compiler index", () => {
 
     writeFileSync(
       blocksPath,
-      `spell Blocks
+      `spell Blocks {
 
   version: "1.0.0"
 
-  block add(a, b):
+  block add(a, b) {
     emit added(sum=a + b)
-`,
+  }
+}`,
       "utf-8"
     );
 
     writeFileSync(
       mainPath,
-      `spell Main
+      `spell Main {
 
   version: "1.0.0"
 
   import "blocks.spell" as lib
 
-  on manual:
+  on manual: {
     do lib.add(1, 2)
-`,
+  }
+}`,
       "utf-8"
     );
 
@@ -93,15 +96,17 @@ describe("Compiler index", () => {
   });
 
   test("compiles atomic block to TryStep IR", () => {
-    const source = `spell AtomicTest
+    const source = `spell AtomicTest {
 
   version: "1.0.0"
 
-  on manual:
-    atomic:
+  on manual: {
+    atomic {
       x = 1
       y = 2
-`;
+    }
+  }
+}`;
     const result = compile(source);
     expect(result.success).toBe(true);
 

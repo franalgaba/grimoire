@@ -102,20 +102,6 @@ export class ParseError extends GrimoireError {
   }
 }
 
-/** Indentation error */
-export class IndentationError extends GrimoireError {
-  constructor(
-    message: string,
-    options?: {
-      location?: SourceLocation;
-      source?: string;
-    }
-  ) {
-    super("INDENTATION_ERROR", message, options);
-    this.name = "IndentationError";
-  }
-}
-
 /** Transform error (AST to SpellSource) */
 export class TransformError extends GrimoireError {
   constructor(
