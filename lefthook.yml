@@ -16,6 +16,6 @@ pre-push:
   parallel: true
   commands:
     test:
-      run: bun test
+      run: bun test --max-concurrency=1
       use_stdin: false
       interactive: true
