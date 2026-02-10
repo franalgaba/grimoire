@@ -86,6 +86,8 @@ export interface ExecuteOptions {
   params?: Record<string, unknown>;
   /** Initial persistent state */
   persistentState?: Record<string, unknown>;
+  /** Invocation trigger context (manual/schedule/event/etc.) */
+  trigger?: ExecutionContext["trigger"];
   /** Simulation mode (no actual transactions) */
   simulate?: boolean;
   /** Execution mode override */
@@ -127,6 +129,7 @@ export interface PreviewOptions {
   chain: ChainId;
   params?: Record<string, unknown>;
   persistentState?: Record<string, unknown>;
+  trigger?: ExecutionContext["trigger"];
   adapters?: VenueAdapter[];
   policy?: PolicySet;
   advisorSkillsDirs?: string[];
@@ -150,7 +153,14 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
     );
   }
 
-  const ctx = createContext({ spell, vault, chain, params, persistentState });
+  const ctx = createContext({
+    spell,
+    vault,
+    chain,
+    trigger: options.trigger,
+    params,
+    persistentState,
+  });
   ctx.advisorTooling = buildAdvisorTooling(spell.advisors, options.advisorSkillsDirs);
 
   const ledger = new InMemoryLedger(ctx.runId, spell.id);
@@ -689,6 +699,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     chain,
     params,
     persistentState,
+    trigger: options.trigger,
     adapters: options.adapters,
     policy: options.policy,
     advisorSkillsDirs: options.advisorSkillsDirs,

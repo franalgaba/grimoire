@@ -301,4 +301,30 @@ describe("preview()", () => {
     expect(result.receipt?.requiresApproval).toBe(false);
     expect(result.receipt?.plannedActions.length).toBe(0);
   });
+
+  test("records explicit invocation trigger in run_started event", async () => {
+    const source = `spell TriggeredPreview {
+  version: "1.0.0"
+
+  on hourly: {
+    x = 1
+  }
+}`;
+    const compileResult = compile(source);
+    assertIR(compileResult);
+
+    const result = await preview({
+      spell: compileResult.ir,
+      vault: VAULT,
+      chain: 1,
+      trigger: { type: "manual", source: "manual_replay" },
+    });
+
+    expect(result.success).toBe(true);
+    const started = result.ledgerEvents.find((entry) => entry.event.type === "run_started");
+    if (!started || started.event.type !== "run_started") {
+      throw new Error("Missing run_started event");
+    }
+    expect(started.event.trigger).toMatchObject({ type: "manual", source: "manual_replay" });
+  });
 });

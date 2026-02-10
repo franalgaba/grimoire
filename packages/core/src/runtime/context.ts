@@ -6,7 +6,7 @@
 import type { CallFrame, ExecutionContext, LedgerEntry, LedgerEvent } from "../types/execution.js";
 import type { SpellIR } from "../types/ir.js";
 import type { PolicySet } from "../types/policy.js";
-import type { Address, ChainId } from "../types/primitives.js";
+import type { Address, ChainId, Trigger } from "../types/primitives.js";
 
 /**
  * Options for creating an execution context
@@ -16,6 +16,7 @@ export interface CreateContextOptions {
   policy?: PolicySet;
   vault: Address;
   chain: ChainId;
+  trigger?: ExecutionContext["trigger"];
   params?: Record<string, unknown>;
   persistentState?: Record<string, unknown>;
 }
@@ -24,7 +25,7 @@ export interface CreateContextOptions {
  * Create a new execution context
  */
 export function createContext(options: CreateContextOptions): ExecutionContext {
-  const { spell, policy, vault, chain, params = {}, persistentState = {} } = options;
+  const { spell, policy, vault, chain, trigger, params = {}, persistentState = {} } = options;
 
   // Generate run ID
   const now = new Date();
@@ -92,7 +93,7 @@ export function createContext(options: CreateContextOptions): ExecutionContext {
     policy,
     runId,
     startTime: now.getTime(),
-    trigger: { type: "manual" },
+    trigger: trigger ?? normalizeTrigger(spell.triggers[0]),
     vault,
     chain,
     state: { persistent, ephemeral },
@@ -108,6 +109,23 @@ export function createContext(options: CreateContextOptions): ExecutionContext {
       retries: 0,
     },
   };
+}
+
+function normalizeTrigger(
+  trigger: Trigger | ExecutionContext["trigger"] | undefined
+): ExecutionContext["trigger"] {
+  if (!trigger) {
+    return { type: "manual" };
+  }
+
+  if (trigger.type === "any" && "triggers" in trigger && Array.isArray(trigger.triggers)) {
+    return {
+      type: "any",
+      triggers: trigger.triggers.map((item) => normalizeTrigger(item)),
+    };
+  }
+
+  return { ...trigger };
 }
 
 /**

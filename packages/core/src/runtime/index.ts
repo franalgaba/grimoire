@@ -10,6 +10,21 @@ export {
   type PreviewOptions,
   type CommitOptions,
 } from "./interpreter.js";
+export {
+  runSession,
+  runOneShotSession,
+  runManagedSession,
+  type SessionMode,
+  type SessionRunOptions,
+  type SessionRunResult,
+} from "./session.js";
+export {
+  getSessionLedgerView,
+  getSessionPnlView,
+  type SessionLedgerView,
+  type SessionPnlView,
+  type SessionPnlAssetView,
+} from "./session-views.js";
 export type { AdvisoryHandler, AdvisoryHandlerInput } from "./steps/advisory.js";
 export {
   createContext,
