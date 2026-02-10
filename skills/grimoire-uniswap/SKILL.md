@@ -5,27 +5,14 @@ description: Retrieves Uniswap router metadata using the Grimoire venue CLI. Use
 
 # Grimoire Uniswap Skill
 
-Use the Grimoire CLI to read public Uniswap adapter data.
+Use this skill to inspect Uniswap metadata and produce token/pool snapshots for spells.
 
-Preferred:
+Preferred invocations:
 
 - `grimoire venue uniswap ...`
-
-If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-uniswap`.
-
-## When to use
-
-- Fetch Uniswap router metadata, tokens, or pools for quick VM prototyping.
-- Produce snapshot `params` blocks with `--format spell` for VM runs.
-
-## Prerequisites
-
-- Global CLI: `npm i -g @grimoirelabs/cli`
-- No install: `npx -y @grimoirelabs/cli venue uniswap ...`
-
-## VM snapshot usage
-
-Use `--format spell` to emit a VM-ready `params:` block you can paste into a spell.
+- `npx -y @grimoirelabs/cli venue uniswap ...` (no-install)
+- `bun run packages/cli/src/index.ts venue uniswap ...` (repo-local)
+- `grimoire-uniswap ...` (direct binary from `@grimoirelabs/venues`)
 
 ## Commands
 
@@ -48,6 +35,8 @@ grimoire venue uniswap pools --chain 8453 --token0 USDC --token1 WETH --fee 500 
 grimoire venue uniswap pools --chain 8453 --token0 USDC --token1 WETH --fee 500 --graph-key $GRAPH_API_KEY --subgraph-id <id> --format table
 ```
 
+Use `--format spell` on `tokens` or `pools` to emit a `params:` snapshot block.
+
 ## Supported Adapters
 
 | Adapter | Router | Approval Flow |
@@ -58,5 +47,5 @@ grimoire venue uniswap pools --chain 8453 --token0 USDC --token1 WETH --fee 500 
 ## Notes
 
 - CLI currently exposes V3 metadata. V4 adapter is available programmatically via `createUniswapV4Adapter()`.
-- Outputs JSON plus a human-readable table.
+- Outputs JSON/table; `tokens` and `pools` also support `--format spell`.
 - Only metadata is exposed (no on-chain quote endpoints).

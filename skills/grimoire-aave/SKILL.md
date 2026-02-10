@@ -5,27 +5,14 @@ description: Fetches Aave V3 public market data using the Grimoire venue CLI. Us
 
 # Grimoire Aave Skill
 
-Use the Grimoire CLI to query Aave market data exposed by the SDK.
+Use this skill to query Aave V3 metadata and reserve snapshots for strategy inputs.
 
-Preferred:
+Preferred invocations:
 
 - `grimoire venue aave ...`
-
-If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-aave`.
-
-## When to use
-
-- Fetch Aave V3 metadata or reserves for quick VM prototyping.
-- Produce snapshot `params` blocks with `--format spell` for VM runs.
-
-## Prerequisites
-
-- Global CLI: `npm i -g @grimoirelabs/cli`
-- No install: `npx -y @grimoirelabs/cli venue aave ...`
-
-## VM snapshot usage
-
-Use `--format spell` to emit a VM-ready `params:` block you can paste into a spell.
+- `npx -y @grimoirelabs/cli venue aave ...` (no-install)
+- `bun run packages/cli/src/index.ts venue aave ...` (repo-local)
+- `grimoire-aave ...` (direct binary from `@grimoirelabs/venues`)
 
 ## Commands
 
@@ -39,6 +26,7 @@ Use `--format spell` to emit a VM-ready `params:` block you can paste into a spe
 ## Examples
 
 ```bash
+grimoire venue aave health
 grimoire venue aave health --format table
 grimoire venue aave chains
 grimoire venue aave markets --chain 1 --format table
@@ -47,6 +35,8 @@ grimoire venue aave reserve --chain 1 --market 0x87870Bca3F3fD6335C3F4ce8392D693
 grimoire venue aave reserves --chain 1 --asset USDC --format table
 grimoire venue aave reserves --chain 1 --asset USDC --format spell
 ```
+
+Use `--format spell` to emit a `params:` block for spell inputs.
 
 ## Supported Chains
 
@@ -70,5 +60,5 @@ The adapter handles this conversion automatically.
 
 ## Notes
 
-- Outputs JSON plus a human-readable table.
-- Only public SDK endpoints are exposed.
+- Read-only metadata endpoints only.
+- Outputs JSON/table; `reserves` also supports `--format spell`.

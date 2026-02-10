@@ -47,7 +47,7 @@ Work in a feature branch if requested. Do not open PRs unless asked.
 - Bun for install/test/build: `bun install`, `bun test`, `bun run ...`
 - Biome for lint/format: `bun run lint`, `bun run format`
 - TypeScript: `bun run typecheck`
-- Skills validation: `bunx skills-ref validate skills/grimoire-vm` (directory path kept as-is)
+- Skills validation: `bunx skills-ref validate <skill-dir>` (for example `skills/grimoire`, `skills/grimoire-aave`)
 - Changesets: `bunx changeset`
 
 ## Style
@@ -102,7 +102,7 @@ packages/
   cli/                       # Grimoire CLI
   sdk/                       # (WIP) SDK for external integrations
 spells/                      # Example spell files
-skills/                      # Agent skills (per-venue + embedded runtime)
+skills/                      # Agent skills (core CLI + per-venue metadata workflows)
 docs/                        # Diataxis docs
 ```
 
@@ -361,7 +361,6 @@ Docs live in `docs/` and follow the Diataxis structure.
 
 Skills live in `skills/` and provide LLM-consumable context:
 - `skills/grimoire/` - Core CLI commands
-- `skills/grimoire-vm/` - Embedded runtime spec and conformance references
 - `skills/grimoire-aave/` - Aave V3 venue CLI + amount format
 - `skills/grimoire-uniswap/` - Uniswap V3/V4 venue CLI
 - `skills/grimoire-morpho-blue/` - Morpho Blue venue CLI + default markets

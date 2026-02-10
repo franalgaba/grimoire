@@ -1,31 +1,20 @@
 ---
 name: grimoire-hyperliquid
-description: Queries Hyperliquid public market data using the Grimoire venue CLI. Use when you need mid prices, L2 order books, or open orders.
+description: Queries Hyperliquid market data using the Grimoire venue CLI. Use when you need mids, books, metadata, open orders, or a withdrawal call.
 ---
 
 # Grimoire Hyperliquid Skill
 
-Use the Grimoire CLI for public Hyperliquid market data.
+Use this skill for Hyperliquid metadata snapshots and, when explicitly requested, withdrawals.
 
-Preferred:
+Preferred invocations:
 
 - `grimoire venue hyperliquid ...`
+- `npx -y @grimoirelabs/cli venue hyperliquid ...` (no-install)
+- `bun run packages/cli/src/index.ts venue hyperliquid ...` (repo-local)
+- `grimoire-hyperliquid ...` (direct binary from `@grimoirelabs/venues`)
 
-If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-hyperliquid`.
-
-## When to use
-
-- Fetch Hyperliquid mid prices, books, or metadata for quick VM prototyping.
-- Produce snapshot `params` blocks with `--format spell` for VM runs.
-
-## Prerequisites
-
-- Global CLI: `npm i -g @grimoirelabs/cli`
-- No install: `npx -y @grimoirelabs/cli venue hyperliquid ...`
-
-## VM snapshot usage
-
-Use `--format spell` to emit a VM-ready `params:` block you can paste into a spell.
+Use `--format spell` for snapshot `params:` blocks.
 
 ## Commands
 
@@ -34,6 +23,7 @@ Use `--format spell` to emit a VM-ready `params:` block you can paste into a spe
 - `grimoire venue hyperliquid open-orders --user <address> [--format <json|table|spell>]`
 - `grimoire venue hyperliquid meta [--format <json|table|spell>]`
 - `grimoire venue hyperliquid spot-meta [--format <json|table|spell>]`
+- `grimoire venue hyperliquid withdraw --amount <usdc> --keystore <path> [--password-env <name>] [--destination <addr>] [--format <json|table>]`
 
 ## Examples
 
@@ -48,6 +38,6 @@ grimoire venue hyperliquid meta
 
 ## Notes
 
-- Outputs JSON plus a human-readable table.
-- Use `--format spell` for VM-ready snapshots.
-- Uses Hyperliquid Info endpoints only (no authenticated actions).
+- `withdraw` is stateful and requires explicit user confirmation plus keystore credentials.
+- `mids`, `l2-book`, `open-orders`, `meta`, `spot-meta` are read-only info calls.
+- Use `--format spell` for snapshot-based spell inputs.

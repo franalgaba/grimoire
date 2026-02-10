@@ -1,183 +1,123 @@
 ---
 name: grimoire
-description: Core Grimoire CLI for compiling, validating, simulating, and executing .spell files. Use when you need to run any grimoire command.
+description: Install and operate Grimoire, author .spell files with full syntax coverage (including advisory decision logic), and run compile/validate/simulate/cast safely. Use when users ask to create, edit, debug, validate, simulate, execute, or explain Grimoire strategies.
+compatibility: "Requires one of: global grimoire CLI, npx access to @grimoirelabs/cli, or repo-local Bun execution."
+metadata:
+  version: "2.1"
+  focus: "installation usage syntax advisory execution"
 ---
 
 # Grimoire CLI Skill
 
-The Grimoire CLI compiles, validates, simulates, and executes `.spell` strategy files.
+This skill is the base operating playbook for Grimoire.
 
-## When to use
+## When To Use
 
-- You want deterministic execution with adapters (`simulate`, `cast`).
-- You need CLI-only workflows (compile, validate, history, logs, wallet).
+Use this skill when the task includes:
 
-## Embedded runtime vs CLI
+- install/setup of Grimoire tooling
+- creating or editing `.spell` files
+- syntax questions about DSL capability
+- advisory (`advise`) authoring, debugging, and replay workflows
+- compile/validate/simulate/cast workflows
+- debugging spell compile/runtime failures
 
-- **Embedded runtime** runs in-process (imported from `@grimoirelabs/core`). Use the `grimoire-vm` skill for in-agent execution.
-- **CLI runtime** runs via the CLI with bundled adapters. This skill covers CLI workflows.
+## Mandatory Loading Rules
 
-For prototyping with snapshots, use the venue skills (`grimoire-aave`, `grimoire-uniswap`, `grimoire-morpho-blue`, `grimoire-hyperliquid`) with `--format spell`.
+These rules are required and solve syntax coverage gaps.
 
-## Commands
+1. For any `.spell` authoring/editing task:
+   - first read `references/syntax-capabilities.md`
+   - then read `references/authoring-workflow.md`
+2. For CLI flag details:
+   - read `references/cli-quick-reference.md`
+3. For any advisory task (`advise`, `advisors`, replay):
+   - read `docs/how-to/use-advisory-decisions.md`
+   - read `docs/explanation/advisory-decision-flow.md`
+4. Do not rely on memory for DSL syntax when authoring; use the references above.
 
-### grimoire init
+## Installation Resolution
 
-Initialize a new `.grimoire` directory with config and examples.
+Select the first working invocation and reuse it for the session.
 
-```bash
-grimoire init [--force] [--runtime-quickstart]
-```
+1. Global:
+   - `npm i -g @grimoirelabs/cli`
+   - command prefix: `grimoire`
+2. No-install:
+   - command prefix: `npx -y @grimoirelabs/cli`
+3. Repo-local:
+   - command prefix: `bun run packages/cli/src/index.ts`
 
-Use `--runtime-quickstart` to scaffold an embedded runtime quickstart spell and README.
+If one path fails, move to the next path automatically.
 
-### grimoire compile
+## Fast Start (Immediate Success Path)
 
-Compile a `.spell` file to IR (intermediate representation).
+Use this sequence before writing custom spells:
 
-```bash
-grimoire compile <spell> [-o <file>] [--pretty]
-```
+1. `<grimoire-cmd> --help`
+2. `<grimoire-cmd> validate spells/compute-only.spell`
+3. `<grimoire-cmd> simulate spells/compute-only.spell --chain 1`
 
-### grimoire compile-all
+If all three pass, proceed to spell authoring.
 
-Compile every `.spell` file in a directory (default: `spells/`).
+## Authoring and Execution Policy
 
-```bash
-grimoire compile-all [dir] [--fail-fast] [--json]
-```
+1. Read syntax references first (mandatory rule above).
+2. Author/update spell.
+3. Run `validate` (use `--strict` for advisory-heavy spells).
+4. Fix errors/warnings and re-run until validation passes.
+5. Run `simulate`.
+6. For advisory steps intended for deterministic execution, record and then use `--advisory-replay <runId>` in dry-run/live cast.
+7. If spell includes irreversible actions, require `cast --dry-run` before any live cast.
+8. Ask for explicit user confirmation before live value-moving `cast`.
 
-### grimoire validate
+## Command Surface (Core)
 
-Validate a `.spell` file without compiling.
+- `init`
+- `compile`
+- `compile-all`
+- `validate`
+- `simulate`
+- `cast`
+- `venues`
+- `venue`
+- `history`
+- `log`
+- `wallet` (`generate`, `address`, `balance`, `import`, `wrap`, `unwrap`)
 
-```bash
-grimoire validate <spell> [--strict] [--json]
-```
+Use `references/cli-quick-reference.md` for concise command signatures and safety-critical flags.
 
-### grimoire simulate
+## Runtime Behavior Model
 
-Simulate spell execution (dry run). State is loaded/saved between runs.
+- One runtime semantics: preview first, commit only for execute paths.
+- `simulate` and `cast --dry-run` are preview-only flows.
+- Live `cast` can commit irreversible actions when policy and runtime checks pass.
 
-```bash
-grimoire simulate <spell> [-p <json>] [--vault <address>] [--chain <id>] [--state-dir <dir>] [--no-state]
-  [--advisor-skills-dir <dir>...]
-  [--advisory-pi] [--advisory-replay <runId>] [--advisory-provider <name>] [--advisory-model <id>]
-  [--advisory-thinking <level>] [--advisory-tools <mode>] [--pi-agent-dir <dir>]
-  [--ens-name <name>] [--ens-rpc-url <url>]
-```
+## Advisory Operating Rules
 
-### grimoire cast
+- Advisory must be explicit statement form: `x = advise advisor: "prompt" { ... }`.
+- Treat advisory outputs as typed contracts; enforce schema with `output`.
+- Require `timeout` and `fallback` in every advisory block.
+- Prefer `validate --strict` when advisory logic gates value-moving actions.
+- Use replay for determinism when moving from preview/dry-run to live execution.
 
-Execute a spell onchain. Supports dry-run and live modes.
+## Venue Metadata and Snapshots
 
-```bash
-grimoire cast <spell> [-p <json>] [--vault <address>] [--chain <id>] \
-  [--dry-run] [--key-env <name>] [--keystore <path>] [--password-env <name>] \
-  [--rpc-url <url>] [--gas-multiplier <n>] [--skip-confirm] [-v] [--json] \
-  [--advisor-skills-dir <dir>...] [--state-dir <dir>] [--no-state] \
-  [--advisory-pi] [--advisory-replay <runId>] [--advisory-provider <name>] [--advisory-model <id>] \
-  [--advisory-thinking <level>] [--advisory-tools <mode>] [--pi-agent-dir <dir>] \
-  [--ens-name <name>] [--ens-rpc-url <url>]
-```
+Use venue skills for snapshot parameters and market metadata:
 
-### grimoire venues
+- `grimoire-aave`
+- `grimoire-uniswap`
+- `grimoire-morpho-blue`
+- `grimoire-hyperliquid`
 
-List available venue adapters and supported chains.
+## References
 
-```bash
-grimoire venues [--json]
-```
-
-### grimoire venue
-
-Proxy to venue metadata CLIs bundled in `@grimoirelabs/venues`.
-
-```bash
-grimoire venue <adapter> [args...]
-```
-
-### grimoire history
-
-View execution history for spells.
-
-```bash
-grimoire history              # list all spells with state
-grimoire history <spellId>    # runs for a specific spell
-grimoire history <spellId> --limit 5 --json
-```
-
-### grimoire log
-
-View ledger events for a specific spell run.
-
-```bash
-grimoire log <spellId> <runId> [--json] [--state-dir <dir>]
-```
-
-### grimoire wallet
-
-Manage wallet operations.
-
-```bash
-grimoire wallet generate                          # create new keystore
-grimoire wallet address --keystore <path> --password-env <name>
-grimoire wallet balance --keystore <path> --password-env <name> --chain <id> --rpc-url <url>
-grimoire wallet import --private-key <hex>
-grimoire wallet wrap --amount <n> --chain <id> --keystore <path> --password-env <name>
-grimoire wallet unwrap --amount <n> --chain <id> --keystore <path> --password-env <name>
-```
-
-## Running Locally
-
-All CLI commands can be invoked via:
-
-```bash
-bun run packages/cli/src/index.ts <command> [args]
-```
-
-## Environment Variables
-
-- `PRIVATE_KEY` - Wallet private key (default for `--key-env`)
-- `KEYSTORE_PASSWORD` - Keystore password (default for `--password-env`)
-- `RPC_URL` - JSON-RPC endpoint (fallback for `--rpc-url`)
-- `ENS_RPC_URL` - RPC endpoint used for ENS profile lookups (fallback for `--ens-rpc-url`)
-
-## State Persistence
-
-Simulate and cast automatically load/save spell state to `.grimoire/grimoire.db` (SQLite). Use `--no-state` to disable or `--state-dir` to change the directory.
-
-## Advisor Skills
-
-Use `--advisor-skills-dir <dir>` with `simulate` or `cast` to resolve advisor skills from directories containing `SKILL.md` files. The runtime emits `skills`/`allowedTools` metadata in advisory events for external orchestrators.
-
-## Advisory (Pi OAuth)
-
-Advisory steps (`advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell fallback. Use `--advisory-pi` to force Pi even if no model is configured.
-
-OAuth (OpenAI Codex) setup:
-
-```bash
-pi
-/login
-# select OpenAI Codex
-```
-
-If the `pi` CLI is not installed globally, you can run `npx @mariozechner/pi-coding-agent` instead. Credentials live under `~/.pi/agent` unless you pass `--pi-agent-dir`.
-
-Example:
-
-```bash
-grimoire simulate spells/my-spell.spell \
-  --advisory-pi \
-  --advisory-provider openai-codex \
-  --advisory-model gpt-5.2 \
-  --advisory-tools none
-```
-
-Record → replay (deterministic advisory outputs):
-
-```bash
-grimoire simulate spells/my-spell.spell --advisory-pi
-grimoire simulate spells/my-spell.spell --advisory-replay <runId>
-```
+- `references/syntax-capabilities.md`
+- `references/authoring-workflow.md`
+- `references/cli-quick-reference.md`
+- `docs/how-to/use-advisory-decisions.md`
+- `docs/explanation/advisory-decision-flow.md`
+- `docs/reference/cli.md`
+- `docs/reference/spell-syntax.md`
+- `docs/reference/grimoire-dsl-spec.md`
+- `docs/reference/compiler-runtime.md`
