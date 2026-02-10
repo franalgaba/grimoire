@@ -1,0 +1,26 @@
+# Test: trailing commas in various contexts
+
+spell TestTrailingCommas {
+
+  version: "1.0.0"
+  description: "Trailing commas are allowed everywhere"
+
+  assets: [USDC, ETH,]
+
+  params: {
+    amount: 100000
+
+  }
+  venues: {
+    uniswap_v3: @uniswap_v3
+
+  }
+  on manual: {
+    uniswap_v3.swap(USDC, ETH, params.amount,) with (
+      slippage=50,
+      deadline=300,
+    )
+    emit swapped(amount=params.amount,)
+
+  }
+}

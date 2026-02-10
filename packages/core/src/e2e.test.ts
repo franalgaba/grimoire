@@ -716,3 +716,127 @@ describe("E2E: Complex Spells", () => {
     expect(execResult.success).toBe(true);
   });
 });
+
+describe("E2E: Diff-Stable Syntax (SPEC-002)", () => {
+  test("parenthesized multi-line with clause compiles and executes", async () => {
+    const source = `spell ParenConstraints {
+
+  version: "1.0.0"
+
+  params: {
+    amount: 100
+  }
+
+  on manual: {
+    value = params.amount * 2
+    emit done(result=value)
+  }
+}`;
+    const compileResult = compile(source);
+    expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
+
+    const execResult = await execute({
+      spell: compileResult.ir,
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+
+    expect(execResult.success).toBe(true);
+    expect(execResult.metrics.stepsExecuted).toBeGreaterThan(0);
+  });
+
+  test("trailing commas in assets and emit compile and execute", async () => {
+    const source = `spell TrailingCommas {
+
+  version: "1.0.0"
+
+  assets: [USDC, ETH,]
+
+  params: {
+    value: 42
+  }
+
+  on manual: {
+    x = params.value + 1
+    emit result(value=x,)
+  }
+}`;
+    const compileResult = compile(source);
+    expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
+
+    const execResult = await execute({
+      spell: compileResult.ir,
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+
+    expect(execResult.success).toBe(true);
+
+    // Verify the assets were parsed correctly with trailing comma
+    expect(compileResult.ir.assets).toBeDefined();
+    expect(compileResult.ir.assets?.length).toBe(2);
+  });
+
+  test("parenthesized with clause on venue action compiles", () => {
+    const source = `spell WithClauseVenue {
+
+  version: "1.0.0"
+
+  venues: {
+    swap: @uniswap
+  }
+
+  on manual: {
+    uniswap.swap(USDC, ETH, 1000) with (
+      slippage=50,
+      deadline=300,
+    )
+  }
+}`;
+    const compileResult = compile(source);
+    expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
+
+    // Verify the constraint clause survived to IR
+    const step = compileResult.ir.steps?.[0];
+    expect(step).toBeDefined();
+    expect(step?.kind).toBe("action");
+    if (step?.kind === "action") {
+      expect(step.constraints).toBeDefined();
+      expect(step.constraints?.maxSlippageBps).toBe(50);
+      expect(step.constraints?.deadline).toBe(300);
+    }
+  });
+
+  test("multi-line params block compiles and executes", async () => {
+    const source = `spell MultilineParams {
+
+  version: "1.0.0"
+
+  params: {
+    cfg: {
+      default: 100
+    }
+    threshold: 50
+  }
+
+  on manual: {
+    x = params.cfg + params.threshold
+    emit done(total=x)
+  }
+}`;
+    const compileResult = compile(source);
+    expect(compileResult.success).toBe(true);
+    assertIR(compileResult);
+
+    const execResult = await execute({
+      spell: compileResult.ir,
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+
+    expect(execResult.success).toBe(true);
+  });
+});

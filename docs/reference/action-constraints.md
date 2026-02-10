@@ -32,13 +32,26 @@ Adapters can use resolved values via `Action.constraints` at runtime.
 
 ## Using constraints in spells
 
-Constraints are attached to an action using the `with` clause:
+Constraints are attached to an action using the `with` clause (inline form):
 
 ```spell
 on manual: {
   uniswap_v3.swap(USDC, WETH, params.amount) with slippage=50, deadline=300
 }
 ```
+
+For diff-stable multi-line constraints, use the parenthesized form. Adding or removing a constraint touches exactly one line:
+
+```spell
+on manual: {
+  uniswap_v3.swap(USDC, WETH, params.amount) with (
+    slippage=50,
+    deadline=300,
+  )
+}
+```
+
+Trailing commas are allowed in both forms. Empty `with ()` is rejected.
 
 You can also use expressions:
 
@@ -82,11 +95,29 @@ on manual: {
 }
 ```
 
-## Spell example
+## Spell examples
+
+Inline form:
 
 ```spell
 on manual: {
   uniswap_v3.swap(USDC, WETH, params.amount) with max_slippage=50, deadline=300
+}
+```
+
+Multi-line parenthesized form:
+
+```spell
+on manual: {
+  uniswap_v3.swap(USDC, WETH, params.amount) with (
+    max_slippage=50,
+    deadline=300,
+    max_price_impact=200,
+    min_liquidity=1000000,
+    require_quote=true,
+    require_simulation=true,
+    max_gas=300000,
+  )
 }
 ```
 

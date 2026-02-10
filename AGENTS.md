@@ -202,11 +202,13 @@ spell YieldOptimizer {
 | Method calls | `obj.method(args)` | `venue.deposit(asset, amount)` |
 | Assignment | `x = expr` | `rate = get_apy("aave_v3", asset)` |
 | Using skill | `using name` | `swap(...) using dex` |
-| Constraints | `with k=v` | `with max_slippage=50` |
+| Constraints | `with k=v` or `with (k=v, ...)` | `with max_slippage=50` or multi-line `with (\n  slippage=50,\n  deadline=300,\n)` |
 | Logical ops | `and`, `or`, `not` | `if a > 0 and b < 10 {` |
 | Emit events | `emit name(k=v)` | `emit done(value=42)` |
 | Halt execution | `halt "reason"` | `halt "insufficient balance"` |
 | Wait | `wait N` | `wait 3600` (seconds) |
+| Trailing commas | allowed in all lists | `[USDC, ETH,]`, `f(a, b,)`, `with (k=v,)` |
+| Multi-line objects | `{ key: val }` across lines | `{` / `  a: 1,` / `  b: 2,` / `}` |
 
 # Example Spells
 

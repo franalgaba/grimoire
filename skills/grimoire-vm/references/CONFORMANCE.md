@@ -276,6 +276,7 @@ skipped(reason="below threshold")
 Expected behavior: action invoked with constraints `slippage=50`, `deadline=300` (no emit in spell).
 
 **spells/test-constraints-extended.spell**
+Uses multi-line parenthesized `with (...)` form for constraints.
 Expected events:
 ```
 constraints_applied(amount=100000)

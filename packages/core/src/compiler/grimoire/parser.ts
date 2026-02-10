@@ -1978,25 +1978,55 @@ export class Parser {
     return node;
   }
 
-  /** Parse constraint clause: with key=value, key=value, ... */
+  /** Parse constraint clause: with key=value, key=value, ... OR with (key=value, key=value, ...) */
   private parseConstraintClause(): ConstraintClause {
     const startToken = this.current();
     this.expect("KEYWORD", "with");
 
     const constraints: Array<{ key: string; value: ExpressionNode }> = [];
+    const parenthesized = this.check("LPAREN");
 
-    do {
-      const key = this.expect("IDENTIFIER").value;
-      this.expect("ASSIGN");
-      const value = this.parseExpression();
-      constraints.push({ key, value });
-    } while (
-      this.check("COMMA") &&
-      (() => {
-        this.advance();
-        return true;
-      })()
-    );
+    if (parenthesized) {
+      this.advance();
+      this.skipNewlines();
+
+      if (this.check("RPAREN")) {
+        throw new ParseError("Empty constraint clause", {
+          location: this.current().location,
+          source: this.source,
+        });
+      }
+
+      while (!this.check("RPAREN") && !this.check("EOF")) {
+        const key = this.expect("IDENTIFIER").value;
+        this.expect("ASSIGN");
+        const value = this.parseExpression();
+        constraints.push({ key, value });
+        this.skipNewlines();
+        if (this.check("COMMA")) {
+          this.advance();
+          this.skipNewlines();
+        } else {
+          break;
+        }
+      }
+
+      this.skipNewlines();
+      this.expect("RPAREN");
+    } else {
+      do {
+        const key = this.expect("IDENTIFIER").value;
+        this.expect("ASSIGN");
+        const value = this.parseExpression();
+        constraints.push({ key, value });
+      } while (
+        this.check("COMMA") &&
+        (() => {
+          this.advance();
+          return true;
+        })()
+      );
+    }
 
     const node: ConstraintClause = { kind: "constraint_clause", constraints };
     node.span = this.makeSpan(startToken);
@@ -2259,19 +2289,25 @@ export class Parser {
       return { kind: "array_literal", elements } as ArrayLiteralNode;
     }
 
-    // Object literal: {key: value}
+    // Object literal: {key: value} (supports multi-line and trailing commas)
     if (token.type === "LBRACE") {
       this.advance();
+      this.skipNewlines();
       const entries: Array<{ key: string; value: ExpressionNode }> = [];
-      while (!this.check("RBRACE")) {
+      while (!this.check("RBRACE") && !this.check("EOF")) {
         const key = this.expect("IDENTIFIER").value;
         this.expect("COLON");
         const value = this.parseExpression();
         entries.push({ key, value });
+        this.skipNewlines();
         if (this.check("COMMA")) {
           this.advance();
+          this.skipNewlines();
+        } else {
+          break;
         }
       }
+      this.skipNewlines();
       this.expect("RBRACE");
       return { kind: "object_literal", entries } as ObjectLiteralNode;
     }

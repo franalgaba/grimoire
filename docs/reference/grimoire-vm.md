@@ -194,7 +194,19 @@ If no tool is available for the action:
 
 ### Constraints
 
-Action constraints bound in `with` MUST be passed to the tool (if available) or enforced by the VM. Key constraints include:
+Action constraints bound in `with` MUST be passed to the tool (if available) or enforced by the VM. Both inline and parenthesized forms are supported:
+
+```
+venue.action(args) with slippage=50, deadline=300
+venue.action(args) with (
+  slippage=50,
+  deadline=300,
+)
+```
+
+Trailing commas are allowed. Empty `with ()` is rejected.
+
+Key constraints include:
 - `slippage` / `max_slippage`
 - `min_output`
 - `max_input`
