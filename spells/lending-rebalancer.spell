@@ -45,7 +45,7 @@ spell LendingRebalancer {
         has_balance = wallet_balance >= params.min_move_amount
 
         if should_rebalance and has_balance {
-          annual_benefit = wallet_balance * rate_diff / 10000
+          annual_benefit = to_number(wallet_balance) * rate_diff / 10000
           payback_days = params.gas_cost_estimate * 365 / annual_benefit
 
           if payback_days < 30 {

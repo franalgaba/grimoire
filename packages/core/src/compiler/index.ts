@@ -4,6 +4,7 @@
 
 export { parseExpression, tryParseExpression } from "./expression-parser.js";
 export { generateIR, type IRGeneratorResult } from "./ir-generator.js";
+export { typeCheckIR, type TypeCheckResult } from "./type-checker.js";
 export { validateIR, type ValidationResult } from "./validator.js";
 
 // Export new Grimoire syntax compiler

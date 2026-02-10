@@ -18,7 +18,7 @@ spell TestBalancePrice {
     eth_balance = balance(ETH)
     usdc_balance = balance(USDC)
     eth_price = price(ETH, USDC)
-    total_value = eth_balance * eth_price + usdc_balance
+    total_value = to_number(eth_balance) * eth_price + to_number(usdc_balance)
     emit portfolio(eth=eth_balance, usdc=usdc_balance, eth_price=eth_price, total=total_value)
 
     if usdc_balance > params.min_balance {

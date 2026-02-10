@@ -24,7 +24,7 @@ spell DCATrading {
   }
   on daily: {
     usdc_balance = balance(USDC)
-    available = usdc_balance - params.min_balance
+    available = to_number(usdc_balance) - params.min_balance
     trade_amount = min(available, params.buy_amount)
 
     if trade_amount < limits.min_trade_size {

@@ -7,8 +7,20 @@
 export * from "./types/index.js";
 
 // Compiler
-export { compile, compileFile, parseSpell, parseExpression, validateIR } from "./compiler/index.js";
-export type { ParseResult, IRGeneratorResult, ValidationResult } from "./compiler/index.js";
+export {
+  compile,
+  compileFile,
+  parseSpell,
+  parseExpression,
+  validateIR,
+  typeCheckIR,
+} from "./compiler/index.js";
+export type {
+  ParseResult,
+  IRGeneratorResult,
+  ValidationResult,
+  TypeCheckResult,
+} from "./compiler/index.js";
 
 // Runtime
 export {

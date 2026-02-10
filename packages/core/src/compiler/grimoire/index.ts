@@ -12,6 +12,7 @@ export { Transformer, transform } from "./transformer.js";
 
 import type { CompilationResult, SpellSource } from "../../types/ir.js";
 import { generateIR } from "../ir-generator.js";
+import { typeCheckIR } from "../type-checker.js";
 import { validateIR } from "../validator.js";
 import { parse } from "./parser.js";
 import { transform } from "./transformer.js";
@@ -48,14 +49,25 @@ export function compileGrimoire(
       };
     }
 
+    // Step 3.5: Type check
+    const typeCheckResult = typeCheckIR(irResult.ir);
+
     // Step 4: Validate
     const validationResult = validateIR(irResult.ir);
 
+    // Type errors block compilation
+    const allErrors = [...irResult.errors, ...typeCheckResult.errors, ...validationResult.errors];
+    const allWarnings = [
+      ...irResult.warnings,
+      ...typeCheckResult.warnings,
+      ...validationResult.warnings,
+    ];
+
     return {
-      success: validationResult.valid,
-      ir: validationResult.valid ? irResult.ir : undefined,
-      errors: [...irResult.errors, ...validationResult.errors],
-      warnings: [...irResult.warnings, ...validationResult.warnings],
+      success: allErrors.length === 0,
+      ir: allErrors.length === 0 ? irResult.ir : undefined,
+      errors: allErrors,
+      warnings: allWarnings,
     };
   } catch (error) {
     const err = error as Error;

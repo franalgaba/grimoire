@@ -32,7 +32,7 @@ spell FundingArbitrage {
     if equity < limits.min_equity {
       emit insufficient_equity(equity=equity, required=limits.min_equity)
     } else {
-      position_value = equity * params.position_size_pct
+      position_value = to_number(equity) * params.position_size_pct
 
       btc_price = price(BTC, USDC)
       eth_price = price(ETH, USDC)

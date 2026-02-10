@@ -5,7 +5,7 @@ The `@grimoirelabs/core` package exposes compiler, runtime, state persistence, a
 ## Compiler
 
 ```ts
-import { compile, compileFile, parseSpell, parseExpression, validateIR } from "@grimoirelabs/core";
+import { compile, compileFile, parseSpell, parseExpression, validateIR, typeCheckIR } from "@grimoirelabs/core";
 ```
 
 - `compile(source: string)` → `CompilationResult`
@@ -13,6 +13,7 @@ import { compile, compileFile, parseSpell, parseExpression, validateIR } from "@
 - `parseSpell(source: string)` → `ParseResult`
 - `parseExpression(expr: string)` → `Expression`
 - `validateIR(ir: SpellIR)` → `ValidationResult`
+- `typeCheckIR(ir: SpellIR)` → `TypeCheckResult` — returns `{ errors, warnings }`. Type errors (e.g. `bigint * number` without conversion) block compilation.
 
 ## Runtime
 
@@ -208,6 +209,8 @@ import { createVenueRegistry } from "@grimoirelabs/core";
 Key types:
 
 - `SpellIR`
+- `CompilationResult` — `{ success, ir?, errors, warnings }`. When type errors or validation errors exist, `success` is `false` and `ir` is `undefined`.
+- `TypeCheckResult` — `{ errors, warnings }`. Type mismatches and wrong arg counts are errors.
 - `Action`, `ActionConstraints`
 - `VenueAdapter`, `VenueAdapterContext`
 - `ExecutionResult`, `ExecutionMetrics`, `LedgerEntry`

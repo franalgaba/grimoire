@@ -322,4 +322,75 @@ describe("Expression Evaluator", () => {
 
     await expect(evaluateAsync(balanceExpr, ctx)).rejects.toThrow("Balance queries not available");
   });
+
+  test("to_number converts bigint to number and passes through number", () => {
+    const fromBigint: Expression = {
+      kind: "call",
+      fn: "to_number",
+      args: [{ kind: "literal", value: 100n, type: "int" }],
+    };
+    expect(evaluate(fromBigint, baseCtx)).toBe(100);
+
+    const fromNumber: Expression = {
+      kind: "call",
+      fn: "to_number",
+      args: [{ kind: "literal", value: 42, type: "int" }],
+    };
+    expect(evaluate(fromNumber, baseCtx)).toBe(42);
+  });
+
+  test("to_bigint converts number to bigint and passes through bigint", () => {
+    const fromNumber: Expression = {
+      kind: "call",
+      fn: "to_bigint",
+      args: [{ kind: "literal", value: 42, type: "int" }],
+    };
+    expect(evaluate(fromNumber, baseCtx)).toBe(42n);
+
+    const fromBigint: Expression = {
+      kind: "call",
+      fn: "to_bigint",
+      args: [{ kind: "literal", value: 100n, type: "int" }],
+    };
+    expect(evaluate(fromBigint, baseCtx)).toBe(100n);
+  });
+
+  test("to_bigint truncates fractional numbers", () => {
+    const expr: Expression = {
+      kind: "call",
+      fn: "to_bigint",
+      args: [{ kind: "literal", value: 3.7, type: "float" }],
+    };
+    expect(evaluate(expr, baseCtx)).toBe(3n);
+  });
+
+  test("to_number and to_bigint throw on invalid types", () => {
+    const badToNumber: Expression = {
+      kind: "call",
+      fn: "to_number",
+      args: [{ kind: "literal", value: "hello", type: "string" }],
+    };
+    expect(() => evaluate(badToNumber, baseCtx)).toThrow("to_number: cannot convert string");
+
+    const badToBigint: Expression = {
+      kind: "call",
+      fn: "to_bigint",
+      args: [{ kind: "literal", value: true, type: "bool" }],
+    };
+    expect(() => evaluate(badToBigint, baseCtx)).toThrow("to_bigint: cannot convert boolean");
+  });
+
+  test("to_number and to_bigint work in async evaluation", async () => {
+    const asyncCtx: EvalContext = {
+      ...baseCtx,
+      queryBalance: async () => 500n,
+    };
+
+    const expr: Expression = {
+      kind: "call",
+      fn: "to_number",
+      args: [{ kind: "literal", value: 200n, type: "int" }],
+    };
+    expect(await evaluateAsync(expr, asyncCtx)).toBe(200);
+  });
 });

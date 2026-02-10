@@ -102,7 +102,7 @@ spell YieldOptimizer {
 
   on hourly: {
     if **gas costs justify the move** {
-      amount_to_move = balance(USDC) * 50%
+      amount_to_move = to_number(balance(USDC)) * 50%
       aave_v3.withdraw(USDC, amount_to_move)
       morpho_blue.lend(USDC, amount_to_move)
     }
