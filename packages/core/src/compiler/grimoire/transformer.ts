@@ -4,7 +4,6 @@ import type { SpellSource } from "../../types/ir.js";
 import type {
   AdviseNode,
   AdvisorsSection,
-  AdvisoryExpr,
   AdvisoryNode,
   AdvisoryOutputSchemaNode,
   ArrayAccessNode,
@@ -45,6 +44,9 @@ import type {
 } from "./ast.js";
 import { parse } from "./parser.js";
 
+const INLINE_ADVISORY_UNSUPPORTED_MESSAGE =
+  "Inline advisory expressions (**...**) are no longer supported. Use explicit advise bindings.";
+
 // =============================================================================
 // TRANSFORMER CLASS
 // =============================================================================
@@ -52,7 +54,6 @@ import { parse } from "./parser.js";
 export class Transformer {
   private stepCounter = 0;
   private blockMap = new Map<string, BlockDef>();
-  private advisorDefaults = new Map<string, { timeout?: number; fallback?: boolean }>();
   private assetDecimals = new Map<string, number | undefined>();
   private venueLabelMap = new Map<string, Set<string>>();
   private importStack: string[] = [];
@@ -274,32 +275,23 @@ export class Transformer {
                 ? { max_per_run: item.maxPerRun, max_per_hour: item.maxPerHour }
                 : undefined,
           };
-
-          this.advisorDefaults.set(item.name, {
-            timeout: item.timeout,
-            fallback: item.fallback,
-          });
         }
         break;
       }
 
       case "guards": {
         const guardsSection = section as GuardsSection;
-        source.guards = guardsSection.items.map((item) => ({
-          id: item.id,
-          ...(item.check.kind === "advisory_expr"
-            ? {
-                advisory: (item.check as AdvisoryExpr).advisor ?? "default",
-                check: (item.check as AdvisoryExpr).prompt,
-                severity: (item.severity as "warn" | "pause") ?? "warn",
-                fallback: item.fallback ?? true,
-              }
-            : {
-                check: this.exprToString(item.check),
-                severity: item.severity ?? "halt",
-                message: item.message,
-              }),
-        }));
+        source.guards = guardsSection.items.map((item) => {
+          if (item.check.kind === "advisory_expr") {
+            throw new Error(INLINE_ADVISORY_UNSUPPORTED_MESSAGE);
+          }
+          return {
+            id: item.id,
+            check: this.exprToString(item.check),
+            severity: item.severity ?? "halt",
+            message: item.message,
+          };
+        });
         break;
       }
     }
@@ -449,83 +441,56 @@ export class Transformer {
     const steps: Array<Record<string, unknown>> = [];
     const id = this.nextStepId("cond");
 
-    // Check for advisory condition
+    // Inline advisory expressions are intentionally unsupported.
     if (stmt.condition.kind === "advisory_expr") {
-      const advisory = stmt.condition as AdvisoryExpr;
-      const thenSteps = this.transformStatements(stmt.thenBody);
-      const elseSteps = this.transformStatements(stmt.elseBody);
-      const advisorName = advisory.advisor ?? "default";
-      const defaults = this.advisorDefaults.get(advisorName);
+      throw new Error(INLINE_ADVISORY_UNSUPPORTED_MESSAGE);
+    }
 
-      // Advisory steps need special handling
+    // Regular conditional
+    const thenSteps = this.transformStatements(stmt.thenBody);
+
+    if (stmt.elifs && stmt.elifs.length > 0) {
+      // Build elif chain as nested conditionals (from last to first)
+      let elseChainSteps = this.transformStatements(stmt.elseBody);
+      let elseChainIds = elseChainSteps.map((s) => s.id as string);
+
+      for (let i = stmt.elifs.length - 1; i >= 0; i--) {
+        const elif = stmt.elifs[i];
+        if (!elif) continue;
+        const elifId = this.nextStepId("cond");
+        const elifThenSteps = this.transformStatements(elif.body);
+
+        const elifCond: Record<string, unknown> = {
+          id: elifId,
+          if: this.exprToString(elif.condition),
+          then: elifThenSteps.map((s) => s.id as string),
+          else: elseChainIds,
+        };
+
+        elseChainSteps = [elifCond, ...elifThenSteps, ...elseChainSteps];
+        elseChainIds = [elifId];
+      }
+
       steps.push({
         id,
-        advisory: {
-          prompt: advisory.prompt,
-          advisor: advisorName,
-          output: `${id}_result`,
-          timeout: defaults?.timeout ?? 30,
-          fallback: defaults?.fallback ?? true,
-        },
+        if: this.exprToString(stmt.condition),
+        then: thenSteps.map((s) => s.id as string),
+        else: elseChainIds,
       });
 
-      // Add conditional based on advisory result
-      const condId = this.nextStepId("cond");
+      steps.push(...thenSteps, ...elseChainSteps);
+    } else {
+      // Simple if/else (no elif)
+      const elseSteps = this.transformStatements(stmt.elseBody);
+
       steps.push({
-        id: condId,
-        if: `${id}_result == true`,
+        id,
+        if: this.exprToString(stmt.condition),
         then: thenSteps.map((s) => s.id as string),
         else: elseSteps.map((s) => s.id as string),
       });
 
       steps.push(...thenSteps, ...elseSteps);
-    } else {
-      // Regular conditional
-      const thenSteps = this.transformStatements(stmt.thenBody);
-
-      if (stmt.elifs && stmt.elifs.length > 0) {
-        // Build elif chain as nested conditionals (from last to first)
-        let elseChainSteps = this.transformStatements(stmt.elseBody);
-        let elseChainIds = elseChainSteps.map((s) => s.id as string);
-
-        for (let i = stmt.elifs.length - 1; i >= 0; i--) {
-          const elif = stmt.elifs[i];
-          if (!elif) continue;
-          const elifId = this.nextStepId("cond");
-          const elifThenSteps = this.transformStatements(elif.body);
-
-          const elifCond: Record<string, unknown> = {
-            id: elifId,
-            if: this.exprToString(elif.condition),
-            then: elifThenSteps.map((s) => s.id as string),
-            else: elseChainIds,
-          };
-
-          elseChainSteps = [elifCond, ...elifThenSteps, ...elseChainSteps];
-          elseChainIds = [elifId];
-        }
-
-        steps.push({
-          id,
-          if: this.exprToString(stmt.condition),
-          then: thenSteps.map((s) => s.id as string),
-          else: elseChainIds,
-        });
-
-        steps.push(...thenSteps, ...elseChainSteps);
-      } else {
-        // Simple if/else (no elif)
-        const elseSteps = this.transformStatements(stmt.elseBody);
-
-        steps.push({
-          id,
-          if: this.exprToString(stmt.condition),
-          then: thenSteps.map((s) => s.id as string),
-          else: elseSteps.map((s) => s.id as string),
-        });
-
-        steps.push(...thenSteps, ...elseSteps);
-      }
     }
 
     return steps;
@@ -718,7 +683,16 @@ export class Transformer {
         advisory: {
           prompt: stmt.prompt,
           advisor: stmt.advisor,
+          context: stmt.context
+            ? Object.fromEntries(
+                Object.entries(stmt.context).map(([key, value]) => [key, this.exprToString(value)])
+              )
+            : undefined,
+          within: stmt.within,
           output: stmt.target,
+          on_violation: stmt.onViolationExplicit ? (stmt.onViolation ?? "reject") : undefined,
+          on_violation_explicit: stmt.onViolationExplicit ?? false,
+          clamp_constraints: stmt.clampConstraints,
           timeout: stmt.timeout,
           fallback: this.exprToFallback(stmt.fallback),
           output_schema: this.serializeOutputSchema(stmt.outputSchema),
@@ -982,25 +956,8 @@ export class Transformer {
 
   /** Transform advisory */
   private transformAdvisory(stmt: AdvisoryNode): Array<Record<string, unknown>> {
-    const id = this.nextStepId("advisory");
-    const thenSteps = this.transformStatements(stmt.thenBody);
-    const elseSteps = this.transformStatements(stmt.elseBody);
-    const advisorName = stmt.advisor ?? "default";
-    const defaults = this.advisorDefaults.get(advisorName);
-
-    return [
-      {
-        id,
-        advisory: {
-          prompt: stmt.prompt,
-          advisor: advisorName,
-          timeout: stmt.timeout ?? defaults?.timeout ?? 30,
-          fallback: stmt.fallback ?? defaults?.fallback ?? true,
-        },
-      },
-      ...thenSteps,
-      ...elseSteps,
-    ];
+    void stmt;
+    throw new Error(INLINE_ADVISORY_UNSUPPORTED_MESSAGE);
   }
 
   /** Convert expression to string representation */
@@ -1021,7 +978,7 @@ export class Transformer {
         return `@${(expr as VenueRefExpr).name}`;
 
       case "advisory_expr":
-        return `**${(expr as AdvisoryExpr).prompt}**`;
+        throw new Error(INLINE_ADVISORY_UNSUPPORTED_MESSAGE);
 
       case "percentage":
         return String((expr as PercentageExpr).value);

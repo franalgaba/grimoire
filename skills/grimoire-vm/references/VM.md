@@ -89,7 +89,7 @@ All step types are supported identically to CLI execution:
 
 ### Advisory steps
 
-Advisory steps (`advise` and inline `**...**` prompts) resolve during preview, never during commit.
+Advisory steps (`advise`) resolve during preview, never during commit.
 
 - The host provides an `onAdvisory` handler or the runtime uses the spell's `fallback`.
 - `advise` output MUST conform to the declared schema; the runtime coerces if needed.

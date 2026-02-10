@@ -792,6 +792,13 @@ async function executeStepLoop(
           advisor: step.advisor,
           output: result.output,
           fallback: result.fallback ?? false,
+          rawOutput: result.rawOutput,
+          effectiveOutput: result.effectiveOutput ?? result.output,
+          onViolation: result.violationPolicy ?? step.violationPolicy ?? "reject",
+          policyScope: step.policyScope,
+          clampConstraints: step.clampConstraints,
+          clamped: result.clamped ?? false,
+          violations: result.advisoryViolations,
         });
       }
     } else {

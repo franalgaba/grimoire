@@ -342,7 +342,7 @@ VM: Run:
 Pass criteria:
 
 1. VM follows spell structure exactly for step ordering and control flow.
-2. Model judgment is used only at explicit semantic boundaries (for example `**...**` advisory decisions).
+2. Model judgment is used only at explicit semantic boundaries (for example `advise` decisions).
 3. Output trace maps decisions and results back to VM steps.
 
 Fail criteria:

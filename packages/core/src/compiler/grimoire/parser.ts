@@ -70,6 +70,9 @@ import type {
 import { ParseError, type SourceSpan } from "./errors.js";
 import { type Token, type TokenType, tokenize } from "./tokenizer.js";
 
+const INLINE_ADVISORY_UNSUPPORTED_MESSAGE =
+  'Inline advisory expressions (**...**) are no longer supported. Use explicit advisory binding: `decision = advise advisor: "prompt" { output: ..., timeout: N, fallback: expr }` then branch on `decision` fields.';
+
 // =============================================================================
 // PARSER CLASS
 // =============================================================================
@@ -1266,7 +1269,12 @@ export class Parser {
     this.expect("COLON");
     const prompt = this.expect("STRING").value;
 
+    let context: Record<string, ExpressionNode> | undefined;
+    let within: string | undefined;
     let outputSchema: AdvisoryOutputSchemaNode | undefined;
+    let onViolation: "reject" | "clamp" | undefined;
+    let onViolationExplicit = false;
+    let clampConstraints: string[] | undefined;
     let timeout: number | undefined;
     let fallback: ExpressionNode | undefined;
 
@@ -1288,8 +1296,20 @@ export class Parser {
         this.advance();
         this.expect("COLON");
 
-        if (key === "output") {
+        if (key === "context") {
+          context = this.parseAdvisoryContext();
+        } else if (key === "within") {
+          within = this.parsePolicyReference();
+          this.expectNewline();
+        } else if (key === "output") {
           outputSchema = this.parseOutputSchemaBlock(keyToken);
+        } else if (key === "on_violation") {
+          onViolation = this.parseOnViolationPolicy();
+          onViolationExplicit = true;
+          this.expectNewline();
+        } else if (key === "clamp_constraints") {
+          clampConstraints = this.parseStringList();
+          this.expectNewline();
         } else if (key === "timeout") {
           const value = this.expect("NUMBER").value;
           timeout = Number.parseFloat(value);
@@ -1317,12 +1337,94 @@ export class Parser {
       target,
       advisor,
       prompt,
+      context,
+      within,
       outputSchema,
+      onViolation: onViolation ?? "reject",
+      onViolationExplicit,
+      clampConstraints,
       timeout,
       fallback,
     };
     node.span = this.makeSpan(startToken);
     return node;
+  }
+
+  private parseAdvisoryContext(): Record<string, ExpressionNode> {
+    this.skipNewlines();
+    if (this.check("LBRACE")) {
+      this.advance();
+      const context: Record<string, ExpressionNode> = {};
+      while (!this.check("RBRACE") && !this.check("EOF")) {
+        this.skipNewlines();
+        if (this.check("RBRACE") || this.check("EOF")) break;
+        if (!(this.check("IDENTIFIER") || this.check("KEYWORD"))) {
+          throw new ParseError(
+            `Expected context input key but got ${this.current().type} '${this.current().value}'`,
+            { location: this.current().location, source: this.source }
+          );
+        }
+        const key = this.advance().value;
+        this.expect("COLON");
+        context[key] = this.parseExpression();
+        if (this.check("COMMA")) {
+          this.advance();
+        }
+        this.expectNewline();
+      }
+      this.expect("RBRACE");
+      this.expectNewline();
+      return context;
+    }
+
+    const values: ExpressionNode[] = [this.parseExpression()];
+    while (this.check("COMMA")) {
+      this.advance();
+      values.push(this.parseExpression());
+    }
+    this.expectNewline();
+
+    const context: Record<string, ExpressionNode> = {};
+    for (let i = 0; i < values.length; i++) {
+      const expr = values[i];
+      if (!expr) continue;
+      const key =
+        expr.kind === "identifier" ? (expr as IdentifierNode).name : `context_input_${i + 1}`;
+      context[key] = expr;
+    }
+
+    return context;
+  }
+
+  private parsePolicyReference(): string {
+    if (this.check("STRING") || this.check("IDENTIFIER") || this.check("KEYWORD")) {
+      return this.advance().value;
+    }
+    throw new ParseError("Expected policy scope reference after 'within'", {
+      location: this.current().location,
+      source: this.source,
+    });
+  }
+
+  private parseOnViolationPolicy(): "reject" | "clamp" {
+    if (!(this.check("STRING") || this.check("IDENTIFIER") || this.check("KEYWORD"))) {
+      throw new ParseError("Expected advisory on_violation policy ('reject' or 'clamp')", {
+        location: this.current().location,
+        source: this.source,
+      });
+    }
+    const token = this.advance();
+    const value = token.value;
+    if (value !== "reject" && value !== "clamp") {
+      throw new ParseError(
+        `Unsupported advisory on_violation policy '${value}'. Use 'reject' or 'clamp'.`,
+        {
+          location: token.location,
+          source: this.source,
+        }
+      );
+    }
+    return value;
   }
 
   private parseOutputSchemaBlock(keyToken: Token): AdvisoryOutputSchemaNode {
@@ -1840,8 +1942,12 @@ export class Parser {
     if (this.check("ADVISORY")) {
       const token = this.current();
       throw new ParseError(
-        'Inline advisory expressions (**...**) are no longer supported. Use explicit advisory binding: `decision = advise advisor: "prompt" { output: ..., timeout: N, fallback: expr }` then branch on `decision` fields.',
-        { location: token.location, source: this.source }
+        INLINE_ADVISORY_UNSUPPORTED_MESSAGE,
+        {
+          location: token.location,
+          source: this.source,
+        },
+        "ADVISORY_INLINE_UNSUPPORTED"
       );
     }
     const condition: ExpressionNode = this.parseExpression();
@@ -2258,8 +2364,12 @@ export class Parser {
     // Advisory: **text** — inline advisory expressions are no longer supported.
     if (token.type === "ADVISORY") {
       throw new ParseError(
-        'Inline advisory expressions (**...**) are no longer supported. Use explicit advisory binding: `decision = advise advisor: "prompt" { output: ..., timeout: N, fallback: expr }` then branch on `decision` fields.',
-        { location: token.location, source: this.source }
+        INLINE_ADVISORY_UNSUPPORTED_MESSAGE,
+        {
+          location: token.location,
+          source: this.source,
+        },
+        "ADVISORY_INLINE_UNSUPPORTED"
       );
     }
 

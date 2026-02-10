@@ -342,7 +342,7 @@ For swaps, **always set both `max_slippage` and `min_output`** to prevent unexpe
 
 - `grimoire compile <spell>` - compile a `.spell` file to IR
 - `grimoire compile-all [dir]` - compile all `.spell` files in a directory
-- `grimoire validate <spell>` - validate a `.spell` file
+- `grimoire validate <spell> [--strict] [--json]` - validate a `.spell` file
 - `grimoire simulate <spell>` - simulate execution (dry run), with state persistence
 - `grimoire cast <spell>` - execute a spell onchain, with state persistence
 - `grimoire history [spell]` - view execution history (all spells or runs for one spell)

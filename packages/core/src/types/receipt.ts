@@ -81,12 +81,27 @@ export interface GuardResult {
   message?: string;
 }
 
+/** Advisory schema/policy violation detail */
+export interface AdvisoryViolationDetail {
+  path: string;
+  message: string;
+  actual?: unknown;
+  expected?: unknown;
+}
+
 /** Result of an advisory resolution during preview */
 export interface AdvisoryResult {
   stepId: string;
   advisor: string;
   output: unknown;
   fallback: boolean;
+  rawOutput?: unknown;
+  effectiveOutput?: unknown;
+  onViolation?: "reject" | "clamp";
+  policyScope?: string;
+  clampConstraints?: string[];
+  clamped?: boolean;
+  violations?: AdvisoryViolationDetail[];
 }
 
 /** A planned on-chain action collected during preview */

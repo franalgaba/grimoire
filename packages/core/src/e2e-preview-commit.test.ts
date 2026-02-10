@@ -247,6 +247,9 @@ describe("Preview/Commit E2E", () => {
       expect(compileResult.errors.length).toBeGreaterThan(0);
       const errorMessages = compileResult.errors.map((e) => e.message);
       expect(errorMessages.some((m) => m.includes("Inline advisory expressions"))).toBe(true);
+      expect(
+        compileResult.errors.some((error) => error.code === "ADVISORY_INLINE_UNSUPPORTED")
+      ).toBe(true);
     });
   });
 
@@ -287,6 +290,53 @@ describe("Preview/Commit E2E", () => {
       });
 
       expect(result.success).toBe(true);
+    });
+
+    test("clamp policy records raw and effective advisory outputs", async () => {
+      const source = `spell AdvisoryClamp {
+  version: "1.0.0"
+
+  advisors: {
+    analyst: {
+      model: "anthropic:haiku"
+    }
+  }
+
+  on manual: {
+    decision = advise analyst: "score this opportunity" {
+      context: 1
+      within: constraints
+      output: {
+        type: number
+        min: 0
+        max: 10
+      }
+      on_violation: clamp
+      clamp_constraints: [max_slippage]
+      timeout: 10
+      fallback: 0
+    }
+    emit advised(score=decision)
+  }
+}`;
+      const compileResult = compile(source);
+      assertIR(compileResult);
+
+      const previewResult = await preview({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+        onAdvisory: async () => 100,
+      });
+
+      expect(previewResult.success).toBe(true);
+      const advisoryResult = previewResult.receipt?.advisoryResults[0];
+      expect(advisoryResult).toBeDefined();
+      expect(advisoryResult?.rawOutput).toBe(100);
+      expect(advisoryResult?.effectiveOutput).toBe(10);
+      expect(advisoryResult?.output).toBe(10);
+      expect(advisoryResult?.clamped).toBe(true);
+      expect(advisoryResult?.onViolation).toBe("clamp");
     });
   });
 

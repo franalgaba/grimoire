@@ -54,6 +54,7 @@ program
   .command("validate <spell>")
   .description("Validate a .spell file")
   .option("--strict", "Treat warnings as errors")
+  .option("--json", "Output validation report as JSON")
   .action(validateCommand);
 
 // Simulate command

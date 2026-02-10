@@ -52,7 +52,7 @@ grimoire compile-all [dir] [--fail-fast] [--json]
 Validate a `.spell` file without compiling.
 
 ```bash
-grimoire validate <spell> [--strict]
+grimoire validate <spell> [--strict] [--json]
 ```
 
 ### grimoire simulate
@@ -153,7 +153,7 @@ Use `--advisor-skills-dir <dir>` with `simulate` or `cast` to resolve advisor sk
 
 ## Advisory (Pi OAuth)
 
-Advisory steps (`**...**` and `advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell fallback. Use `--advisory-pi` to force Pi even if no model is configured.
+Advisory steps (`advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell fallback. Use `--advisory-pi` to force Pi even if no model is configured.
 
 OAuth (OpenAI Codex) setup:
 

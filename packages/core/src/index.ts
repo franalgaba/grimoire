@@ -16,6 +16,7 @@ export {
   typeCheckIR,
 } from "./compiler/index.js";
 export type {
+  AdvisorySummary,
   ParseResult,
   IRGeneratorResult,
   ValidationResult,

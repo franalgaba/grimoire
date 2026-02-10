@@ -97,6 +97,11 @@ export interface StepResult {
   halted?: boolean;
   skipped?: boolean;
   fallback?: boolean;
+  rawOutput?: unknown;
+  effectiveOutput?: unknown;
+  violationPolicy?: "reject" | "clamp";
+  clamped?: boolean;
+  advisoryViolations?: AdvisoryViolationEventDetail[];
 }
 
 // =============================================================================
@@ -286,6 +291,13 @@ interface BindingSetEvent {
 }
 
 // Advisory events
+interface AdvisoryViolationEventDetail {
+  path: string;
+  message: string;
+  actual?: unknown;
+  expected?: unknown;
+}
+
 interface AdvisoryStartedEvent {
   type: "advisory_started";
   stepId: string;
@@ -302,6 +314,13 @@ interface AdvisoryCompletedEvent {
   stepId: string;
   advisor: string;
   output: unknown;
+  rawOutput?: unknown;
+  effectiveOutput?: unknown;
+  onViolation?: "reject" | "clamp";
+  policyScope?: string;
+  clampConstraints?: string[];
+  clamped?: boolean;
+  violations?: AdvisoryViolationEventDetail[];
 }
 
 interface AdvisoryFailedEvent {

@@ -213,6 +213,9 @@ export type AdvisoryOutputSchema =
   | { type: "object"; fields?: Record<string, AdvisoryOutputSchema> }
   | { type: "array"; items?: AdvisoryOutputSchema };
 
+/** Advisory output policy when schema/constraint validation fails */
+export type AdvisoryViolationPolicy = "reject" | "clamp";
+
 /** Advisory step - AI consultation (read-only) */
 export interface AdvisoryStep {
   kind: "advisory";
@@ -220,8 +223,12 @@ export interface AdvisoryStep {
   advisor: string;
   prompt: string;
   context?: Record<string, Expression>;
+  policyScope?: string;
   outputSchema: AdvisoryOutputSchema;
   outputBinding: string;
+  violationPolicy?: AdvisoryViolationPolicy;
+  violationPolicyExplicit?: boolean;
+  clampConstraints?: string[];
   timeout: number;
   fallback: Expression;
   dependsOn: string[];

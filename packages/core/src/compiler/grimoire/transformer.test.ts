@@ -623,6 +623,42 @@ describe("Transformer", () => {
         "Inline advisory expressions (**...**) are no longer supported"
       );
     });
+
+    test("transforms advisory contract fields on advise statements", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  advisors: {
+    risk: {
+      model: sonnet
+    }
+  }
+
+  on manual: {
+    decision = advise risk: "Check risk" {
+      context: balance, rates
+      within: constraints
+      output: boolean
+      on_violation: clamp
+      clamp_constraints: [max_slippage, min_output]
+      timeout: 10
+      fallback: true
+    }
+  }
+}`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const step = result.steps?.[0];
+      const advisory = (step?.advisory as Record<string, unknown>) ?? {};
+      expect(advisory.context).toEqual({
+        balance: "balance",
+        rates: "rates",
+      });
+      expect(advisory.within).toBe("constraints");
+      expect(advisory.on_violation).toBe("clamp");
+      expect(advisory.clamp_constraints).toEqual(["max_slippage", "min_output"]);
+      expect(advisory.on_violation_explicit).toBe(true);
+    });
   });
 
   describe("method call transformation", () => {
