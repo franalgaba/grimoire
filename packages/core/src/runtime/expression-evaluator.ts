@@ -357,6 +357,20 @@ function evaluateCall(fn: BuiltinFn, args: EvalValue[]): EvalValue {
       return sum / arr.length;
     }
 
+    case "to_number": {
+      const v = args[0];
+      if (typeof v === "number") return v;
+      if (typeof v === "bigint") return Number(v);
+      throw new Error(`to_number: cannot convert ${typeof v}`);
+    }
+
+    case "to_bigint": {
+      const v = args[0];
+      if (typeof v === "bigint") return v;
+      if (typeof v === "number") return BigInt(Math.trunc(v));
+      throw new Error(`to_bigint: cannot convert ${typeof v}`);
+    }
+
     // Async functions should not be called synchronously
     case "balance":
     case "price":
@@ -437,6 +451,8 @@ async function evaluateCallAsync(
     case "abs":
     case "sum":
     case "avg":
+    case "to_number":
+    case "to_bigint":
       return evaluateCall(fn, args);
 
     default:

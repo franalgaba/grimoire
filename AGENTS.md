@@ -221,7 +221,7 @@ spell YieldOptimizer {
 # Compiler Pipeline
 
 ```
-Source (.spell) -> Tokenizer -> Parser -> AST -> Transformer -> SpellSource -> IR Generator -> SpellIR
+Source (.spell) -> Tokenizer -> Parser -> AST -> Transformer -> SpellSource -> IR Generator -> SpellIR -> Type Checker -> Validator
 ```
 
 Key files:
@@ -230,6 +230,8 @@ Key files:
 - `packages/core/src/compiler/grimoire/ast.ts` - AST node type definitions
 - `packages/core/src/compiler/grimoire/transformer.ts` - AST -> SpellSource conversion
 - `packages/core/src/compiler/ir-generator.ts` - SpellSource -> SpellIR (executable format)
+- `packages/core/src/compiler/type-checker.ts` - Compile-time type checker (errors block compilation)
+- `packages/core/src/compiler/validator.ts` - IR validation (structural checks)
 
 # Venues and Adapters
 
@@ -361,7 +363,7 @@ Keep docs and skills in sync with code changes:
 | Change | Update |
 |--------|--------|
 | New/changed CLI command or flag | `docs/reference/cli.md`, `skills/grimoire/SKILL.md`, this file |
-| New/changed DSL syntax or feature | `docs/reference/grimoire-dsl-spec.md` |
+| New/changed DSL syntax or feature | `docs/reference/grimoire-dsl-spec.md`, `docs/reference/spell-syntax.md` |
 | New/changed venue adapter | `docs/reference/venues.md`, matching `skills/grimoire-<venue>/SKILL.md` |
 | New venue adapter added | Create `skills/grimoire-<venue>/SKILL.md`, update `docs/reference/venues.md` |
 | Test runner changes | `docs/how-to/run-tests.md` |
@@ -419,7 +421,8 @@ The expression parser (`packages/core/src/compiler/expression-parser.ts`) handle
 - Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
 - Logical: `and`, `or`, `not` (case-insensitive)
 - Ternary: `condition ? then : else`
-- Function calls: `max(a, b)`, `min(x, y)`, `abs(n)`, `sum(arr)`, `avg(arr)`
+- Function calls: `max(a, b)`, `min(x, y)`, `abs(n)`, `sum(arr)`, `avg(arr)`, `to_number(n)`, `to_bigint(n)`
+- Type conversions: `to_number(bigint_val)` → number, `to_bigint(number_val)` → bigint
 - Property access: `obj.prop`, `arr[0]`
 
 # Usage Example

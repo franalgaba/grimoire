@@ -33,7 +33,9 @@ export type BuiltinFn =
   | "max"
   | "abs"
   | "sum"
-  | "avg";
+  | "avg"
+  | "to_number"
+  | "to_bigint";
 
 /** Expression IR node types */
 export type Expression =

@@ -18,7 +18,7 @@ spell AaveSupply {
   }
   on manual: {
     usdc_balance = balance(USDC)
-    supply_amount = min(usdc_balance, params.amount)
+    supply_amount = min(to_number(usdc_balance), params.amount)
     should_supply = supply_amount >= params.min_amount
 
     if should_supply {

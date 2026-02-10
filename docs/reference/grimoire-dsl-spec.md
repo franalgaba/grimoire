@@ -522,6 +522,21 @@ result = (a + b) * c
 | `sum(arr)` | Sum array elements | `sum(rates)` |
 | `avg(arr)` | Average array elements | `avg(rates)` |
 
+### Type Conversion Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `to_number(n)` | Convert bigint to number | `to_number(balance(ETH))` |
+| `to_bigint(n)` | Convert number to bigint | `to_bigint(params.amount)` |
+
+Blockchain query functions (`balance`, `get_position`, `get_debt`) return `bigint` values. Params, literals, and price functions return `number`. Arithmetic between `bigint` and `number` is a compile-time type error. Use `to_number()` or `to_bigint()` to convert explicitly:
+
+```
+eth_value = to_number(balance(ETH)) * price(ETH, USDC)
+```
+
+Comparisons (`>`, `<`, `>=`, `<=`, `==`, `!=`) auto-promote and work across `bigint` and `number` without conversion.
+
 ### Async Functions (Blockchain Queries)
 
 | Function | Description |
@@ -1271,6 +1286,7 @@ spell TieredTrader {
 | State access | `variable` | `run_count = run_count + 1` |
 | Param access | `params.key` | `params.amount` |
 | Limit access | `limit_key` | `limit_max_allocation` |
+| Type conversion | `to_number(n)` / `to_bigint(n)` | `to_number(balance(ETH)) * price(ETH, USDC)` |
 
 ---
 

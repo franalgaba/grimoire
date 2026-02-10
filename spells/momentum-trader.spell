@@ -34,7 +34,7 @@ spell MomentumTrader {
     eth_price = price(WETH, USDC)
     btc_price = price(WBTC, USDC)
 
-    portfolio_value = base_balance + (eth_balance * eth_price) + (btc_balance * btc_price)
+    portfolio_value = to_number(base_balance) + (to_number(eth_balance) * eth_price) + (to_number(btc_balance) * btc_price)
 
     position_count = 0
     if eth_balance > 0 {
@@ -44,7 +44,7 @@ spell MomentumTrader {
       position_count = position_count + 1
 
     }
-    trade_size = min(base_balance * params.position_size, portfolio_value * limits.max_single_position)
+    trade_size = min(to_number(base_balance) * params.position_size, portfolio_value * limits.max_single_position)
     can_trade = trade_size >= limits.min_trade_size
 
     emit daily_rebalance(

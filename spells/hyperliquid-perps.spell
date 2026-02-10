@@ -38,7 +38,7 @@ spell HyperliquidPerps {
       btc_price = price(BTC, USDC)
       eth_price = price(ETH, USDC)
 
-      position_value = equity * params.position_size_pct
+      position_value = to_number(equity) * params.position_size_pct
       position_value = min(position_value, params.max_position_size)
 
       emit position_check(

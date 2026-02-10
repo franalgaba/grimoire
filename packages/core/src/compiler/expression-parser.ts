@@ -57,6 +57,8 @@ const BUILTIN_FNS: BuiltinFn[] = [
   "abs",
   "sum",
   "avg",
+  "to_number",
+  "to_bigint",
 ];
 
 /**

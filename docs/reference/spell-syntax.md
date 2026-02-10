@@ -147,6 +147,20 @@ if x > 10 and not halted {
 }
 ```
 
+### Type conversions
+
+Blockchain queries (`balance`, `get_position`, `get_debt`) return `bigint`. Params, literals, and `price`/`get_apy`/`get_health_factor` return `number`. Arithmetic between mismatched types is a compile-time error. Use conversion builtins:
+
+```spell
+# Convert bigint balance to number for arithmetic with price
+eth_value = to_number(balance(ETH)) * price(ETH, USDC)
+
+# Convert number to bigint
+big_amount = to_bigint(params.amount)
+```
+
+Comparisons auto-promote across `bigint` and `number` without conversion.
+
 ## Advisory prompts
 
 ```spell
