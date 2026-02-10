@@ -1,18 +1,23 @@
 # Test: Bridge WETH from Base to Arbitrum via Across (for gas)
 
-spell TestAcrossWethBaseToArb
+spell TestAcrossWethBaseToArb {
 
   version: "1.0.0"
   description: "Bridge WETH from Base to Arbitrum via Across — for gas"
   assets: [WETH]
 
-  params:
+  params: {
     amount: 3000000000000000
     destination_chain: 42161
 
-  venues:
+  }
+  venues: {
     across: @across
 
-  on manual:
+  }
+  on manual: {
     across.bridge(WETH, params.amount, params.destination_chain)
     emit bridged(asset=WETH, direction="base_to_arb", amount=params.amount)
+
+  }
+}

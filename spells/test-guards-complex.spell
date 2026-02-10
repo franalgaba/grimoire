@@ -1,20 +1,26 @@
-spell TestGuardsComplex
+spell TestGuardsComplex {
 
   version: "1.0.0"
   description: "Test guards with logical operators and combined with actions"
   assets: [USDC, ETH]
 
-  params:
+  params: {
     amount: 100000
     max_amount: 1000000
 
-  venues:
+  }
+  venues: {
     dex: @uniswap_v3
 
-  guards:
+  }
+  guards: {
     amount_range: params.amount > 0 and params.amount < params.max_amount
     not_zero: params.amount != 0
 
-  on manual:
+  }
+  on manual: {
     uniswap_v3.swap(USDC, ETH, params.amount) with slippage=100
     emit done(amount=params.amount)
+
+  }
+}

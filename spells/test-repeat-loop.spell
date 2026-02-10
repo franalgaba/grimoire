@@ -1,16 +1,21 @@
 # Test: Repeat loop — fixed iterations
 
-spell TestRepeatLoop
+spell TestRepeatLoop {
 
   version: "1.0.0"
   description: "Repeat loop increments a counter"
   assets: []
 
-  params:
+  params: {
     start: 1
 
-  on manual:
+  }
+  on manual: {
     total = 0
-    repeat 3:
+    repeat 3 {
       total = total + params.start
+    }
     emit repeated(total=total)
+
+  }
+}

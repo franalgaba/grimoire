@@ -13,22 +13,26 @@ npm i -g @grimoirelabs/cli
 Example: `spells/uniswap-swap-execute.spell`. If you're not in this repo, create the file with the following content.
 
 ```spell
-spell UniswapSwapExecute
+spell UniswapSwapExecute {
 
   version: "1.0.0"
   description: "Swap USDC for WETH on Uniswap V3"
 
   assets: [USDC, WETH]
 
-  params:
+  params: {
     amount: 1000000000
+  }
 
-  venues:
+  venues: {
     uniswap_v3: @uniswap_v3
+  }
 
-  on manual:
+  on manual: {
     uniswap_v3.swap(USDC, WETH, params.amount)
     emit swap_submitted(asset_in=USDC, asset_out=WETH, amount=params.amount)
+  }
+}
 ```
 
 ## 3) Simulate execution

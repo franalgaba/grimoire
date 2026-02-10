@@ -9,8 +9,9 @@ Uniswap adapters read `maxSlippageBps` internally. In `.spell` files, use `max_s
 Example action step in a spell:
 
 ```spell
-on manual:
+on manual: {
   uniswap_v3.swap(USDC, WETH, params.amount) with max_slippage=50
+}
 ```
 
 Notes:
@@ -22,24 +23,27 @@ Notes:
 For **exact-in** swaps, set a `min_output` floor:
 
 ```spell
-on manual:
+on manual: {
   uniswap_v3.swap(USDC, WETH, params.amount) with min_output=990000
+}
 ```
 
 For **exact-out** swaps, set a `max_input` cap:
 
 ```spell
-on manual:
+on manual: {
   uniswap_v3.swap(USDC, WETH, params.amount) with max_input=1010000
+}
 ```
 
 ## Slippage for Across
 
-Across uses the same constraint fields. The adapter converts the quote’s output amount into a minimum based on slippage:
+Across uses the same constraint fields. The adapter converts the quote's output amount into a minimum based on slippage:
 
 ```spell
-on manual:
+on manual: {
   across.bridge(USDC, params.amount, 10) with max_slippage=30
+}
 ```
 
 ## Advanced constraints

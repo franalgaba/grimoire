@@ -25,19 +25,20 @@ This prints a `params:` block you can paste into a spell.
 Create a file `spells/vm-vault-snapshot.spell`:
 
 ```spell
-spell VmVaultSnapshot
+spell VmVaultSnapshot {
 
   description: "Compute a yield spread from a Morpho vault snapshot"
 
-  params:
+  params: {
     snapshot_at: ""
     snapshot_source: ""
     vault_names: []
     vault_addresses: []
     vault_net_apys: []
     vault_tvl_usd: []
+  }
 
-  on manual:
+  on manual: {
     best_apy = max(params.vault_net_apys)
     avg_apy = avg(params.vault_net_apys)
     spread = best_apy - avg_apy
@@ -48,6 +49,8 @@ spell VmVaultSnapshot
       avg_apy=avg_apy,
       spread=spread
     )
+  }
+}
 ```
 
 Replace the `params:` block with the snapshot you generated in step 1 (the output already includes `params:`).

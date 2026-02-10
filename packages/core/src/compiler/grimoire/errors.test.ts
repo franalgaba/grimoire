@@ -5,7 +5,6 @@
 import { describe, expect, test } from "bun:test";
 import {
   GrimoireError,
-  IndentationError,
   ParseError,
   TokenizeError,
   TransformError,
@@ -41,9 +40,9 @@ describe("Error Types", () => {
 
     test("creates error with source", () => {
       const error = new GrimoireError("TEST_ERROR", "Test message", {
-        source: "spell Test\n  version: 1.0",
+        source: "spell Test {\n  version: 1.0\n}",
       });
-      expect(error.source).toBe("spell Test\n  version: 1.0");
+      expect(error.source).toBe("spell Test {\n  version: 1.0\n}");
     });
 
     test("format() returns formatted error without location", () => {
@@ -62,7 +61,7 @@ describe("Error Types", () => {
     });
 
     test("format() includes source context", () => {
-      const source = "spell Test\n  invalid syntax here";
+      const source = "spell Test {\n  invalid syntax here\n}";
       const error = new GrimoireError("TEST_ERROR", "Invalid syntax", {
         location: { line: 2, column: 3, offset: 13 },
         source,
@@ -113,14 +112,6 @@ describe("Error Types", () => {
         },
       });
       expect(error.span).toBeDefined();
-    });
-  });
-
-  describe("IndentationError", () => {
-    test("creates indentation error", () => {
-      const error = new IndentationError("Mismatched indent");
-      expect(error.name).toBe("IndentationError");
-      expect(error.code).toBe("INDENTATION_ERROR");
     });
   });
 

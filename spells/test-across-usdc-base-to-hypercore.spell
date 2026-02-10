@@ -1,18 +1,23 @@
 # Test: Bridge USDC from Base to HyperCore via Across (direct deposit)
 
-spell TestAcrossUsdcBaseToHypercore
+spell TestAcrossUsdcBaseToHypercore {
 
   version: "1.0.0"
   description: "Bridge USDC from Base to HyperCore via Across — direct deposit"
   assets: [USDC]
 
-  params:
+  params: {
     amount: 500000
     destination_chain: 1337
 
-  venues:
+  }
+  venues: {
     across: @across
 
-  on manual:
+  }
+  on manual: {
     across.bridge(USDC, params.amount, params.destination_chain)
     emit bridged(asset=USDC, direction="base_to_hypercore", amount=params.amount)
+
+  }
+}

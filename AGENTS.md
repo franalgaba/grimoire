@@ -66,7 +66,7 @@ Location: `CHANGELOG.md` (root). Format follows Keep a Changelog.
 
 # Project Overview
 
-Grimoire is a DSL for defining and executing onchain DeFi strategies. Strategies are written in `.spell` files using a Python-like indentation-based syntax.
+Grimoire is a DSL for defining and executing onchain DeFi strategies. Strategies are written in `.spell` files using a brace-delimited syntax (`{` ... `}`).
 
 # Project Structure
 
@@ -108,86 +108,102 @@ docs/                        # Diataxis docs
 
 # Grimoire Syntax
 
-Spells use a Python-like indentation-based syntax (2-space indent):
+Spells use a brace-delimited syntax (`{` ... `}`):
 
 ```
-spell YieldOptimizer
-
+spell YieldOptimizer {
   version: "1.0.0"
   description: "Optimizes yield across lending venues"
   assets: [USDC, USDT, DAI]
 
-  params:
+  params: {
     min_amount: 100
     amount: 100000
+  }
 
-  limits:
+  limits: {
     max_allocation_per_venue: 50%
+  }
 
-  venues:
+  venues: {
     aave_v3: @aave_v3
     morpho_blue: @morpho_blue
     uniswap_v3: @uniswap_v3
+  }
 
-  skills:
-    dex:
+  skills: {
+    dex: {
       type: swap
       adapters: [uniswap_v3]
-      default_constraints:
+      default_constraints: {
         max_slippage: 50
+      }
+    }
+  }
 
-  advisors:
-    risk:
+  advisors: {
+    risk: {
       model: anthropic:sonnet
       timeout: 30
       fallback: true
+    }
+  }
 
-  state:
-    persistent:
+  state: {
+    persistent: {
       counter: 0
-    ephemeral:
+    }
+    ephemeral: {
       temp: 0
+    }
+  }
 
-  on hourly:
-    for asset in assets:
+  on hourly: {
+    for asset in assets {
       current_balance = balance(asset)
 
-      if current_balance > params.min_amount:
-        if **gas costs justify the move** via risk:
-          atomic:
+      if current_balance > params.min_amount {
+        if **gas costs justify the move** via risk {
+          atomic {
             aave_v3.withdraw(asset, params.amount)
             morpho_blue.lend(asset, params.amount)
+          }
+        }
+      }
+    }
+  }
+}
 ```
 
 ## Syntax Reference
 
 | Feature | Syntax | Example |
 |---------|--------|---------|
-| Spell declaration | `spell Name` | `spell YieldOptimizer` |
+| Spell declaration | `spell Name {` | `spell YieldOptimizer {` |
 | Arrays | `[item1, item2]` | `assets: [USDC, DAI]` |
 | Venue refs | `@name` | `@aave_v3` |
 | Venue groups | `name: [@v1, @v2]` | `lending: [@aave_v3, @morpho_blue]` |
-| Skills | `skills:` | `skills: ...` |
-| Advisors | `advisors:` | `advisors: ...` |
+| Skills | `skills: {` | `skills: { ... }` |
+| Advisors | `advisors: {` | `advisors: { ... }` |
 | Percentages | `N%` | `50%` (converts to 0.5) |
-| Triggers | `on trigger:` | `on hourly:`, `on daily:`, `on manual:` |
-| For loops | `for x in y:` | `for asset in assets:` |
-| Repeat loops | `repeat N:` | `repeat 3:` |
-| Loop until | `loop until cond max N:` | `loop until done max 10:` |
-| If/elif/else | `if cond:` | `if x > 0:` |
-| Advisory (AI) | `**prompt**` | `if **is this safe**:` |
+| Triggers | `on trigger: {` | `on hourly: {`, `on daily: {`, `on manual: {` |
+| For loops | `for x in y {` | `for asset in assets {` |
+| Repeat loops | `repeat N {` | `repeat 3 {` |
+| Loop until | `loop until cond max N {` | `loop until done max 10 {` |
+| If/elif/else | `if cond {` | `if x > 0 {` |
+| Advisory (AI) | `**prompt**` | `if **is this safe** {` |
 | Advise | `x = advise advisor:` | `decision = advise risk: "..."` |
-| Atomic blocks | `atomic:` | Transaction grouping |
-| Try/catch | `try:` | `try: ... catch *:` |
-| Parallel | `parallel ...:` | `parallel join=all:` |
-| Pipeline | `expr | map:` | `items | map:` |
-| Block/Do | `block` / `do` | `block add(a,b):` |
+| Atomic blocks | `atomic {` | Transaction grouping |
+| Try/catch | `try {` | `try { ... } catch *: {` |
+| Parallel | `parallel ... {` | `parallel join=all: {` |
+| Pipeline | `expr | map: {` | `items | map: {` |
+| Block/Do | `block` / `do` | `block add(a,b) {` |
 | Comments | `# comment` | `# Calculate rates` |
 | Method calls | `obj.method(args)` | `venue.deposit(asset, amount)` |
 | Assignment | `x = expr` | `rate = get_apy("aave_v3", asset)` |
 | Using skill | `using name` | `swap(...) using dex` |
 | Constraints | `with k=v` | `with max_slippage=50` |
-| Logical ops | `and`, `or`, `not` | `if a > 0 and b < 10:` |
+| Logical ops | `and`, `or`, `not` | `if a > 0 and b < 10 {` |
 | Emit events | `emit name(k=v)` | `emit done(value=42)` |
 | Halt execution | `halt "reason"` | `halt "insufficient balance"` |
 | Wait | `wait N` | `wait 3600` (seconds) |
@@ -207,7 +223,7 @@ Source (.spell) -> Tokenizer -> Parser -> AST -> Transformer -> SpellSource -> I
 ```
 
 Key files:
-- `packages/core/src/compiler/grimoire/tokenizer.ts` - Indentation-aware lexer, emits INDENT/DEDENT tokens
+- `packages/core/src/compiler/grimoire/tokenizer.ts` - Brace-delimited lexer, emits LBRACE/RBRACE tokens
 - `packages/core/src/compiler/grimoire/parser.ts` - Recursive descent parser
 - `packages/core/src/compiler/grimoire/ast.ts` - AST node type definitions
 - `packages/core/src/compiler/grimoire/transformer.ts` - AST -> SpellSource conversion

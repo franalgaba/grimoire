@@ -1,22 +1,28 @@
 # Test: Advise statement with output schema
 
-spell TestAdviseOutput
+spell TestAdviseOutput {
 
   version: "1.0.0"
   description: "Advise statement returns an enum decision"
   assets: []
 
-  advisors:
-    reviewer:
+  advisors: {
+    reviewer: {
       model: "anthropic:haiku"
       skills: ["web-search"]
       allowed_tools: ["web.run"]
 
-  on manual:
-    decision = advise reviewer: "choose action"
-      output:
+    }
+  }
+  on manual: {
+    decision = advise reviewer: "choose action" {
+      output: {
         type: enum
         values: ["hold", "buy", "sell"]
+      }
       timeout: 10
       fallback: true
+    }
     emit advised(decision=decision)
+  }
+}

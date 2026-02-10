@@ -25,22 +25,26 @@ const across = createAcrossAdapter({
 `to_chain` can be a literal or an expression (params/state), but it must resolve to a numeric chain id at runtime.
 
 ```spell
-spell AcrossBridge
+spell AcrossBridge {
 
   version: "1.0.0"
 
   assets: [USDC]
 
-  params:
+  params: {
     amount: 100000000
     destination_chain: 10
+  }
 
-  venues:
+  venues: {
     across: @across
+  }
 
-  on manual:
+  on manual: {
     across.bridge(USDC, params.amount, params.destination_chain)
     emit bridge_submitted(asset=USDC, amount=params.amount, to_chain=params.destination_chain)
+  }
+}
 ```
 
 ## 3) Execute with adapters

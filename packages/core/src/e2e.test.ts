@@ -22,18 +22,20 @@ function assertIR(
 describe("E2E: Compile and Execute", () => {
   describe("Basic Compute Spells", () => {
     test("executes simple compute step", async () => {
-      const source = `spell SimpleCompute
+      const source = `spell SimpleCompute {
 
   version: "1.0.0"
 
-  params:
+  params: {
     x: 10
     y: 20
+  }
 
-  on manual:
+  on manual: {
     sum = params.x + params.y
     product = params.x * params.y
-`;
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -49,16 +51,18 @@ describe("E2E: Compile and Execute", () => {
     });
 
     test("uses parameter overrides", async () => {
-      const source = `spell ParamOverride
+      const source = `spell ParamOverride {
 
   version: "1.0.0"
 
-  params:
+  params: {
     multiplier: 2
+  }
 
-  on manual:
+  on manual: {
     result = 100 * params.multiplier
-`;
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -82,18 +86,20 @@ describe("E2E: Compile and Execute", () => {
     });
 
     test("chains multiple compute steps", async () => {
-      const source = `spell ChainedCompute
+      const source = `spell ChainedCompute {
 
   version: "1.0.0"
 
-  params:
+  params: {
     input: 100
+  }
 
-  on manual:
+  on manual: {
     doubled = params.input * 2
     tripled = doubled * 1.5
     final = tripled + 10
-`;
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -111,19 +117,22 @@ describe("E2E: Compile and Execute", () => {
 
   describe("Conditional Spells", () => {
     test("executes then branch when condition is true", async () => {
-      const source = `spell ConditionalThen
+      const source = `spell ConditionalThen {
 
   version: "1.0.0"
 
-  params:
+  params: {
     value: 100
+  }
 
-  on manual:
-    if params.value > 50:
+  on manual: {
+    if params.value > 50 {
       result = 1
-    else:
+    } else {
       result = 0
-`;
+    }
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -138,19 +147,22 @@ describe("E2E: Compile and Execute", () => {
     });
 
     test("executes else branch when condition is false", async () => {
-      const source = `spell ConditionalElse
+      const source = `spell ConditionalElse {
 
   version: "1.0.0"
 
-  params:
+  params: {
     value: 10
+  }
 
-  on manual:
-    if params.value > 50:
+  on manual: {
+    if params.value > 50 {
       result = 1
-    else:
+    } else {
       result = 0
-`;
+    }
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -166,23 +178,27 @@ describe("E2E: Compile and Execute", () => {
     });
 
     test("handles nested conditionals", async () => {
-      const source = `spell NestedConditional
+      const source = `spell NestedConditional {
 
   version: "1.0.0"
 
-  params:
+  params: {
     x: 100
     y: 50
+  }
 
-  on manual:
-    if params.x > 50:
-      if params.y > 25:
+  on manual: {
+    if params.x > 50 {
+      if params.y > 25 {
         result = 3
-      else:
+      } else {
         result = 2
-    else:
+      }
+    } else {
       result = 1
-`;
+    }
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -199,14 +215,16 @@ describe("E2E: Compile and Execute", () => {
 
   describe("Loop Spells", () => {
     test("compiles for loop", async () => {
-      const source = `spell ForLoop
+      const source = `spell ForLoop {
 
   version: "1.0.0"
 
-  on manual:
-    for i in items:
+  on manual: {
+    for i in items {
       x = i
-`;
+    }
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       // Loop step is created
@@ -217,15 +235,16 @@ describe("E2E: Compile and Execute", () => {
 
   describe("Wait Steps", () => {
     test("executes wait step", async () => {
-      const source = `spell WaitSpell
+      const source = `spell WaitSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 1
     wait 1
     y = 2
-`;
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -242,16 +261,18 @@ describe("E2E: Compile and Execute", () => {
 
   describe("Emit Steps", () => {
     test("emits event with data", async () => {
-      const source = `spell EmitSpell
+      const source = `spell EmitSpell {
 
   version: "1.0.0"
 
-  params:
+  params: {
     value: 42
+  }
 
-  on manual:
+  on manual: {
     emit result(value=params.value)
-`;
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -268,14 +289,15 @@ describe("E2E: Compile and Execute", () => {
 
   describe("Halt Steps", () => {
     test("halts execution immediately", async () => {
-      const source = `spell HaltSpell
+      const source = `spell HaltSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 1
     halt "Stopping here"
-`;
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -293,19 +315,23 @@ describe("E2E: Compile and Execute", () => {
 
   describe("State Management", () => {
     test("uses state in computations", async () => {
-      const source = `spell StateSpell
+      const source = `spell StateSpell {
 
   version: "1.0.0"
 
-  state:
-    persistent:
+  state: {
+    persistent: {
       counter: 0
-    ephemeral:
+    }
+    ephemeral: {
       temp: 0
+    }
+  }
 
-  on manual:
+  on manual: {
     x = 1
-`;
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -323,17 +349,19 @@ describe("E2E: Compile and Execute", () => {
 
   describe("Action Steps", () => {
     test("simulates action steps and emits ledger events", async () => {
-      const source = `spell ActionSpell
+      const source = `spell ActionSpell {
 
   version: "1.0.0"
   assets: [USDC]
 
-  venues:
+  venues: {
     lending: [@aave]
+  }
 
-  on manual:
+  on manual: {
     aave.deposit(USDC, 100)
-`;
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -358,21 +386,23 @@ describe("E2E: Compile and Execute", () => {
 
 describe("E2E: Expression Evaluation", () => {
   test("evaluates arithmetic expressions", async () => {
-    const source = `spell ArithmeticSpell
+    const source = `spell ArithmeticSpell {
 
   version: "1.0.0"
 
-  params:
+  params: {
     a: 10
     b: 3
+  }
 
-  on manual:
+  on manual: {
     sum = params.a + params.b
     diff = params.a - params.b
     prod = params.a * params.b
     quot = params.a / params.b
     modulo = params.a % params.b
-`;
+  }
+}`;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
     assertIR(compileResult);
@@ -387,20 +417,22 @@ describe("E2E: Expression Evaluation", () => {
   });
 
   test("evaluates comparison expressions", async () => {
-    const source = `spell ComparisonSpell
+    const source = `spell ComparisonSpell {
 
   version: "1.0.0"
 
-  params:
+  params: {
     x: 10
     y: 20
+  }
 
-  on manual:
+  on manual: {
     eq = params.x == params.y
     neq = params.x != params.y
     lt = params.x < params.y
     gt = params.x > params.y
-`;
+  }
+}`;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
     assertIR(compileResult);
@@ -415,18 +447,20 @@ describe("E2E: Expression Evaluation", () => {
   });
 
   test("evaluates logical expressions", async () => {
-    const source = `spell LogicalSpell
+    const source = `spell LogicalSpell {
 
   version: "1.0.0"
 
-  params:
+  params: {
     a: true
     b: false
+  }
 
-  on manual:
+  on manual: {
     and_result = params.a and params.b
     or_result = params.a or params.b
-`;
+  }
+}`;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
     assertIR(compileResult);
@@ -441,19 +475,21 @@ describe("E2E: Expression Evaluation", () => {
   });
 
   test("evaluates function calls", async () => {
-    const source = `spell FunctionSpell
+    const source = `spell FunctionSpell {
 
   version: "1.0.0"
 
-  params:
+  params: {
     a: 10
     b: 20
     c: 15
+  }
 
-  on manual:
+  on manual: {
     min_val = min(params.a, params.b)
     max_val = max(params.a, params.b)
-`;
+  }
+}`;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
     assertIR(compileResult);
@@ -468,16 +504,18 @@ describe("E2E: Expression Evaluation", () => {
   });
 
   test("evaluates ternary expressions", async () => {
-    const source = `spell TernarySpell
+    const source = `spell TernarySpell {
 
   version: "1.0.0"
 
-  params:
+  params: {
     value: 100
+  }
 
-  on manual:
+  on manual: {
     result = params.value > 50 ? 1 : 0
-`;
+  }
+}`;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
     assertIR(compileResult);
@@ -493,16 +531,18 @@ describe("E2E: Expression Evaluation", () => {
 
   describe("Action execution", () => {
     test("executes action with approval flow", async () => {
-      const source = `spell ActionApproval
+      const source = `spell ActionApproval {
 
   version: "1.0.0"
 
-  venues:
+  venues: {
     lending: @aave_v3
+  }
 
-  on manual:
+  on manual: {
     aave_v3.deposit(USDC, 100)
-`;
+  }
+}`;
       const compileResult = compile(source);
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
@@ -563,39 +603,42 @@ describe("E2E: Expression Evaluation", () => {
 
 describe("E2E: Trigger Types", () => {
   test("compiles manual trigger", async () => {
-    const source = `spell ManualSpell
+    const source = `spell ManualSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 1
-`;
+  }
+}`;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
     expect(compileResult.ir?.triggers[0]?.type).toBe("manual");
   });
 
   test("compiles hourly trigger", async () => {
-    const source = `spell HourlySpell
+    const source = `spell HourlySpell {
 
   version: "1.0.0"
 
-  on hourly:
+  on hourly: {
     x = 1
-`;
+  }
+}`;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
     expect(compileResult.ir?.triggers[0]?.type).toBe("schedule");
   });
 
   test("compiles daily trigger", async () => {
-    const source = `spell DailySpell
+    const source = `spell DailySpell {
 
   version: "1.0.0"
 
-  on daily:
+  on daily: {
     x = 1
-`;
+  }
+}`;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
     expect(compileResult.ir?.triggers[0]?.type).toBe("schedule");
@@ -604,30 +647,35 @@ describe("E2E: Trigger Types", () => {
 
 describe("E2E: Complex Spells", () => {
   test("compiles and executes spell with all features", async () => {
-    const source = `spell ComplexSpell
+    const source = `spell ComplexSpell {
 
   version: "1.0.0"
   description: "A complex test spell"
   assets: [USDC, ETH]
 
-  params:
+  params: {
     threshold: 100
     multiplier: 2
+  }
 
-  limits:
+  limits: {
     max_amount: 50%
+  }
 
-  venues:
+  venues: {
     swap: @uniswap
     lending: [@aave, @compound]
+  }
 
-  on manual:
+  on manual: {
     value = params.threshold * params.multiplier
-    if value > 100:
+    if value > 100 {
       emit success(amount=value)
-    else:
+    } else {
       emit failure(amount=value)
-`;
+    }
+  }
+}`;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
     assertIR(compileResult);
@@ -642,17 +690,19 @@ describe("E2E: Complex Spells", () => {
   });
 
   test("handles percentage values", async () => {
-    const source = `spell PercentageSpell
+    const source = `spell PercentageSpell {
 
   version: "1.0.0"
 
-  limits:
+  limits: {
     max_allocation: 50%
     min_threshold: 0.5%
+  }
 
-  on manual:
+  on manual: {
     x = 100
-`;
+  }
+}`;
     const compileResult = compile(source);
     expect(compileResult.success).toBe(true);
     assertIR(compileResult);

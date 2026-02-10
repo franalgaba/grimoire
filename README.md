@@ -87,27 +87,32 @@ Next steps: [cli-cast.md](./docs/how-to/cli-cast.md), [transition-to-determinist
 ## Example spell
 
 ```spell
-spell YieldOptimizer
+spell YieldOptimizer {
 
   assets: [USDC, DAI]
 
-  venues:
+  venues: {
     aave_v3: @aave_v3
     morpho_blue: @morpho_blue
+  }
 
-  params:
+  params: {
     amount: 100000
+  }
 
-  on hourly:
-    if **gas costs justify the move**:
+  on hourly: {
+    if **gas costs justify the move** {
       amount_to_move = balance(USDC) * 50%
       aave_v3.withdraw(USDC, amount_to_move)
       morpho_blue.lend(USDC, amount_to_move)
+    }
+  }
+}
 ```
 
 ## Features
 
-- **Human-readable DSL** with Python-like indentation
+- **Human-readable DSL** with brace-delimited syntax
 - **Explicit constraints** and limits via `with` and `limits`
 - **Adapter-based venues** (SDKs live in `@grimoirelabs/venues`)
 - **Onchain + offchain** actions (EVM + Hyperliquid + Yellow + LI.FI)

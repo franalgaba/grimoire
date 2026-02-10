@@ -1,17 +1,22 @@
 # Swap ETH for USDC on Uniswap V4 (native ETH — no wrapping needed)
 
-spell EthToUsdcSwapV4
+spell EthToUsdcSwapV4 {
 
   version: "1.0.0"
   description: "Swap ETH for USDC on Uniswap V4"
   assets: [ETH, USDC]
 
-  params:
+  params: {
     amount: 1000000000000000
 
-  venues:
+  }
+  venues: {
     uniswap_v4: @uniswap_v4
 
-  on manual:
+  }
+  on manual: {
     uniswap_v4.swap(ETH, USDC, params.amount)
     emit swap_done(asset_in=ETH, asset_out=USDC, amount=params.amount)
+
+  }
+}

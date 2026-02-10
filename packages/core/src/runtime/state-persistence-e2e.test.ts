@@ -47,17 +47,20 @@ function compileSpell(source: string): SpellIR {
 describe("State persistence e2e", () => {
   test("full lifecycle: execute → persist → reload → re-execute", async () => {
     const spell = compileSpell(`
-spell ComputeSpell
+spell ComputeSpell {
 
   version: "1.0.0"
   description: "Simple compute spell"
 
-  params:
+  params: {
     increment: 10
+  }
 
-  on manual:
+  on manual: {
     value = params.increment * 2
     emit computed(result=value)
+  }
+}
 `);
 
     // --- Run 1 ---
@@ -125,14 +128,16 @@ spell ComputeSpell
   test("state survives store close and reopen", async () => {
     const dbPath = join(testDir, "grimoire.db");
     const spell = compileSpell(`
-spell Accumulator
+spell Accumulator {
 
   version: "1.0.0"
   description: "Accumulator"
 
-  on manual:
+  on manual: {
     x = 1 + 2
     emit done(value=x)
+  }
+}
 `);
 
     // Run 1 with first store instance
@@ -173,26 +178,30 @@ spell Accumulator
 
   test("compute-only spell from spells/ directory", async () => {
     const spell = compileSpell(`
-spell ComputeOnly
+spell ComputeOnly {
 
   version: "1.0.0"
   description: "Test spell with only compute steps"
 
-  params:
+  params: {
     amount: 1000
     target_weight: 60
     current_weight: 50
+  }
 
-  on manual:
+  on manual: {
     drift = params.target_weight - params.current_weight
     needs_rebalance = drift > 5 or drift < -5
 
-    if needs_rebalance:
+    if needs_rebalance {
       rebalance_amount = params.amount * drift / 100
       fee_estimate = rebalance_amount * 3 / 1000
       emit rebalance_needed(drift=drift, amount=rebalance_amount, fee=fee_estimate)
-    else:
+    } else {
       emit no_rebalance_needed(drift=drift)
+    }
+  }
+}
 `);
 
     const result = await execute({
@@ -226,13 +235,15 @@ spell ComputeOnly
   test("failed execution is recorded correctly", async () => {
     // Create a spell with a guard that always fails by constructing IR directly
     const baseSpell = compileSpell(`
-spell FailSpell
+spell FailSpell {
 
   version: "1.0.0"
   description: "Spell that will fail"
 
-  on manual:
+  on manual: {
     x = 1
+  }
+}
 `);
 
     // Manually add a guard that always fails
@@ -272,31 +283,37 @@ spell FailSpell
 
   test("multiple spells tracked independently", async () => {
     const spellA = compileSpell(`
-spell SpellAlpha
+spell SpellAlpha {
 
   version: "1.0.0"
   description: "Spell A"
 
-  params:
+  params: {
     x: 100
+  }
 
-  on manual:
+  on manual: {
     value = params.x * 2
     emit done(value=value)
+  }
+}
 `);
 
     const spellB = compileSpell(`
-spell SpellBeta
+spell SpellBeta {
 
   version: "1.0.0"
   description: "Spell B"
 
-  params:
+  params: {
     y: 50
+  }
 
-  on manual:
+  on manual: {
     count = params.y + 1
     emit done(count=count)
+  }
+}
 `);
 
     // Execute spell A
@@ -337,13 +354,15 @@ spell SpellBeta
 
   test("createRunRecord serializes bigint gasUsed correctly", async () => {
     const spell = compileSpell(`
-spell GasTest
+spell GasTest {
 
   version: "1.0.0"
   description: "Gas test"
 
-  on manual:
+  on manual: {
     x = 42
+  }
+}
 `);
 
     const result = await execute({
@@ -372,14 +391,16 @@ spell GasTest
 
   test("ledger serializes bigint values without errors", async () => {
     const spell = compileSpell(`
-spell LedgerBigint
+spell LedgerBigint {
 
   version: "1.0.0"
   description: "Test ledger bigint serialization"
 
-  on manual:
+  on manual: {
     x = 1 + 2
     emit done(value=x)
+  }
+}
 `);
 
     const result = await execute({
@@ -409,17 +430,20 @@ spell LedgerBigint
     const pruningStore = new SqliteStateStore({ dbPath, maxRuns: 3 });
 
     const spell = compileSpell(`
-spell PruneTest
+spell PruneTest {
 
   version: "1.0.0"
   description: "Pruning test"
 
-  params:
+  params: {
     run_number: 0
+  }
 
-  on manual:
+  on manual: {
     n = params.run_number
     emit run(number=n)
+  }
+}
 `);
 
     try {
@@ -446,13 +470,15 @@ spell PruneTest
   test("persistentState is passed through to execution context", async () => {
     // Compile a spell with persistent state in the schema
     const baseSpell = compileSpell(`
-spell StateCheck
+spell StateCheck {
 
   version: "1.0.0"
   description: "Verify state loading"
 
-  on manual:
+  on manual: {
     x = 1
+  }
+}
 `);
 
     // Manually add persistent state to the IR (simulating a spell with state schema)

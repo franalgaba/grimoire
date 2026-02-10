@@ -1,6 +1,6 @@
 # Test: Block definitions + do + import
 
-spell TestBlocksImports
+spell TestBlocksImports {
 
   version: "1.0.0"
   description: "Block invocation and import syntax"
@@ -8,9 +8,13 @@ spell TestBlocksImports
 
   import "blocks/common.spell"
 
-  block add(a, b):
+  block add(a, b) {
     sum = a + b
     emit added(sum=sum)
 
-  on manual:
+  }
+  on manual: {
     do add(2, 3)
+
+  }
+}

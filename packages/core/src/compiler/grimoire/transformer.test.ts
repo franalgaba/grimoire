@@ -23,40 +23,40 @@ const getEmit = (step: StepRecord | undefined): { event?: string } | undefined =
 describe("Transformer", () => {
   describe("basic transformation", () => {
     test("transforms spell name", () => {
-      const source = `spell TestSpell
-
+      const source = `spell TestSpell {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.spell).toBe("TestSpell");
     });
 
     test("transforms version", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "2.0.0"
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.version).toBe("2.0.0");
     });
 
     test("transforms description", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
   description: "A test spell"
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.description).toBe("A test spell");
@@ -65,14 +65,14 @@ describe("Transformer", () => {
 
   describe("assets transformation", () => {
     test("transforms asset array", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
   assets: [USDC, DAI, USDT]
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const assets = result.assets ?? {};
@@ -80,14 +80,14 @@ describe("Transformer", () => {
     });
 
     test("assets have default chain", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
   assets: [USDC]
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.assets?.USDC.chain).toBe(1);
@@ -96,17 +96,18 @@ describe("Transformer", () => {
 
   describe("params transformation", () => {
     test("transforms simple params", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  params:
+  params: {
     amount: 100
     threshold: 50
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.params).toBeDefined();
@@ -115,35 +116,39 @@ describe("Transformer", () => {
     });
 
     test("transforms percentage params", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  params:
+  params: {
     ratio: 50%
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.params?.ratio).toBe(0.5);
     });
 
     test("transforms unit literal params with asset decimals", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  assets:
-    USDC:
+  assets: {
+    USDC: {
       decimals: 6
+    }
+  }
 
-  params:
+  params: {
     amount: 1.5 USDC
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.params?.amount).toBe(1500000);
@@ -152,17 +157,18 @@ describe("Transformer", () => {
 
   describe("limits transformation", () => {
     test("transforms limits as params with prefix", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  limits:
+  limits: {
     max_allocation: 50%
     min_amount: 100
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.params?.limit_max_allocation).toBe(0.5);
@@ -172,16 +178,17 @@ describe("Transformer", () => {
 
   describe("venues transformation", () => {
     test("transforms single venue", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  venues:
+  venues: {
     swap: @uniswap
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.venues).toBeDefined();
@@ -190,16 +197,17 @@ describe("Transformer", () => {
     });
 
     test("transforms venue array", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  venues:
+  venues: {
     lending: [@aave, @morpho, @compound]
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.venues?.aave).toBeDefined();
@@ -211,18 +219,20 @@ describe("Transformer", () => {
 
   describe("state transformation", () => {
     test("transforms persistent state", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  state:
-    persistent:
+  state: {
+    persistent: {
       counter: 0
       total: 100
+    }
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.state).toBeDefined();
@@ -231,17 +241,19 @@ describe("Transformer", () => {
     });
 
     test("transforms ephemeral state", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  state:
-    ephemeral:
+  state: {
+    ephemeral: {
       temp: 0
+    }
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.state?.ephemeral?.temp).toBe(0);
@@ -250,52 +262,52 @@ describe("Transformer", () => {
 
   describe("trigger transformation", () => {
     test("transforms manual trigger", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.trigger).toEqual({ manual: true });
     });
 
     test("transforms hourly trigger", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on hourly:
+  on hourly: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.trigger).toEqual({ schedule: "0 * * * *" });
     });
 
     test("transforms daily trigger", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on daily:
+  on daily: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.trigger).toEqual({ schedule: "0 0 * * *" });
     });
 
     test("transforms condition trigger", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on condition params.amount > 1 every 60:
+  on condition params.amount > 1 every 60: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.trigger).toEqual({
@@ -305,13 +317,13 @@ describe("Transformer", () => {
     });
 
     test("transforms event trigger", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on event "base.block" where block.number > 0:
+  on event "base.block" where block.number > 0: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.trigger).toEqual({
@@ -323,13 +335,13 @@ describe("Transformer", () => {
 
   describe("statement transformation", () => {
     test("transforms assignment to compute step", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 42
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.steps).toBeDefined();
@@ -338,14 +350,15 @@ describe("Transformer", () => {
     });
 
     test("transforms if statement to conditional", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    if x > 10:
+  on manual: {
+    if x > 10 {
       y = 1
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const condStep = findStep(result.steps, "if");
@@ -353,14 +366,15 @@ describe("Transformer", () => {
     });
 
     test("transforms for loop", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    for item in items:
+  on manual: {
+    for item in items {
       x = item
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const loopStep = findStep(result.steps, "for");
@@ -368,13 +382,13 @@ describe("Transformer", () => {
     });
 
     test("transforms emit statement", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     emit done(value=42)
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const emitStep = findStep(result.steps, "emit");
@@ -384,13 +398,13 @@ describe("Transformer", () => {
     });
 
     test("transforms halt statement", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     halt "stopped"
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const haltStep = findStep(result.steps, "halt");
@@ -399,13 +413,13 @@ describe("Transformer", () => {
     });
 
     test("transforms wait statement", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     wait 60
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const waitStep = findStep(result.steps, "wait");
@@ -414,15 +428,16 @@ describe("Transformer", () => {
     });
 
     test("transforms atomic block", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    atomic:
+  on manual: {
+    atomic {
       x = 1
       y = 2
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const tryStep = findStep(result.steps, "try");
@@ -432,28 +447,28 @@ describe("Transformer", () => {
 
   describe("expression transformation", () => {
     test("transforms literal expressions", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 42
     y = "hello"
     z = true
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.steps?.length).toBe(3);
     });
 
     test("transforms binary expressions", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = a + b * c
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const step = result.steps?.[0];
@@ -462,13 +477,13 @@ describe("Transformer", () => {
     });
 
     test("transforms function calls", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = max(a, b)
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const step = result.steps?.[0];
@@ -477,13 +492,13 @@ describe("Transformer", () => {
     });
 
     test("transforms property access", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = params.amount
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const step = result.steps?.[0];
@@ -492,13 +507,13 @@ describe("Transformer", () => {
     });
 
     test("transforms array literal", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = [1, 2, 3]
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const step = result.steps?.[0];
@@ -507,13 +522,13 @@ describe("Transformer", () => {
     });
 
     test("transforms venue reference", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = @aave_v3
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const step = result.steps?.[0];
@@ -522,13 +537,13 @@ describe("Transformer", () => {
     });
 
     test("transforms percentage", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 50%
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const step = result.steps?.[0];
@@ -537,27 +552,27 @@ describe("Transformer", () => {
     });
 
     test("transforms unary expressions", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = -a
     y = not b
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.steps?.length).toBe(2);
     });
 
     test("transforms ternary expressions", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = a > 0 ? a : 0
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const step = result.steps?.[0];
@@ -568,16 +583,17 @@ describe("Transformer", () => {
 
   describe("advisory transformation", () => {
     test("transforms advisory if condition", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    if **is this safe**:
+  on manual: {
+    if **is this safe** {
       x = 1
-    else:
+    } else {
       x = 0
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       // Advisory conditions create special steps
@@ -587,13 +603,13 @@ describe("Transformer", () => {
 
   describe("method call transformation", () => {
     test("transforms deposit method call", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     aave.deposit(USDC, 100)
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const actionStep = findStep(result.steps, "action");
@@ -602,13 +618,13 @@ describe("Transformer", () => {
     });
 
     test("transforms withdraw method call", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     aave.withdraw(USDC, 100)
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const actionStep = findStep(result.steps, "action");
@@ -617,13 +633,13 @@ describe("Transformer", () => {
     });
 
     test("transforms swap method call", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     uniswap.swap(USDC, ETH, 100)
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const actionStep = findStep(result.steps, "action");
@@ -632,13 +648,13 @@ describe("Transformer", () => {
     });
 
     test("transforms generic method call", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     venue.custom_action(arg1, arg2)
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const actionStep = findStep(result.steps, "action");
@@ -655,13 +671,13 @@ describe("Transformer", () => {
     });
 
     test("transforms query method call to compute", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     lending.get_rates(USDC)
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const computeStep = findStep(result.steps, "compute");
@@ -669,13 +685,13 @@ describe("Transformer", () => {
     });
 
     test("extracts venue from identifier", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     myVenue.deposit(USDC, 100)
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const actionStep = findStep(result.steps, "action");
@@ -685,49 +701,53 @@ describe("Transformer", () => {
 
   describe("complex transformations", () => {
     test("transforms nested if statements", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    if a > 0:
-      if b > 0:
+  on manual: {
+    if a > 0 {
+      if b > 0 {
         x = 1
-`;
+      }
+    }
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.steps?.length).toBeGreaterThan(0);
     });
 
     test("transforms if-elif-else", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    if a > 10:
+  on manual: {
+    if a > 10 {
       x = 3
-    elif a > 5:
+    } elif a > 5 {
       x = 2
-    else:
+    } else {
       x = 1
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.steps?.length).toBeGreaterThan(0);
     });
 
     test("transforms multiple triggers", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 1
+  }
 
-  on hourly:
+  on hourly: {
     y = 2
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.trigger).toBeDefined();
@@ -736,17 +756,18 @@ describe("Transformer", () => {
 
   describe("guards transformation", () => {
     test("transforms guards section into source.guards", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  guards:
+  guards: {
     max_amount: params.amount < 1000000
     positive: params.amount > 0
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       expect(result.guards).toBeDefined();
@@ -760,13 +781,13 @@ describe("Transformer", () => {
 
   describe("output binding transformation", () => {
     test("transforms assignment with method call to action step with output", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     result = venue.swap(USDC, ETH, 100)
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const actionStep = findStep(result.steps, "action");
@@ -776,13 +797,13 @@ describe("Transformer", () => {
     });
 
     test("plain function call assignment stays as compute step", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     result = max(a, b)
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const computeStep = findStep(result.steps, "compute");
@@ -793,13 +814,13 @@ describe("Transformer", () => {
 
   describe("constraints transformation", () => {
     test("transforms with clause on method call to step.constraints", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     venue.swap(USDC, ETH, 1000) with slippage=50, deadline=300, min_output=900, max_input=1100
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const actionStep = findStep(result.steps, "action");
@@ -813,13 +834,13 @@ describe("Transformer", () => {
     });
 
     test("transforms with clause on assignment with method call", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     result = venue.swap(USDC, ETH, 1000) with slippage=50
-`;
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const actionStep = findStep(result.steps, "action");
@@ -832,14 +853,15 @@ describe("Transformer", () => {
 
   describe("atomic onFailure transformation", () => {
     test("transforms atomic skip: to try step with skip catch action", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    atomic skip:
+  on manual: {
+    atomic skip {
       x = 1
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const tryStep = findStep(result.steps, "try");
@@ -849,14 +871,15 @@ describe("Transformer", () => {
     });
 
     test("transforms atomic halt: to try step with halt catch action", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    atomic halt:
+  on manual: {
+    atomic halt {
       x = 1
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const tryStep = findStep(result.steps, "try");
@@ -866,14 +889,15 @@ describe("Transformer", () => {
     });
 
     test("transforms plain atomic: to try step with revert (default)", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    atomic:
+  on manual: {
+    atomic {
       x = 1
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
       const tryStep = findStep(result.steps, "try");

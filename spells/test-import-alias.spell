@@ -1,6 +1,6 @@
 # Test: import alias + namespaced block call
 
-spell TestImportAlias
+spell TestImportAlias {
 
   version: "1.0.0"
   description: "Import blocks with alias and call namespaced block"
@@ -9,5 +9,8 @@ spell TestImportAlias
 
   import "blocks/common.spell" as util
 
-  on manual:
+  on manual: {
     do util.add(2, 3)
+
+  }
+}

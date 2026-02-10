@@ -1,19 +1,23 @@
 # Test: Built-in functions — min, max, abs
 
-spell TestBuiltinFunctions
+spell TestBuiltinFunctions {
 
   version: "1.0.0"
   description: "Test built-in math functions in expressions"
   assets: []
 
-  params:
+  params: {
     a: 150
     b: 300
     negative: -42
 
-  on manual:
+  }
+  on manual: {
     smallest = min(params.a, params.b)
     largest = max(params.a, params.b)
     positive = abs(params.negative)
     diff = abs(params.a - params.b)
     emit math_results(min_val=smallest, max_val=largest, abs_neg=positive, abs_diff=diff)
+
+  }
+}

@@ -36,34 +36,32 @@ describe("Parser", () => {
     });
 
     test("throws on invalid token in expression", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = @
-`;
+  }
+}`;
       expect(() => parse(source)).toThrow();
     });
   });
 
   describe("spell declaration", () => {
     test("parses minimal spell", () => {
-      const source = `spell TestSpell
-
+      const source = `spell TestSpell {
   version: "1.0.0"
-`;
+}`;
       const ast = parse(source);
       expect(ast.kind).toBe("spell");
       expect(ast.name).toBe("TestSpell");
     });
 
     test("parses spell with version and description", () => {
-      const source = `spell MySpell
-
+      const source = `spell MySpell {
   version: "2.0.0"
   description: "A test spell"
-`;
+}`;
       const ast = parse(source);
       expect(ast.name).toBe("MySpell");
 
@@ -75,11 +73,10 @@ describe("Parser", () => {
 
   describe("sections", () => {
     test("parses assets section with array", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
   assets: [USDC, USDT, DAI]
-`;
+}`;
       const ast = parse(source);
       const assetsSection = ast.sections.find((s): s is AssetsSection => s.kind === "assets");
       expect(assetsSection).toBeDefined();
@@ -88,16 +85,18 @@ describe("Parser", () => {
     });
 
     test("parses assets section with block metadata", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  assets:
-    USDC:
+  assets: {
+    USDC: {
       decimals: 6
-    ETH:
+    }
+    ETH: {
       chain: 1
       decimals: 18
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const assetsSection = ast.sections.find((s): s is AssetsSection => s.kind === "assets");
       expect(assetsSection).toBeDefined();
@@ -106,13 +105,13 @@ describe("Parser", () => {
     });
 
     test("parses params section", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  params:
+  params: {
     amount: 100
     threshold: 0.5
-`;
+  }
+}`;
       const ast = parse(source);
       const paramsSection = ast.sections.find((s): s is ParamsSection => s.kind === "params");
       expect(paramsSection).toBeDefined();
@@ -120,15 +119,16 @@ describe("Parser", () => {
     });
 
     test("parses typed params block", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  params:
-    amount:
+  params: {
+    amount: {
       type: amount
       asset: USDC
       default: 1
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const paramsSection = ast.sections.find((s): s is ParamsSection => s.kind === "params");
       expect(paramsSection).toBeDefined();
@@ -137,26 +137,26 @@ describe("Parser", () => {
     });
 
     test("parses limits section with percentages", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  limits:
+  limits: {
     max_allocation: 50%
     min_threshold: 0.5%
-`;
+  }
+}`;
       const ast = parse(source);
       const limitsSection = ast.sections.find((s) => s.kind === "limits");
       expect(limitsSection).toBeDefined();
     });
 
     test("parses venues section", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  venues:
+  venues: {
     lending: [@aave_v3, @morpho]
     swap: @uniswap_v3
-`;
+  }
+}`;
       const ast = parse(source);
       const venuesSection = ast.sections.find((s): s is VenuesSection => s.kind === "venues");
       expect(venuesSection).toBeDefined();
@@ -166,60 +166,66 @@ describe("Parser", () => {
 
   describe("additional sections", () => {
     test("parses skills section", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  skills:
+  skills: {
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const skillsSection = ast.sections.find((s) => s.kind === "skills");
       expect(skillsSection).toBeDefined();
     });
 
     test("parses advisors section", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  advisors:
+  advisors: {
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const advisorsSection = ast.sections.find((s) => s.kind === "advisors");
       expect(advisorsSection).toBeDefined();
     });
 
     test("parses guards section", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  guards:
+  guards: {
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const guardsSection = ast.sections.find((s) => s.kind === "guards");
       expect(guardsSection).toBeDefined();
     });
 
     test("parses state with both persistent and ephemeral", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  state:
-    persistent:
+  state: {
+    persistent: {
       counter: 0
-    ephemeral:
+    }
+    ephemeral: {
       temp: 0
+    }
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const stateSection = ast.sections.find((s): s is StateSection => s.kind === "state");
       expect(stateSection).toBeDefined();
@@ -230,50 +236,50 @@ describe("Parser", () => {
 
   describe("triggers", () => {
     test("parses manual trigger", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       expect(ast.triggers.length).toBe(1);
       expect(ast.triggers[0]?.trigger.kind).toBe("manual");
     });
 
     test("parses hourly trigger", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on hourly:
+  on hourly: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       expect(ast.triggers[0]?.trigger.kind).toBe("hourly");
     });
 
     test("parses daily trigger", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on daily:
+  on daily: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       expect(ast.triggers[0]?.trigger.kind).toBe("daily");
     });
 
     test("parses condition trigger with interval", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on condition params.amount > 10 every 5m:
+  on condition params.amount > 10 every 5m: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       expect(ast.triggers[0]?.trigger.kind).toBe("condition");
       if (ast.triggers[0]?.trigger.kind === "condition") {
@@ -282,13 +288,13 @@ describe("Parser", () => {
     });
 
     test("parses event trigger with filter", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on event "base.block" where block.number > 0:
+  on event "base.block" where block.number > 0: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       expect(ast.triggers[0]?.trigger.kind).toBe("event");
     });
@@ -296,13 +302,13 @@ describe("Parser", () => {
 
   describe("statements", () => {
     test("parses assignment", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 42
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.kind).toBe("assignment");
@@ -310,14 +316,15 @@ describe("Parser", () => {
     });
 
     test("parses if statement", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    if x > 10:
+  on manual: {
+    if x > 10 {
       pass
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as IfNode;
       expect(stmt.kind).toBe("if");
@@ -325,16 +332,17 @@ describe("Parser", () => {
     });
 
     test("parses if-else statement", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    if x > 10:
+  on manual: {
+    if x > 10 {
       pass
-    else:
+    } else {
       pass
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as IfNode;
       expect(stmt.kind).toBe("if");
@@ -342,18 +350,19 @@ describe("Parser", () => {
     });
 
     test("parses if-elif-else statement", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    if x > 10:
+  on manual: {
+    if x > 10 {
       pass
-    elif x > 5:
+    } elif x > 5 {
       pass
-    else:
+    } else {
       pass
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as IfNode;
       expect(stmt.kind).toBe("if");
@@ -362,14 +371,15 @@ describe("Parser", () => {
     });
 
     test("parses for loop", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    for item in items:
+  on manual: {
+    for item in items {
       pass
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as ForNode;
       expect(stmt.kind).toBe("for");
@@ -377,81 +387,89 @@ describe("Parser", () => {
     });
 
     test("parses atomic block", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    atomic:
+  on manual: {
+    atomic {
       pass
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0];
       expect(stmt.kind).toBe("atomic");
     });
 
     test("parses emit statement", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     emit result(value=42)
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0];
       expect(stmt.kind).toBe("emit");
     });
 
     test("parses halt statement", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     halt "error occurred"
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0];
       expect(stmt.kind).toBe("halt");
     });
 
     test("parses wait statement", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     wait 3600
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0];
       expect(stmt.kind).toBe("wait");
     });
 
     test("parses advise statement with object schema", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  advisors:
-    risk:
+  advisors: {
+    risk: {
       model: sonnet
+    }
+  }
 
-  on manual:
-    decision = advise risk: "Check risk"
-      output:
+  on manual: {
+    decision = advise risk: "Check risk" {
+      output: {
         type: object
-        fields:
-          allow:
+        fields: {
+          allow: {
             type: boolean
-          score:
+          }
+          score: {
             type: number
             min: 0
             max: 1
+          }
+        }
+      }
       timeout: 10
       fallback: true
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0];
       expect(stmt?.kind).toBe("advise");
@@ -460,13 +478,13 @@ describe("Parser", () => {
 
   describe("expressions", () => {
     test("parses binary expressions with correct precedence", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = a + b * c
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("binary");
@@ -484,13 +502,13 @@ describe("Parser", () => {
     });
 
     test("parses comparison expressions", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = a > b
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("binary");
@@ -501,13 +519,13 @@ describe("Parser", () => {
     });
 
     test("parses logical expressions", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = a and b or c
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       // (a and b) or c - and has higher precedence
@@ -518,13 +536,13 @@ describe("Parser", () => {
     });
 
     test("parses unary not", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = not y
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("unary");
@@ -535,39 +553,39 @@ describe("Parser", () => {
     });
 
     test("parses property access", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = obj.prop
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("property_access");
     });
 
     test("parses array access", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = arr[0]
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("array_access");
     });
 
     test("parses function call", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = max(a, b)
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("call");
@@ -578,26 +596,26 @@ describe("Parser", () => {
     });
 
     test("parses method call", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = obj.method(arg)
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("call");
     });
 
     test("parses array literal", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = [1, 2, 3]
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("array_literal");
@@ -608,26 +626,26 @@ describe("Parser", () => {
     });
 
     test("parses unit literal", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 1 USDC
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("unit_literal");
     });
 
     test("parses venue reference expression", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = @aave_v3
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("venue_ref_expr");
@@ -638,13 +656,13 @@ describe("Parser", () => {
     });
 
     test("parses percentage expression", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 50%
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.value.kind).toBe("percentage");
@@ -655,14 +673,15 @@ describe("Parser", () => {
     });
 
     test("parses advisory expression in if condition", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    if **is this safe**:
+  on manual: {
+    if **is this safe** {
       pass
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as IfNode;
       expect(stmt.condition.kind).toBe("advisory_expr");
@@ -675,28 +694,33 @@ describe("Parser", () => {
 
   describe("complex spells", () => {
     test("parses full lending optimizer spell", () => {
-      const source = `spell LendingYieldOptimizer
-
+      const source = `spell LendingYieldOptimizer {
   version: "1.0.0"
   assets: [USDC, USDT, DAI]
 
-  limits:
+  limits: {
     max_allocation_per_venue: 50%
     min_rebalance_threshold: 0.5%
+  }
 
-  venues:
+  venues: {
     lending: [@aave_v3, @morpho]
     swap: @uniswap_v3
+  }
 
-  on hourly:
-    for asset in assets:
+  on hourly: {
+    for asset in assets {
       rates = lending.get_supply_rates(asset)
       best_venue = max(rates, key=rate)
-      if rate_diff > limits.min_rebalance_threshold:
-        atomic:
+      if rate_diff > limits.min_rebalance_threshold {
+        atomic {
           current_venue.withdraw(asset, balance)
           best_venue.deposit(asset, balance)
-`;
+        }
+      }
+    }
+  }
+}`;
       const ast = parse(source);
       expect(ast.name).toBe("LendingYieldOptimizer");
       expect(ast.sections.length).toBeGreaterThan(0);
@@ -710,60 +734,64 @@ describe("Parser", () => {
   });
 
   describe("atomic onFailure", () => {
-    test("parses atomic skip:", () => {
-      const source = `spell Test
-
+    test("parses atomic skip", () => {
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    atomic skip:
+  on manual: {
+    atomic skip {
       pass
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AtomicNode;
       expect(stmt.kind).toBe("atomic");
       expect(stmt.onFailure).toBe("skip");
     });
 
-    test("parses atomic halt:", () => {
-      const source = `spell Test
-
+    test("parses atomic halt", () => {
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    atomic halt:
+  on manual: {
+    atomic halt {
       pass
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AtomicNode;
       expect(stmt.kind).toBe("atomic");
       expect(stmt.onFailure).toBe("halt");
     });
 
-    test("parses atomic revert:", () => {
-      const source = `spell Test
-
+    test("parses atomic revert", () => {
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    atomic revert:
+  on manual: {
+    atomic revert {
       pass
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AtomicNode;
       expect(stmt.kind).toBe("atomic");
       expect(stmt.onFailure).toBe("revert");
     });
 
-    test("plain atomic: leaves onFailure undefined", () => {
-      const source = `spell Test
-
+    test("plain atomic leaves onFailure undefined", () => {
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
-    atomic:
+  on manual: {
+    atomic {
       pass
-`;
+    }
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AtomicNode;
       expect(stmt.kind).toBe("atomic");
@@ -773,17 +801,18 @@ describe("Parser", () => {
 
   describe("guards section", () => {
     test("parses guards with expression checks", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  guards:
+  guards: {
     max_amount: params.amount < 1000000
     positive_amount: params.amount > 0
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const guardsSection = ast.sections.find((s): s is GuardsSection => s.kind === "guards");
       expect(guardsSection).toBeDefined();
@@ -794,14 +823,15 @@ describe("Parser", () => {
     });
 
     test("parses empty guards section", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
-  guards:
+  guards: {
+  }
 
-  on manual:
+  on manual: {
     pass
-`;
+  }
+}`;
       const ast = parse(source);
       const guardsSection = ast.sections.find((s): s is GuardsSection => s.kind === "guards");
       expect(guardsSection).toBeDefined();
@@ -811,13 +841,13 @@ describe("Parser", () => {
 
   describe("constraint clause", () => {
     test("parses with clause on method call", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     venue.swap(USDC, ETH, 1000) with slippage=50, deadline=300, min_output=900, max_input=1100
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
       expect(stmt.kind).toBe("method_call");
@@ -831,13 +861,13 @@ describe("Parser", () => {
     });
 
     test("parses with clause on assignment", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     result = venue.swap(USDC, ETH, 1000) with slippage=50
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.kind).toBe("assignment");
@@ -847,13 +877,13 @@ describe("Parser", () => {
     });
 
     test("method call without with clause has no constraints", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     venue.swap(USDC, ETH, 1000)
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
       expect(stmt.kind).toBe("method_call");
@@ -863,13 +893,13 @@ describe("Parser", () => {
 
   describe("output binding", () => {
     test("parses assignment with method call RHS", () => {
-      const source = `spell Test
-
+      const source = `spell Test {
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     result = venue.swap(USDC, ETH, 100)
-`;
+  }
+}`;
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
       expect(stmt.kind).toBe("assignment");

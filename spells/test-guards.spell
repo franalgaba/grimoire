@@ -1,15 +1,20 @@
-spell TestGuards
+spell TestGuards {
 
   version: "1.0.0"
   description: "Test guards section"
   assets: [USDC]
 
-  params:
+  params: {
     amount: 100000
 
-  guards:
+  }
+  guards: {
     max_amount: params.amount < 1000000
     positive_amount: params.amount > 0
 
-  on manual:
+  }
+  on manual: {
     emit checked(amount=params.amount)
+
+  }
+}

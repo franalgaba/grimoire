@@ -15,6 +15,6 @@ Source (.spell)
 
 ## Notes
 
-- The tokenizer is indentation-aware and emits INDENT/DEDENT tokens.
+- The tokenizer is brace-aware and emits LBRACE/RBRACE tokens.
 - The transformer normalizes sections and maps method calls to actions.
 - The IR generator validates step structure and compiles expressions.

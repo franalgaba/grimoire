@@ -1,16 +1,22 @@
-spell TestAtomicRevert
+spell TestAtomicRevert {
 
   version: "1.0.0"
   description: "Test atomic block with explicit revert onFailure mode"
   assets: [USDC]
 
-  params:
+  params: {
     amount: 100000
 
-  venues:
+  }
+  venues: {
     lending: @aave_v3
 
-  on manual:
-    atomic revert:
+  }
+  on manual: {
+    atomic revert {
       aave_v3.deposit(USDC, params.amount)
       aave_v3.deposit(USDC, params.amount)
+
+    }
+  }
+}

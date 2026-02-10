@@ -1,20 +1,26 @@
 # Test: Persistent state counter — increments each run
 
-spell TestStateCounter
+spell TestStateCounter {
 
   version: "1.0.0"
   description: "Increments a counter on each run — tests state persistence"
   assets: []
 
-  state:
-    persistent:
+  state: {
+    persistent: {
       run_count: 0
       total_amount: 0
 
-  params:
+    }
+  }
+  params: {
     increment: 100
 
-  on manual:
+  }
+  on manual: {
     run_count = run_count + 1
     total_amount = total_amount + params.increment
     emit counter_updated(run_count=run_count, total_amount=total_amount)
+
+  }
+}

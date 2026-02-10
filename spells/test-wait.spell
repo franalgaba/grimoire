@@ -1,18 +1,23 @@
 # Test: Wait between actions — tests timed delays
 
-spell TestWait
+spell TestWait {
 
   version: "1.0.0"
   description: "Emit events with a wait between them — tests wait step"
   assets: []
 
-  state:
-    persistent:
+  state: {
+    persistent: {
       step_count: 0
 
-  on manual:
+    }
+  }
+  on manual: {
     step_count = step_count + 1
     emit step_started(step=step_count)
     wait 5
     step_count = step_count + 1
     emit step_after_wait(step=step_count)
+
+  }
+}

@@ -12,12 +12,14 @@ import { compileGrimoire, parseGrimoire } from "./index.js";
 
 describe("Module exports", () => {
   test("parseGrimoire returns SpellSource", () => {
-    const source = `spell Test
+    const source = `spell Test {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 1
+  }
+}
 `;
     const result = parseGrimoire(source);
     expect(result.spell).toBe("Test");
@@ -25,12 +27,14 @@ describe("Module exports", () => {
   });
 
   test("compileGrimoire returns CompilationResult", () => {
-    const source = `spell Test
+    const source = `spell Test {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 1
+  }
+}
 `;
     const result = compileGrimoire(source);
     expect(result.success).toBe(true);
@@ -53,12 +57,14 @@ describe("Module exports", () => {
 
   test("compileGrimoire handles IR generation errors", () => {
     // Spell that parses but has invalid expression for IR generation
-    const source = `spell Test
+    const source = `spell Test {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = unknown_function()
+  }
+}
 `;
     const result = compileGrimoire(source);
     // Should either succeed or fail with IR error
@@ -71,14 +77,16 @@ describe("Module exports", () => {
 describe("Integration", () => {
   describe("parse → transform", () => {
     test("transforms simple spell to SpellSource", () => {
-      const source = `spell TestSpell
+      const source = `spell TestSpell {
 
   version: "1.0.0"
   description: "A test spell"
 
-  on manual:
+  on manual: {
     x = 42
     emit result(value=x)
+  }
+}
 `;
       const ast = parse(source);
       const spellSource = transform(ast);
@@ -92,13 +100,15 @@ describe("Integration", () => {
     });
 
     test("transforms spell with assets", () => {
-      const source = `spell AssetSpell
+      const source = `spell AssetSpell {
 
   version: "1.0.0"
   assets: [USDC, USDT]
 
-  on manual:
+  on manual: {
     pass
+  }
+}
 `;
       const ast = parse(source);
       const spellSource = transform(ast);
@@ -108,15 +118,18 @@ describe("Integration", () => {
     });
 
     test("transforms spell with params", () => {
-      const source = `spell ParamSpell
+      const source = `spell ParamSpell {
 
   version: "1.0.0"
-  params:
+  params: {
     amount: 100
     threshold: 0.5
+  }
 
-  on manual:
+  on manual: {
     pass
+  }
+}
 `;
       const ast = parse(source);
       const spellSource = transform(ast);
@@ -127,15 +140,18 @@ describe("Integration", () => {
     });
 
     test("transforms spell with venues", () => {
-      const source = `spell VenueSpell
+      const source = `spell VenueSpell {
 
   version: "1.0.0"
-  venues:
+  venues: {
     lending: [@aave_v3, @morpho]
     swap: @uniswap
+  }
 
-  on manual:
+  on manual: {
     pass
+  }
+}
 `;
       const ast = parse(source);
       const spellSource = transform(ast);
@@ -147,12 +163,14 @@ describe("Integration", () => {
     });
 
     test("transforms hourly trigger", () => {
-      const source = `spell HourlySpell
+      const source = `spell HourlySpell {
 
   version: "1.0.0"
 
-  on hourly:
+  on hourly: {
     pass
+  }
+}
 `;
       const ast = parse(source);
       const spellSource = transform(ast);
@@ -161,12 +179,14 @@ describe("Integration", () => {
     });
 
     test("transforms daily trigger", () => {
-      const source = `spell DailySpell
+      const source = `spell DailySpell {
 
   version: "1.0.0"
 
-  on daily:
+  on daily: {
     pass
+  }
+}
 `;
       const ast = parse(source);
       const spellSource = transform(ast);
@@ -177,12 +197,14 @@ describe("Integration", () => {
 
   describe("full compilation", () => {
     test("compiles minimal spell to IR", () => {
-      const source = `spell MinimalSpell
+      const source = `spell MinimalSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 42
+  }
+}
 `;
       const result = compile(source);
 
@@ -193,13 +215,15 @@ describe("Integration", () => {
     });
 
     test("compiles spell with compute step", () => {
-      const source = `spell ComputeSpell
+      const source = `spell ComputeSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     x = 10 + 20
     y = x * 2
+  }
+}
 `;
       const result = compile(source);
 
@@ -209,15 +233,18 @@ describe("Integration", () => {
     });
 
     test("compiles spell with conditional", () => {
-      const source = `spell ConditionalSpell
+      const source = `spell ConditionalSpell {
 
   version: "1.0.0"
 
-  on manual:
-    if x > 10:
+  on manual: {
+    if x > 10 {
       y = 1
-    else:
+    } else {
       y = 0
+    }
+  }
+}
 `;
       const result = compile(source);
 
@@ -228,13 +255,16 @@ describe("Integration", () => {
     });
 
     test("compiles spell with loop", () => {
-      const source = `spell LoopSpell
+      const source = `spell LoopSpell {
 
   version: "1.0.0"
 
-  on manual:
-    for item in items:
+  on manual: {
+    for item in items {
       x = item
+    }
+  }
+}
 `;
       const result = compile(source);
 
@@ -244,12 +274,14 @@ describe("Integration", () => {
     });
 
     test("compiles spell with emit", () => {
-      const source = `spell EmitSpell
+      const source = `spell EmitSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     emit done(value=42)
+  }
+}
 `;
       const result = compile(source);
 
@@ -259,12 +291,14 @@ describe("Integration", () => {
     });
 
     test("compiles spell with wait", () => {
-      const source = `spell WaitSpell
+      const source = `spell WaitSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     wait 60
+  }
+}
 `;
       const result = compile(source);
 
@@ -275,12 +309,14 @@ describe("Integration", () => {
     });
 
     test("compiles spell with halt", () => {
-      const source = `spell HaltSpell
+      const source = `spell HaltSpell {
 
   version: "1.0.0"
 
-  on manual:
+  on manual: {
     halt "stopped"
+  }
+}
 `;
       const result = compile(source);
 
@@ -309,24 +345,30 @@ describe("Integration", () => {
 
   describe("complete spell examples", () => {
     test("compiles yield optimizer spell", () => {
-      const source = `spell YieldOptimizer
+      const source = `spell YieldOptimizer {
 
   version: "1.0.0"
   assets: [USDC, DAI]
 
-  params:
+  params: {
     min_amount: 100
+  }
 
-  limits:
+  limits: {
     max_per_venue: 50%
+  }
 
-  venues:
+  venues: {
     lending: [@aave_v3, @compound]
+  }
 
-  on hourly:
+  on hourly: {
     x = params.min_amount * 2
-    if x > 100:
+    if x > 100 {
       emit rebalance(value=x)
+    }
+  }
+}
 `;
       const result = compile(source);
 

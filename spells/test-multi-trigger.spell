@@ -1,20 +1,26 @@
 # Test: Multiple triggers — hourly and daily handlers
 
-spell TestMultiTrigger
+spell TestMultiTrigger {
 
   version: "1.0.0"
   description: "Spell with multiple trigger handlers"
   assets: []
 
-  state:
-    persistent:
+  state: {
+    persistent: {
       hourly_count: 0
       daily_count: 0
 
-  on hourly:
+    }
+  }
+  on hourly: {
     hourly_count = hourly_count + 1
     emit hourly_tick(count=hourly_count)
 
-  on daily:
+  }
+  on daily: {
     daily_count = daily_count + 1
     emit daily_tick(count=daily_count)
+
+  }
+}

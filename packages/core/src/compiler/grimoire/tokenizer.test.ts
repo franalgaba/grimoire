@@ -55,7 +55,6 @@ describe("Tokenizer", () => {
 
     test("handles whitespace only", () => {
       const tokens = tokenize("   ");
-      // May have DEDENT tokens depending on indentation tracking
       expect(tokens[tokens.length - 1]?.type).toBe("EOF");
     });
 
@@ -65,9 +64,11 @@ describe("Tokenizer", () => {
       expect(tokens[0]?.type).toBe("EOF");
     });
 
-    test("handles tabs as indentation", () => {
+    test("tabs are treated as cosmetic whitespace", () => {
       const tokens = tokenize("x\n\ty");
-      expect(tokens.some((t) => t.type === "INDENT")).toBe(true);
+      const types = tokens.map((t) => t.type);
+      expect(types).toContain("IDENTIFIER");
+      expect(types).not.toContain("INDENT");
     });
 
     test("handles mixed brackets for line continuation", () => {
@@ -76,8 +77,9 @@ describe("Tokenizer", () => {
   2
 )`;
       const tokens = tokenize(source);
-      // Should not have INDENT/DEDENT inside parens
-      expect(tokens.filter((t) => t.type === "INDENT").length).toBe(0);
+      // Should not have NEWLINE inside parens
+      const newlines = tokens.filter((t) => t.type === "NEWLINE");
+      expect(newlines.length).toBe(0);
     });
 
     test("handles single quote strings", () => {
@@ -192,39 +194,54 @@ describe("Tokenizer", () => {
     });
   });
 
-  describe("indentation", () => {
-    test("emits INDENT on deeper indentation", () => {
-      const tokens = tokenize("spell Test\n  body");
+  describe("braces", () => {
+    test("emits LBRACE and RBRACE tokens", () => {
+      const tokens = tokenize("spell Test {\n  body\n}");
       const types = tokens.map((t) => t.type);
-      expect(types).toContain("INDENT");
+      expect(types).toContain("LBRACE");
+      expect(types).toContain("RBRACE");
     });
 
-    test("emits DEDENT on shallower indentation", () => {
-      const tokens = tokenize("spell Test\n  body\nanother");
+    test("does not emit INDENT or DEDENT", () => {
+      const tokens = tokenize("spell Test {\n  body\n}");
       const types = tokens.map((t) => t.type);
-      expect(types).toContain("DEDENT");
+      expect(types).not.toContain("INDENT");
+      expect(types).not.toContain("DEDENT");
     });
 
-    test("handles multiple indent levels", () => {
-      const source = `spell Test
+    test("whitespace is cosmetic (no structural tokens)", () => {
+      const source = `spell Test {
   level1
     level2
-  back`;
+  back
+}`;
       const tokens = tokenize(source);
       const types = tokens.map((t) => t.type);
-      expect(types.filter((t) => t === "INDENT").length).toBe(2);
-      expect(types.filter((t) => t === "DEDENT").length).toBe(2);
+      expect(types).not.toContain("INDENT");
+      expect(types).not.toContain("DEDENT");
+      expect(types).toContain("LBRACE");
+      expect(types).toContain("RBRACE");
     });
 
-    test("ignores indentation inside brackets", () => {
+    test("NEWLINEs emitted inside braces but not inside parens/brackets", () => {
+      const source = "x = (\n  1\n)\nif y {\n  z\n}";
+      const tokens = tokenize(source);
+      const types = tokens.map((t) => t.type);
+      // Newlines suppressed inside parens
+      // The first newline after closing ) should be emitted
+      expect(types).toContain("NEWLINE");
+      expect(types).toContain("LBRACE");
+    });
+
+    test("ignores indentation inside brackets (parens)", () => {
       const source = `x = [
   1,
   2
 ]`;
       const tokens = tokenize(source);
-      // Should not emit INDENT/DEDENT inside brackets
       const types = tokens.map((t) => t.type);
       expect(types).not.toContain("INDENT");
+      expect(types.filter((t) => t === "NEWLINE").length).toBe(0);
     });
   });
 

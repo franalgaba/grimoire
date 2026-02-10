@@ -30,8 +30,8 @@ Status: Implemented (tool execution remains external). This document describes t
 Add optional fields to the `advisors` section:
 
 ```spell
-advisors:
-  risk:
+advisors: {
+  risk: {
     model: "anthropic:sonnet"
     system_prompt: "Be conservative and concise."
     skills: [web-search, x-search]
@@ -39,9 +39,12 @@ advisors:
     mcp: [company-kb, market-data]
     timeout: 30
     fallback: true
-    rate_limit:
+    rate_limit: {
       max_per_run: 10
       max_per_hour: 100
+    }
+  }
+}
 ```
 
 Rules:
@@ -55,30 +58,38 @@ Rules:
 Advisory expression (boolean) remains:
 
 ```spell
-if **is this safe?** via risk:
+if **is this safe?** via risk {
   emit approved()
+}
 ```
 
 Structured advisory output via `advise` remains, with expanded schema types:
 
 ```spell
-decision = advise risk: "Assess risk for this swap"
-  output:
+decision = advise risk: "Assess risk for this swap" {
+  output: {
     type: object
-    fields:
-      allow:
+    fields: {
+      allow: {
         type: boolean
-      confidence:
+      }
+      confidence: {
         type: number
         min: 0
         max: 1
-      rationale:
+      }
+      rationale: {
         type: string
+      }
+    }
+  }
   timeout: 30
-  fallback:
+  fallback: {
     allow: false
     confidence: 0.2
     rationale: "Default fallback"
+  }
+}
 ```
 
 ### Output schema (Option B: readable)
@@ -95,17 +106,22 @@ Supported `output.type` values:
 Schema format (Option B):
 
 ```spell
-output:
+output: {
   type: array
-  items:
+  items: {
     type: object
-    fields:
-      id:
+    fields: {
+      id: {
         type: string
-      score:
+      }
+      score: {
         type: number
         min: 0
         max: 100
+      }
+    }
+  }
+}
 ```
 
 ### Advisory behavior in `cast`
@@ -141,8 +157,9 @@ import "strategies/rebalance.spell" as rebalance
 Invocation:
 
 ```spell
-on manual:
+on manual: {
   do rebalance.run(USDC, WETH)
+}
 ```
 
 ### Collision and error handling
@@ -160,8 +177,9 @@ on manual:
 Syntax:
 
 ```spell
-on condition params.amount > 100000 every 5m:
+on condition params.amount > 100000 every 5m: {
   emit large_trade(amount=params.amount)
+}
 ```
 
 Rules:
@@ -175,8 +193,9 @@ Rules:
 Syntax:
 
 ```spell
-on event "base.block" where block.number % 100 == 0:
+on event "base.block" where block.number % 100 == 0: {
   emit checkpoint(block=block.number)
+}
 ```
 
 Rules:
@@ -223,13 +242,16 @@ Semantics:
 If the method call object matches a defined **skill name**, treat it as a skill:
 
 ```spell
-skills:
-  dex:
+skills: {
+  dex: {
     type: swap
     adapters: [uniswap_v3, uniswap_v4]
+  }
+}
 
-on manual:
+on manual: {
   dex.swap(USDC, WETH, params.amount)  # auto-selects via skill
+}
 ```
 
 This removes the need for `using dex`.
@@ -269,14 +291,18 @@ CLI:
 ### Param types
 
 ```spell
-params:
-  amount:
+params: {
+  amount: {
     type: amount
     asset: USDC
-  slippage:
+  }
+  slippage: {
     type: bps
-  interval:
+  }
+  interval: {
     type: duration
+  }
+}
 ```
 
 ### Literal units
