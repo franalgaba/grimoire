@@ -31,6 +31,20 @@ function parseLastJson(logs: string[]): Record<string, unknown> {
   throw new Error(`No JSON payload found in logs:\n${logs.join("\n")}`);
 }
 
+function createTestIO(logs: string[]): {
+  log: typeof console.log;
+  exit: typeof process.exit;
+} {
+  return {
+    log: (...args: unknown[]) => {
+      logs.push(args.map((arg) => String(arg)).join(" "));
+    },
+    exit: ((code?: number) => {
+      throw new Error(`process.exit(${code ?? 0})`);
+    }) as typeof process.exit,
+  };
+}
+
 const VAULT: Address = "0x0000000000000000000000000000000000000000";
 const tempDirs: string[] = [];
 
@@ -79,24 +93,19 @@ describe("Runtime parity: CLI simulate vs embedded preview", () => {
     await writeFile(spellPath, source, "utf8");
 
     const logs: string[] = [];
-    const originalLog = console.log;
-    const originalExit = process.exit;
-    console.log = (...args: unknown[]) => {
-      logs.push(args.map((arg) => String(arg)).join(" "));
-    };
-    process.exit = ((code?: number) => {
-      throw new Error(`process.exit(${code ?? 0})`);
-    }) as typeof process.exit;
 
     try {
-      await simulateCommand(spellPath, {
-        json: true,
-        noState: true,
-        chain: "1",
-      });
-    } finally {
-      console.log = originalLog;
-      process.exit = originalExit;
+      await simulateCommand(
+        spellPath,
+        {
+          json: true,
+          noState: true,
+          chain: "1",
+        },
+        createTestIO(logs)
+      );
+    } catch {
+      // simulateCommand exits non-zero on failure after printing JSON.
     }
 
     const parsed = parseLastJson(logs);
@@ -147,28 +156,19 @@ describe("Runtime parity: CLI simulate vs embedded preview", () => {
     await writeFile(spellPath, source, "utf8");
 
     const logs: string[] = [];
-    const originalLog = console.log;
-    const originalExit = process.exit;
-    console.log = (...args: unknown[]) => {
-      logs.push(args.map((arg) => String(arg)).join(" "));
-    };
-    process.exit = ((code?: number) => {
-      throw new Error(`process.exit(${code ?? 0})`);
-    }) as typeof process.exit;
 
     try {
-      try {
-        await simulateCommand(spellPath, {
+      await simulateCommand(
+        spellPath,
+        {
           json: true,
           noState: true,
           chain: "1",
-        });
-      } catch {
-        // simulateCommand exits non-zero on failure after printing JSON.
-      }
-    } finally {
-      console.log = originalLog;
-      process.exit = originalExit;
+        },
+        createTestIO(logs)
+      );
+    } catch {
+      // simulateCommand exits non-zero on failure after printing JSON.
     }
 
     const parsed = parseLastJson(logs);

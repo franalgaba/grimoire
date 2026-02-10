@@ -42,7 +42,21 @@ interface SimulateOptions {
   state?: boolean;
 }
 
-export async function simulateCommand(spellPath: string, options: SimulateOptions): Promise<void> {
+interface SimulateCommandIO {
+  log: typeof console.log;
+  exit: typeof process.exit;
+}
+
+export async function simulateCommand(
+  spellPath: string,
+  options: SimulateOptions,
+  ioOverrides?: Partial<SimulateCommandIO>
+): Promise<void> {
+  const io: SimulateCommandIO = {
+    log: ioOverrides?.log ?? console.log,
+    exit: ioOverrides?.exit ?? ((code?: number) => process.exit(code)),
+  };
+
   const spinner = ora(`Simulating ${spellPath}...`).start();
 
   try {
@@ -52,7 +66,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
         params = JSON.parse(options.params);
       } catch {
         spinner.fail(chalk.red("Invalid params JSON"));
-        process.exit(1);
+        io.exit(1);
       }
     }
 
@@ -60,7 +74,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
       spinner.text = `Resolving ENS profile ${options.ensName}...`;
       const profile = await resolveEnsProfile(options.ensName, { rpcUrl: options.ensRpcUrl });
       params = hydrateParamsFromEnsProfile(params, profile);
-      console.log(
+      io.log(
         chalk.dim(
           `ENS profile ${profile.name} -> ${profile.address ?? "unresolved"} (risk=${profile.riskProfile ?? "n/a"}, slippage=${profile.maxSlippageBps ?? "n/a"})`
         )
@@ -73,9 +87,9 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
     if (!compileResult.success || !compileResult.ir) {
       spinner.fail(chalk.red("Compilation failed"));
       for (const error of compileResult.errors) {
-        console.log(chalk.red(`  [${error.code}] ${error.message}`));
+        io.log(chalk.red(`  [${error.code}] ${error.message}`));
       }
-      process.exit(1);
+      io.exit(1);
     }
 
     spinner.text = "Preparing simulation...";
@@ -110,7 +124,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
 
     const freshnessWarnings = enforceFreshnessPolicy(provenance);
     for (const warning of freshnessWarnings) {
-      console.log(chalk.yellow(`Warning: ${warning}`));
+      io.log(chalk.yellow(`Warning: ${warning}`));
     }
 
     spinner.text = "Running preview...";
@@ -164,24 +178,24 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
       provenance,
     });
 
-    console.log();
+    io.log();
     if (options.json) {
       const payload = {
         success: result.success,
         receipt: result.receipt,
         error: result.structuredError,
       };
-      console.log(stringifyJson(payload));
+      io.log(stringifyJson(payload));
     } else {
-      console.log(formatRunReportText(report));
+      io.log(formatRunReportText(report));
     }
 
     if (!result.success) {
-      process.exit(1);
+      io.exit(1);
     }
   } catch (error) {
     spinner.fail(chalk.red(`Simulation failed: ${(error as Error).message}`));
-    process.exit(1);
+    io.exit(1);
   }
 }
 
