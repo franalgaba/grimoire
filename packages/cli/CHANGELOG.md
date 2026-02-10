@@ -1,5 +1,13 @@
 # @grimoirelabs/cli
 
+## 0.5.3
+
+### Patch Changes
+
+- Updated dependencies [ea592bc]
+  - @grimoirelabs/core@0.7.0
+  - @grimoirelabs/venues@0.3.3
+
 ## 0.5.2
 
 ### Patch Changes
