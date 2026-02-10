@@ -1,97 +1,102 @@
-# Run tests and checks
+# How To Run Tests
 
-## Unit tests
+This guide covers repo validation, package tests, and onchain suite execution.
+
+## Prerequisites
+
+- Bun installed
+- Dependencies installed (`bun install`)
+
+## Fast Local Validation
+
+Run the repo-wide validation script:
 
 ```bash
-bun test                    # Run all tests
-bun test --coverage         # Run tests with coverage report
-bun test packages/core/     # Test a specific package
+bun run validate
 ```
 
-## Lint and typecheck
+This runs:
+
+- `bun run lint`
+- `bun run typecheck`
+- `bun test`
+
+## Package-Scoped Tests
+
+Examples:
 
 ```bash
-bun run lint                # Check for lint errors (biome)
-bun run lint:fix            # Auto-fix lint issues
-bun run typecheck           # TypeScript type checking
-bun run validate            # Run lint + typecheck + tests
+bun run --filter @grimoirelabs/core test
+bun run --filter @grimoirelabs/venues test
+bun run --filter @grimoirelabs/cli test
 ```
 
-## Onchain test suite
-
-The onchain test runner (`scripts/run-onchain-tests.sh`) validates venue adapters end-to-end across 6 phases.
-
-### Phases
-
-| Phase | What it does | Requires |
-|-------|-------------|----------|
-| 0 | Compile all spells (`spells/` + `@spells/`) | Nothing |
-| 1 | Simulate pure-computation spells | Nothing |
-| 2 | Simulate feature spells (guards, constraints, onFailure) | Nothing |
-| 3 | Cast feature spells (guards, constraints, output binding, onFailure) | `--dry-run` or `--execute` |
-| 4 | Cast venue adapter tests (Uniswap V3/V4, Aave V3, Morpho Blue) | `--dry-run` or `--execute` |
-| 5 | Multi-chain tests (Across bridge, Arbitrum, Hyperliquid) | `--execute` only |
-
-### Usage
+## Watch/Coverage
 
 ```bash
-# Simulate only (no wallet needed):
+bun run test:watch
+bun run test:coverage
+```
+
+## Onchain Test Suite
+
+Script: `scripts/run-onchain-tests.sh`
+
+Simulate only:
+
+```bash
 ./scripts/run-onchain-tests.sh
-
-# Dry-run (builds txs, estimates gas, does NOT send):
-./scripts/run-onchain-tests.sh --dry-run
-
-# Live execution on Base (recommended — cheap gas):
-CHAIN=8453 ./scripts/run-onchain-tests.sh --execute
-
-# Live execution on mainnet:
-CHAIN=1 ./scripts/run-onchain-tests.sh --execute
-
-# Skip password prompt via env var:
-KEYSTORE_PASSWORD=... ./scripts/run-onchain-tests.sh --execute
 ```
 
-### Resume from a specific phase
-
-If the test suite fails mid-run, resume from the phase that failed:
+Dry-run (build tx, no send):
 
 ```bash
-# Skip phases 0-3, start from Phase 4 (venue adapters):
-./scripts/run-onchain-tests.sh --execute --start-phase 4
-
-# Skip to Phase 5 (multi-chain) — resumes from last checkpoint:
-./scripts/run-onchain-tests.sh --execute --start-phase 5
+./scripts/run-onchain-tests.sh --dry-run
 ```
 
-Phase 5 writes checkpoints to `.grimoire/test-suite/checkpoint` after each sub-step. On resume with `--start-phase 5`, completed sub-steps are automatically skipped.
+Live execute (Base default chain):
 
-### Recovery mode
+```bash
+CHAIN=8453 ./scripts/run-onchain-tests.sh --execute
+```
 
-If Phase 5 fails mid-way and funds are stranded on Arbitrum or HyperCore:
+Resume from phase:
+
+```bash
+./scripts/run-onchain-tests.sh --execute --start-phase 4
+```
+
+Recovery mode:
 
 ```bash
 ./scripts/run-onchain-tests.sh --recover
 ```
 
-Recovery mode attempts to withdraw from Hyperliquid and bridge any USDC on Arbitrum back to Base.
+## Onchain Requirements
 
-### Safety
+Typical requirements from script header:
 
-- Phase 5 is automatically skipped if earlier phases have failures (prevents stranding funds after known errors).
-- To force Phase 5 after fixing failures: `./scripts/run-onchain-tests.sh --execute --start-phase 5`
+- keystore file (default `~/.grimoire/keystore.json`)
+- funded gas balance
+- funded token balances for venue flows
 
-### Wallet requirements
+Helpful env vars:
 
-- Keystore: `~/.grimoire/keystore.json` (or `KEYSTORE` env var)
-- ETH: >= 0.01 ETH on Base (for gas)
-- USDC: >= 5 USDC on Base
+- `KEYSTORE`
+- `KEYSTORE_PASSWORD`
+- `RPC_URL`
+- `ARB_RPC_URL`
+- `CHAIN`
 
-### Environment variables
+## Interpreting Failures
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CHAIN` | `8453` | Base chain ID |
-| `RPC_URL` | (default for chain) | Base RPC URL |
-| `ARB_RPC_URL` | (default for chain) | Arbitrum RPC URL |
-| `KEYSTORE` | `~/.grimoire/keystore.json` | Keystore file path |
-| `KEYSTORE_PASSWORD` | (interactive prompt) | Keystore password |
+- Compile/validate failures: syntax/type/validator stage issues in spell.
+- Runtime preview failures: guard violations, missing adapter assumptions, constraint failures.
+- Commit failures: chain execution, drift, wallet/provider, or action execution issues.
+
+For run-level investigation:
+
+```bash
+grimoire history <spell-id>
+grimoire log <spell-id> <run-id>
+```

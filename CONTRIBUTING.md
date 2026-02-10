@@ -37,7 +37,7 @@ If you touched adapters, the runtime, or spell behavior:
 If you edited skills:
 
 ```bash
-bunx skills-ref validate skills/grimoire-vm
+bunx skills-ref validate <skill-dir>
 ```
 
 For user-facing changes, add a changeset:

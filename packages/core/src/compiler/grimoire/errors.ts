@@ -95,9 +95,10 @@ export class ParseError extends GrimoireError {
       location?: SourceLocation;
       span?: SourceSpan;
       source?: string;
-    }
+    },
+    code = "PARSE_ERROR"
   ) {
-    super("PARSE_ERROR", message, options);
+    super(code, message, options);
     this.name = "ParseError";
   }
 }

@@ -101,6 +101,7 @@ export type {
   ErrorType,
   AdvisoryStep,
   AdvisoryOutputSchema,
+  AdvisoryViolationPolicy,
   WaitStep,
   EmitStep,
   HaltStep,
@@ -141,3 +142,24 @@ export type {
   LedgerEvent,
   LedgerEntry,
 } from "./execution.js";
+
+// Receipt / Value-Flow
+export type {
+  ValueDelta,
+  AssetAccounting,
+  AccountingSummary,
+  DriftKey,
+  DriftPolicy,
+  DriftCheckResult,
+  GuardResult,
+  AdvisoryResult,
+  AdvisoryViolationDetail,
+  PlannedAction,
+  PreviewProvenance,
+  ConstraintCheckResult,
+  ReceiptStatus,
+  Receipt,
+  PreviewResult,
+  CommitResult,
+  StructuredError,
+} from "./receipt.js";

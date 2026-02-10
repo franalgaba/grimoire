@@ -1,4 +1,4 @@
-# Test: AI judgment — advisory condition for swap decision
+# Test: AI judgment — advisory binding for swap decision
 
 spell TestAIJudgment {
 
@@ -6,6 +6,11 @@ spell TestAIJudgment {
   description: "Use AI advisory to decide whether to execute a swap"
   assets: [ETH, USDC]
 
+  advisors: {
+    market_analyst: {
+      model: "anthropic:haiku"
+    }
+  }
   params: {
     amount: 200000000000000
     price_threshold: 3000
@@ -16,7 +21,14 @@ spell TestAIJudgment {
 
   }
   on manual: {
-    if **should we swap ETH to USDC given current market conditions** {
+    decision = advise market_analyst: "should we swap ETH to USDC given current market conditions" {
+      output: {
+        type: boolean
+      }
+      timeout: 30
+      fallback: true
+    }
+    if decision {
       uniswap_v4.swap(ETH, USDC, params.amount)
       emit ai_approved_swap(amount=params.amount)
     } else {

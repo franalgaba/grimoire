@@ -5,27 +5,16 @@ description: Fetches Morpho Blue public deployment metadata using the Grimoire v
 
 # Grimoire Morpho Blue Skill
 
-Use the Grimoire CLI to read Morpho Blue deployment data.
+Use this skill to query Morpho Blue deployment metadata and vault snapshots for spell params.
 
-Preferred:
+Preferred invocations:
 
 - `grimoire venue morpho-blue ...`
+- `npx -y @grimoirelabs/cli venue morpho-blue ...` (no-install)
+- `bun run packages/cli/src/index.ts venue morpho-blue ...` (repo-local)
+- `grimoire-morpho-blue ...` (direct binary from `@grimoirelabs/venues`)
 
-If you installed `@grimoirelabs/venues` directly, you can also use `grimoire-morpho-blue`.
-
-## When to use
-
-- Fetch Morpho Blue addresses or vaults for quick VM prototyping.
-- Produce snapshot `params` blocks with `--format spell` for VM runs.
-
-## Prerequisites
-
-- Global CLI: `npm i -g @grimoirelabs/cli`
-- No install: `npx -y @grimoirelabs/cli venue morpho-blue ...`
-
-## VM snapshot usage
-
-Use `--format spell` to emit a VM-ready `params:` block you can paste into a spell.
+Use `--format spell` to emit a `params:` snapshot block.
 
 The snapshot includes provenance fields (`snapshot_at`, `snapshot_source`) and APY data.
 
@@ -50,7 +39,7 @@ grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --
 grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
 ```
 
-Example VM provenance output fields to preserve:
+Example provenance output fields to preserve:
 
 - `snapshot_at`
 - `snapshot_source`
@@ -69,5 +58,5 @@ When no collateral is specified in a spell, the first matching market by loan to
 
 ## Notes
 
-- Outputs JSON plus a human-readable table.
+- Outputs JSON/table; `vaults` also supports `--format spell`.
 - Uses the SDK's chain address registry.

@@ -174,4 +174,31 @@ describe("Execution Context", () => {
     expect(ctx.metrics.retries).toBe(1);
     expect(ctx.metrics.advisoryCalls).toBe(1);
   });
+
+  test("defaults trigger from spell definition", () => {
+    const ctx = createContext({
+      spell: createMinimalSpell({
+        triggers: [{ type: "schedule", cron: "0 * * * *" }],
+      }),
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+
+    expect(ctx.trigger.type).toBe("schedule");
+    expect(ctx.trigger).toMatchObject({ cron: "0 * * * *" });
+  });
+
+  test("uses explicit trigger override when provided", () => {
+    const ctx = createContext({
+      spell: createMinimalSpell({
+        triggers: [{ type: "schedule", cron: "0 * * * *" }],
+      }),
+      trigger: { type: "manual", source: "session_override" },
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+
+    expect(ctx.trigger.type).toBe("manual");
+    expect(ctx.trigger).toMatchObject({ source: "session_override" });
+  });
 });

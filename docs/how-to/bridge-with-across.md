@@ -1,79 +1,74 @@
-# Bridge with Across
+# How To Bridge With Across
 
-Across bridges use the `bridge` action and the Across adapter in `@grimoirelabs/venues`.
+This procedure uses the `across` adapter through a Grimoire spell.
 
-## 1) Configure assets and integrator ID
+## 1. Define a Bridge Spell
 
-Across requires token mappings per chain and an integrator ID.
-
-```ts
-import { createAcrossAdapter } from "@grimoirelabs/venues";
-
-const across = createAcrossAdapter({
-  integratorId: "0x0000",
-  assets: {
-    USDC: {
-      1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-      10: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-    },
-  },
-});
-```
-
-## 2) Use the bridge action in a spell
-
-`to_chain` can be a literal or an expression (params/state), but it must resolve to a numeric chain id at runtime.
+Example:
 
 ```spell
-spell AcrossBridge {
-
-  version: "1.0.0"
-
+spell BridgeUsdcBaseToArb {
   assets: [USDC]
-
-  params: {
-    amount: 100000000
-    destination_chain: 10
-  }
 
   venues: {
     across: @across
   }
 
+  params: {
+    amount: 1000000
+  }
+
   on manual: {
-    across.bridge(USDC, params.amount, params.destination_chain)
-    emit bridge_submitted(asset=USDC, amount=params.amount, to_chain=params.destination_chain)
+    across.bridge(USDC, params.amount, 42161) with (
+      max_slippage=50,
+      min_output=990000,
+    )
   }
 }
 ```
 
-## 3) Execute with adapters
+Notes:
 
-```ts
-import { execute } from "@grimoirelabs/core";
-import { createAcrossAdapter } from "@grimoirelabs/venues";
+- `to_chain` must resolve to a numeric chain ID for Across runtime path.
+- Use both `max_slippage` and `min_output` for safer bridge execution.
 
-await execute({
-  spell,
-  vault,
-  chain: 1,
-  executionMode: "execute",
-  adapters: [createAcrossAdapter({ integratorId: "0x0000", assets: { /* ... */ } })],
-});
+## 2. Validate and Preview
+
+```bash
+grimoire validate spells/across-bridge.spell
+grimoire simulate spells/across-bridge.spell --chain 8453
 ```
 
-## Minimum bridge amounts
+## 3. Dry-Run Cast
 
-Across enforces per-token minimum bridge amounts to cover relayer fees. Amounts below these thresholds will fail with "Sent amount is too low relative to fees":
+```bash
+grimoire cast spells/across-bridge.spell \
+  --dry-run \
+  --chain 8453 \
+  --key-env PRIVATE_KEY \
+  --rpc-url <base-rpc>
+```
 
-| Token | Minimum | Raw (6 decimals) |
-|-------|---------|-------------------|
-| USDC | ~$1.00 | 1000000 |
-| WETH | ~0.002 ETH | 2000000000000000 |
+## 4. Execute Live
 
-These are approximate and vary by route and network conditions. When in doubt, use larger amounts.
+```bash
+grimoire cast spells/across-bridge.spell \
+  --chain 8453 \
+  --key-env PRIVATE_KEY \
+  --rpc-url <base-rpc>
+```
 
-## See also
+## 5. Inspect Run and Ledger
 
-- [Action constraints](../reference/action-constraints.md)
-- [Venue adapters](../reference/venues.md)
+```bash
+grimoire history
+grimoire history <spell-id>
+grimoire log <spell-id> <run-id>
+```
+
+## Troubleshooting
+
+- `Across adapter requires numeric toChain`: ensure the third arg resolves to number.
+- Missing token mapping: use symbols/addresses supported in adapter config for source/destination chains.
+- Quote/simulation failures: verify chain RPC, token address, and amount above bridge minimums.
+- Stale replayed snapshot data: tune `--data-max-age` or `--on-stale warn`.

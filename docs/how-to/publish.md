@@ -1,36 +1,68 @@
-# Publish packages (initial release)
+# How To Publish
 
-Grimoire uses Changesets for ongoing releases. The initial `0.1.0` publish is done manually.
+This repository uses Changesets for release workflows after initial bootstrapping.
 
 ## Prerequisites
 
-- npm account with access to the `@grimoirelabs` scope
-- Node + npm available locally
+- npm publish permissions for `@grimoirelabs/*`
+- clean working tree
+- validated build/test
 
-## Manual publish (one-time)
+## 1. Validate
 
 ```bash
-# Install deps and build packages
 bun install
-bun run build
-
-# Publish in dependency order
-cd packages/core
-npm publish --access public --provenance
-
-cd ../venues
-npm publish --access public --provenance
-
-cd ../cli
-npm publish --access public --provenance
+bun run validate
 ```
 
-## After the initial release
-
-Use Changesets + CI for future versions:
+## 2. Create Changeset (normal release flow)
 
 ```bash
 bunx changeset
 ```
 
-Push the changes to `main`. The release workflow publishes with provenance via npm trusted publishing.
+Commit generated changeset files.
+
+## 3. Version Packages
+
+```bash
+bun run version
+```
+
+This runs `changeset version` and formats the repo.
+
+## 4. Build
+
+```bash
+bun run build
+```
+
+## 5. Publish
+
+```bash
+bun run release
+```
+
+`release` runs build + `changeset publish` with provenance/public access env defaults.
+
+## Initial 0.1.0 Note
+
+Per project policy, initial `0.1.0` publish is manual. After that, use Changesets + CI/release flow.
+
+## Package Entry Points
+
+Published packages:
+
+- `@grimoirelabs/core`
+- `@grimoirelabs/venues`
+- `@grimoirelabs/cli`
+
+## Post-Publish Checks
+
+- Verify package versions on npm
+- Validate CLI install path:
+
+```bash
+npm i -g @grimoirelabs/cli@latest
+grimoire --version
+```

@@ -325,7 +325,12 @@ export interface AdviseNode extends ASTNode {
   target: string;
   advisor: string;
   prompt: string;
+  context?: Record<string, ExpressionNode>;
+  within?: string;
   outputSchema: AdvisoryOutputSchemaNode;
+  onViolation?: "reject" | "clamp";
+  onViolationExplicit?: boolean;
+  clampConstraints?: string[];
   timeout: number;
   fallback: ExpressionNode;
 }

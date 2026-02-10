@@ -246,4 +246,100 @@ describe("Validator", () => {
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.code === "UNKNOWN_STEP_REFERENCE")).toBe(true);
   });
+
+  test("emits advisory summaries for validation", () => {
+    const ir = createValidIR();
+    ir.steps = [
+      {
+        kind: "advisory",
+        id: "advisory_summary",
+        advisor: "advisor",
+        prompt: "Should we move funds?",
+        context: {
+          balance: { kind: "binding", name: "amount" },
+        },
+        policyScope: "constraints",
+        outputSchema: { type: "boolean" },
+        outputBinding: "decision",
+        violationPolicy: "reject",
+        violationPolicyExplicit: true,
+        clampConstraints: ["max_slippage"],
+        timeout: 10,
+        fallback: { kind: "literal", value: false, type: "bool" },
+        dependsOn: [],
+      },
+      {
+        kind: "conditional",
+        id: "cond_1",
+        condition: { kind: "binding", name: "decision" },
+        thenSteps: ["action_approved"],
+        elseSteps: ["emit_rejected"],
+        dependsOn: [],
+      },
+      {
+        kind: "action",
+        id: "action_approved",
+        action: {
+          type: "transfer",
+          asset: "USDC",
+          amount: { kind: "literal", value: 1, type: "int" },
+          to: "0x0000000000000000000000000000000000000004",
+        },
+        constraints: {
+          maxSlippageBps: 50,
+          maxGas: { kind: "literal", value: 100000, type: "int" },
+        },
+        onFailure: "revert",
+        dependsOn: [],
+      },
+      {
+        kind: "emit",
+        id: "emit_rejected",
+        event: "rejected",
+        data: {},
+        dependsOn: [],
+      },
+    ];
+
+    const result = validateIR(ir);
+    expect(result.advisorySummaries.length).toBe(1);
+    const summary = result.advisorySummaries[0];
+    expect(summary?.advisory_id).toBe("advisory_summary");
+    expect(summary?.dependent_paths).toContain("conditional:cond_1:then");
+    expect(summary?.dependent_paths).toContain("conditional:cond_1:else");
+    expect(summary?.irreversible_actions_downstream).toBe(1);
+    expect(summary?.governing_constraints).toContain("constraints");
+    expect(summary?.governing_constraints).toContain("max_slippage");
+    expect(summary?.governing_constraints).toContain("max_gas");
+  });
+
+  test("rejects non-clampable advisory clamp constraints", () => {
+    const ir = createValidIR();
+    ir.steps = [
+      {
+        kind: "advisory",
+        id: "advisory_bad_clamp",
+        advisor: "advisor",
+        prompt: "Should we move funds?",
+        context: {
+          balance: { kind: "binding", name: "amount" },
+        },
+        policyScope: "constraints",
+        outputSchema: { type: "boolean" },
+        outputBinding: "decision",
+        violationPolicy: "clamp",
+        violationPolicyExplicit: true,
+        clampConstraints: ["max_single_move"],
+        timeout: 10,
+        fallback: { kind: "literal", value: true, type: "bool" },
+        dependsOn: [],
+      },
+    ];
+
+    const result = validateIR(ir);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.code === "ADVISORY_NON_CLAMPABLE_CONSTRAINT")).toBe(
+      true
+    );
+  });
 });

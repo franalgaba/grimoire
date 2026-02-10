@@ -55,6 +55,21 @@ describe("Module exports", () => {
     expect(result.errors[0]?.code).toBe("GRIMOIRE_PARSE_ERROR");
   });
 
+  test("compileGrimoire emits advisory inline unsupported code", () => {
+    const source = `spell InlineAdvisory {
+  version: "1.0.0"
+
+  on manual: {
+    if **is this safe** {
+      pass
+    }
+  }
+}`;
+    const result = compileGrimoire(source);
+    expect(result.success).toBe(false);
+    expect(result.errors.some((error) => error.code === "ADVISORY_INLINE_UNSUPPORTED")).toBe(true);
+  });
+
   test("compileGrimoire handles IR generation errors", () => {
     // Spell that parses but has invalid expression for IR generation
     const source = `spell Test {

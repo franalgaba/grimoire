@@ -1,265 +1,230 @@
-# Venues reference
+# Venue Adapter Reference
 
-The `@grimoirelabs/venues` package provides official adapters.
+This page documents adapters exposed by `@grimoirelabs/venues` from `packages/venues/src/index.ts`.
 
-## CLI metadata
+## Adapter Model
 
-If you installed the Grimoire CLI, you can access venue metadata via:
+Each adapter implements `VenueAdapter`:
 
-```bash
-grimoire venue morpho-blue info
-grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000
-grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
+- `meta`: name, supported chains, actions, execution type
+- `buildAction(action, ctx)`: build EVM tx plan (single or multi-tx)
+- `executeAction(action, ctx)`: offchain execution path (optional)
 
-# Uniswap pools snapshot (mainnet)
-grimoire venue uniswap pools --chain 1 --token0 USDC --token1 WETH --fee 3000 --format spell
+Execution types:
 
-# Uniswap pools snapshot via RPC (avoids The Graph)
-grimoire venue uniswap pools --chain 1 --token0 USDC --token1 WETH --fee 3000 --rpc-url $RPC_URL --format spell
+- `evm`: action compiled to transaction(s)
+- `offchain`: action executed through external API
 
-# Hyperliquid mid prices snapshot
-grimoire venue hyperliquid mids --format spell
-```
+## Registered Adapters
 
-If you provide `--rpc-url` (or set `RPC_URL`) and omit `--endpoint`/`--graph-key`, the CLI fetches pools directly from the Uniswap V3 factory onchain.
+Default adapter bundle order:
 
-## Install (programmatic usage)
+- `aave_v3`
+- `uniswap_v3`
+- `uniswap_v4`
+- `morpho_blue`
+- `hyperliquid`
+- `across`
+- `yellow`
+- `lifi`
 
-```bash
-npm i @grimoirelabs/venues
-```
-
-## Adapters
-
-- `aave_v3` — Aave V3 lending/borrowing (Ethereum, Base)
-- `morpho_blue` — Morpho Blue isolated lending markets
-- `uniswap_v3` — Uniswap V3 swaps via SwapRouter02
-- `uniswap_v4` — Uniswap V4 swaps via Universal Router + Permit2
-- `hyperliquid` — Hyperliquid spot/perps (offchain)
-- `across` — Across cross-chain bridge
-- `yellow` — Yellow NitroRPC app-session lifecycle (offchain)
-- `lifi` — LI.FI route/quote execution for swap + bridge (offchain)
-
-## Usage
+## `aave_v3`
 
-```ts
-import { adapters } from "@grimoirelabs/venues";
-import { execute } from "@grimoirelabs/core";
+- Type: `evm`
+- Actions: `lend`, `withdraw`, `borrow`, `repay`
+- Default markets:
+  - chain 1: `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`
+  - chain 8453: `0xA238Dd80C259a72e81d7e4664a9801593F98d1c5`
 
-await execute({
-  spell,
-  vault,
-  chain,
-  executionMode: "execute",
-  adapters,
-});
-```
+Implementation notes:
 
-## Adapter configuration
+- Uses `@aave/client` action builders.
+- Handles approval-required flows by returning multiple txs.
+- In preview/dry-run may emit placeholder tx for insufficient-balance plans.
+- Amount handling follows Aave SDK conventions (human vs exact wrappers per action type).
 
-Use factory functions to pass SDK config:
+## `uniswap_v3`
 
-```ts
-import { createAcrossAdapter, createUniswapV3Adapter } from "@grimoirelabs/venues";
+- Type: `evm`
+- Actions: `swap`
+- Default router: `0xE592427A0AEce92De3Edee1F18E0157C05861564` on supported chains
 
-const across = createAcrossAdapter({
-  integratorId: "0x0000",
-  assets: {
-    USDC: {
-      1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-      10: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-    },
-  },
-});
-
-const uniswap = createUniswapV3Adapter({
-  routers: { 1: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45" },
-  slippageBps: 50,
-});
-```
+Implementation notes:
 
-### Aave V3
+- Builds routes/pools via Uniswap V3 SDK.
+- Fetches on-chain pool state (`slot0`, `liquidity`) for quote-like pathing.
+- Resolves constraints:
+  - `maxSlippageBps`
+  - `minOutput`
+  - `maxInput`
+- For native ETH input:
+  - wraps ETH to WETH
+  - adds approval tx
+  - submits swap tx
 
-Supports Ethereum mainnet and Base with pre-configured market addresses.
+## `uniswap_v4`
 
-```ts
-import { createAaveV3Adapter } from "@grimoirelabs/venues";
-
-// Default: Ethereum + Base markets pre-configured
-const aave = createAaveV3Adapter();
-
-// Custom markets:
-const aave = createAaveV3Adapter({
-  markets: {
-    1: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",     // Ethereum
-    8453: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",   // Base
-  },
-});
-```
-
-**Amount format:** The `@aave/client` SDK uses human-readable BigDecimal amounts internally. The adapter converts raw spell amounts to human-readable format automatically:
+- Type: `evm`
+- Actions: `swap`
+- Uses Universal Router v2 + quote pathing.
 
-| Action | SDK amount format | Example (0.1 USDC) |
-|--------|------------------|---------------------|
-| supply | `value: "0.1"` | Human-readable BigDecimal |
-| borrow | `value: "0.1"` | Human-readable BigDecimal |
-| withdraw | `value: { exact: "100000" }` | Raw amount in `exact` wrapper |
-| repay | `value: { exact: "100000" }` | Raw amount in `exact` wrapper |
-
-### Morpho Blue
-
-Ships with default markets for Base (chain 8453). No configuration needed for USDC lending on Base.
-
-```ts
-import { createMorphoBlueAdapter } from "@grimoirelabs/venues";
-
-// Default: Base USDC markets (cbBTC/USDC + WETH/USDC) pre-configured
-const morpho = createMorphoBlueAdapter();
-
-// Custom markets:
-const morpho = createMorphoBlueAdapter({
-  markets: [
-    {
-      id: "usdc-weth-lltv-86",
-      loanToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-      collateralToken: "0x4200000000000000000000000000000000000006",
-      oracle: "0xFEa2D58cEfCb9fcb597723c6bAE66fFE4193aFE4",
-      irm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
-      lltv: 860000000000000000n,
-    },
-  ],
-});
-```
-
-**Default Base markets:**
-
-| Market | Collateral | LLTV | Supply |
-|--------|-----------|------|--------|
-| cbBTC/USDC | cbBTC | 86% | ~$1.26B |
-| WETH/USDC | WETH | 86% | ~$48.7M |
-
-When no collateral is specified in a spell, the first matching market by loan token is selected (cbBTC/USDC for USDC lending).
-
-### Uniswap V3
+Implementation notes:
 
-```ts
-import { createUniswapV3Adapter } from "@grimoirelabs/venues";
+- Supports exact-in/exact-out swap modes.
+- Uses quoter when available; otherwise fallback behavior applies.
+- Applies explicit `min_output` / `max_input` constraints when present.
+- Supports native ETH in/out mapping to V4 currency conventions.
 
-const uniswap = createUniswapV3Adapter({
-  routers: {
-    1: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
-    8453: "0x2626664c2603336E57B271c5C0b26F421741e481",
-  },
-  slippageBps: 50,
-});
-```
+## `morpho_blue`
 
-### Uniswap V4
+- Type: `evm`
+- Actions: `lend`, `withdraw`, `borrow`, `repay`
+- Supported chains: `[1, 8453]`
 
-Uses Universal Router with Permit2 approval flow.
+Implementation notes:
 
-```ts
-import { createUniswapV4Adapter } from "@grimoirelabs/venues";
+- Encodes Blue contract calls with `blueAbi`.
+- Uses market resolution by loan token and optional collateral.
+- Approval path for `lend` and `repay`.
 
-const uniswapV4 = createUniswapV4Adapter({
-  routers: {
-    1: "0x...",
-    8453: "0x...",
-  },
-  slippageBps: 50,
-});
-```
+Default embedded Base markets include:
 
-### Across (bridge)
+- cbBTC/USDC (86% LLTV)
+- WETH/USDC (86% LLTV)
 
-Cross-chain bridging. Enforces minimum amounts per token to cover relayer fees.
+## `across`
 
-```ts
-import { createAcrossAdapter } from "@grimoirelabs/venues";
+- Type: `evm`
+- Actions: `bridge`
 
-const across = createAcrossAdapter({
-  integratorId: "0x0000",
-  assets: {
-    USDC: {
-      1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-      8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-      42161: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-    },
-  },
-});
-```
+Implementation notes:
 
-**Minimum bridge amounts** (approximate, varies by route):
+- Requires numeric `toChain` at action resolution time.
+- Uses Across quote API and spoke pool `deposit` simulation.
+- Builds approval tx for ERC20 bridge input when required.
+- Supports mapped assets (USDC/WETH defaults across multiple chains).
 
-| Token | Minimum |
-|-------|---------|
-| USDC | ~$1.00 |
-| WETH | ~0.002 ETH |
+Constraint behavior:
 
-### Hyperliquid (offchain)
+- Honors `maxSlippageBps` and `minOutput` when computing output amount.
 
-```ts
-import { createHyperliquidAdapter } from "@grimoirelabs/venues";
+## `hyperliquid`
 
-const hyperliquid = createHyperliquidAdapter({
-  privateKey: "0x...",
-  assetMap: {
-    BTC: 0,
-    ETH: 1,
-  },
-});
-```
+- Type: `offchain`
+- Actions: `swap`, `withdraw`
+- Supported chains in metadata: `[0, 999]`
 
-> Hyperliquid requires a private key and executes offchain orders via the Hyperliquid API. No gas needed.
+Implementation notes:
 
-### Yellow (offchain)
+- `hyperliquidAdapter` requires key-configured factory for real execution.
+- `createHyperliquidAdapter` uses private key and asset map.
+- `executeAction` sends orders/withdraws via Hyperliquid client APIs.
 
-Yellow adapter supports custom session operations:
+## `yellow`
 
-- `session_open` -> `create_app_session`
-- `session_update` -> `submit_app_state`
-- `session_close_settle` -> `close_app_session`
-- `session_transfer` helper -> allocation update + submit
+- Type: `offchain`
+- Actions: `custom`
 
-State update invariants enforced by the adapter:
+Supported custom ops:
 
-- `intent` must be one of `operate`, `deposit`, `withdraw`
-- `version` must increment by exactly 1 for updates
-- `allocations` must be non-empty for updates
-- signatures must satisfy configured quorum/signer set
+- `session_open`
+- `session_update`
+- `session_close_settle`
+- `session_transfer`
 
-```ts
-import { createYellowAdapter } from "@grimoirelabs/venues";
+Implementation notes:
 
-const yellow = createYellowAdapter({
-  rpcUrl: process.env.YELLOW_RPC_URL,
-  appId: process.env.YELLOW_APP_ID,
-});
-```
+- Talks to NitroRPC endpoints via `YELLOW_RPC_URL`.
+- Tracks session version/signers/quorum state internally.
+- Enforces version increments and quorum checks before submit.
 
-### LI.FI (offchain)
+## `lifi`
 
-LI.FI adapter supports native Grimoire `swap` and `bridge` actions and optional custom `compose_execute`.
+- Type: `offchain`
+- Actions: `swap`, `bridge`, `custom`
 
-```ts
-import { createLifiAdapter } from "@grimoirelabs/venues";
+Supported custom op:
 
-const lifi = createLifiAdapter({
-  apiUrl: process.env.LIFI_API_URL, // default: https://li.quest/v1
-  apiKey: process.env.LIFI_API_KEY,
-  integrator: process.env.LIFI_INTEGRATOR,
-});
-```
+- `compose_execute`
 
-Action constraints (`max_slippage`, `min_output`, `max_gas`) are enforced against quote/route metadata before execution.
+Implementation notes:
 
-For custom `compose_execute`, `routeRequest.toAddress` is safety-checked:
+- Uses LI.FI API (default `https://li.quest/v1`).
+- Supports API key/integrator headers.
+- Enforces runtime constraints against quote payload where possible:
+  - `minOutput`
+  - `maxSlippageBps`
+  - `maxGas`
 
-- defaults to `walletAddress` when omitted
-- must match `walletAddress` by default
-- can be intentionally overridden by setting `allowExternalToAddress: true` (or `allow_external_to_address: true`) in the request
+## Core vs Venues Boundary
 
-## Execution types
+- `@grimoirelabs/core` remains protocol-agnostic.
+- All SDK/protocol integration belongs in `@grimoirelabs/venues`.
+- Adapters are injected at runtime via `execute({ adapters })`.
 
-- `executionType: "evm"` for on-chain transactions (Aave, Morpho, Uniswap, Across)
-- `executionType: "offchain"` for venues like Hyperliquid, Yellow, and LI.FI
+## Venue CLI Proxies
+
+`grimoire venue <adapter> ...` proxies to per-venue CLIs currently for:
+
+- Aave
+- Uniswap
+- Morpho Blue
+- Hyperliquid
+
+Across/Yellow/LI.FI currently expose adapters in runtime, not proxied top-level venue CLIs from `grimoire venue`.
+
+## Per-Venue CLI Commands
+
+`@grimoirelabs/venues` publishes these binaries:
+
+- `grimoire-aave`
+- `grimoire-uniswap`
+- `grimoire-morpho-blue`
+- `grimoire-hyperliquid`
+
+### `grimoire-aave`
+
+Commands:
+
+- `health`
+- `chains`
+- `markets`
+- `market`
+- `reserve`
+- `reserves`
+
+`reserves` supports `--format spell` snapshot output.
+
+### `grimoire-uniswap`
+
+Commands:
+
+- `info`
+- `routers`
+- `tokens`
+- `pools`
+
+`tokens` and `pools` support `--format spell` snapshot output.
+
+### `grimoire-morpho-blue`
+
+Commands:
+
+- `info`
+- `addresses`
+- `vaults`
+
+`vaults` supports `--format spell` snapshot output.
+
+### `grimoire-hyperliquid`
+
+Commands:
+
+- `mids`
+- `l2-book`
+- `open-orders`
+- `meta`
+- `spot-meta`
+- `withdraw`
+
+Most read-only commands support `--format spell` snapshot output.

@@ -1,268 +1,285 @@
-# CLI reference
+# Grimoire CLI Reference
 
-## grimoire init
+This page documents the `grimoire` CLI surface from `packages/cli/src/index.ts` and command implementations in `packages/cli/src/commands/*`.
 
-Initialize a new `.grimoire` directory with config, aliases, and example spell.
+## Command Summary
+
+- `grimoire init`
+- `grimoire compile <spell>`
+- `grimoire compile-all [dir]`
+- `grimoire validate <spell>`
+- `grimoire simulate <spell>`
+- `grimoire cast <spell>`
+- `grimoire venues`
+- `grimoire venue [adapter] [args...]`
+- `grimoire history [spell]`
+- `grimoire log <spell> <runId>`
+- `grimoire wallet <subcommand>`
+
+## `init`
+
+Initialize `.grimoire` scaffolding.
 
 ```bash
-grimoire init [options]
+grimoire init [--force] [--runtime-quickstart]
 ```
 
 Options:
-- `-f, --force` — overwrite existing files
-- `--vm` — create a VM quickstart scaffold instead of the default example spell
 
-## grimoire compile
+- `--force`: overwrite if `.grimoire` already exists.
+- `--runtime-quickstart`: create `runtime-quickstart` spell and readme instead of `example-swap`.
 
-Compile a `.spell` file to IR.
+Creates:
+
+- `.grimoire/config.yaml`
+- `.grimoire/aliases/default.yaml`
+- `.grimoire/spells/...`
+
+## `compile`
+
+Compile a single `.spell` file to IR JSON.
 
 ```bash
-grimoire compile <spell> [options]
+grimoire compile <spell> [-o <file>] [--pretty]
 ```
 
 Options:
-- `-o, --output <file>` — output file for IR JSON
-- `--pretty` — pretty print JSON output
 
-## grimoire compile-all
+- `-o, --output <file>`: write IR JSON to file.
+- `--pretty`: pretty JSON output.
 
-Compile every `.spell` file in a directory (default: `spells/`).
+Exit code:
+
+- `0` on success
+- `1` on compile errors or IO failures
+
+## `compile-all`
+
+Compile every `.spell` under a directory recursively.
 
 ```bash
-grimoire compile-all [dir]
+grimoire compile-all [dir] [--fail-fast] [--json]
+```
+
+Defaults:
+
+- `dir`: `spells`
+
+Options:
+
+- `--fail-fast`: stop on first failure.
+- `--json`: emit machine-readable per-file result list.
+
+Exit code:
+
+- `0` when all files compile
+- `1` when any file fails or no spell files found
+
+## `validate`
+
+Compile + validate a spell, including advisory summaries.
+
+```bash
+grimoire validate <spell> [--strict] [--json]
 ```
 
 Options:
-- `--fail-fast` — stop after the first failure
-- `--json`
 
-## grimoire validate
+- `--strict`: treat warnings as failures.
+- `--json`: emit validation payload.
 
-Validate a `.spell` file.
+JSON includes:
 
-```bash
-grimoire validate <spell> [options]
-```
+- `success`
+- `strict`
+- `spell` metadata
+- `errors`
+- `warnings`
+- `advisory_summaries`
 
-Options:
-- `--strict` — treat warnings as errors
+Exit code:
 
-## grimoire simulate
+- `0` when valid
+- `1` on errors (or warnings in strict mode)
 
-Simulate spell execution (dry run). State is automatically loaded and saved between runs.
+## `simulate`
+
+Run preview-mode execution (no irreversible commit).
 
 ```bash
 grimoire simulate <spell> [options]
 ```
 
-Options:
-- `-p, --params <json>` — parameters as JSON
-- `--vault <address>` — vault address
-- `--chain <id>` — chain ID (default: 1)
-- `--json` — machine-readable run envelope (includes data provenance)
-- `--advisor-skills-dir <dir>` — directory to resolve advisor skills (repeatable)
-- `--advisory-pi` — force advisory steps via Pi SDK
-- `--advisory-replay <runId>` — replay advisory outputs from a previous run
-- `--advisory-provider <name>` — Pi provider for advisory (e.g., openai-codex, anthropic)
-- `--advisory-model <id>` — Pi model ID for advisory (e.g., gpt-5.2, claude-sonnet-4-20250514)
-- `--advisory-thinking <level>` — Pi thinking level (off|low|medium|high)
-- `--advisory-tools <mode>` — advisory tools: none|read|coding (default: read)
-- `--pi-agent-dir <dir>` — Pi agent directory (defaults to ~/.pi/agent)
-- `--data-replay <mode>` — external data replay mode: `off`, `auto`, or `<runId|snapshotId>` (default: `auto`)
-- `--data-max-age <sec>` — maximum external data age in seconds (default: `3600`)
-- `--on-stale <fail|warn>` — stale data policy (default: `fail`)
-- `--ens-name <name>` — ENS name to hydrate params from ENS text records and resolved address
-- `--ens-rpc-url <url>` — RPC URL for ENS lookups (default: `ENS_RPC_URL`, fallback: `RPC_URL`)
-- `--state-dir <dir>` — directory for state database (default: `.grimoire/`)
-- `--no-state` — disable state persistence
+Core options:
 
-Notes:
-- Advisory runs automatically when a model is configured (spell model, CLI model/provider, or Pi defaults in `~/.pi/agent/settings.json`).
-- `--advisory-pi` forces the Pi SDK even if no model is configured (falls back to Pi’s first available model).
-- `--advisory-model` expects a Pi model ID (for example, `gpt-5.2`, `claude-sonnet-4-20250514`). Use `--advisory-provider` to pick the provider.
-- `--advisory-replay` requires state persistence (omit `--no-state`).
-- `--data-replay <runId|snapshotId>` requires state persistence (omit `--no-state`).
-- `--data-replay auto` records provenance by default and keeps replay metadata ready for deterministic debugging.
-- OAuth for `openai-codex` requires a Pi login (`pi` → `/login` → OpenAI Codex). Tokens are stored in `~/.pi/agent/auth.json` (or the directory passed via `--pi-agent-dir`).
+- `-p, --params <json>`: parameter override JSON
+- `--vault <address>`: vault address (default `0x000...000`)
+- `--chain <id>`: EVM chain id (default `1`)
+- `--json`: JSON output
 
-## grimoire cast
+Advisory options:
 
-Execute a spell. Supports simulation, dry-run, and live execution modes. State is automatically loaded and saved between runs.
+- `--advisor-skills-dir <dir...>`
+- `--advisory-pi`
+- `--advisory-replay <runId>`
+- `--advisory-provider <name>`
+- `--advisory-model <id>`
+- `--advisory-thinking <off|low|medium|high>`
+- `--advisory-tools <none|read|coding>`
+- `--pi-agent-dir <dir>`
+
+Data replay/freshness options:
+
+- `--data-replay <mode>` where mode is `off`, `auto`, run ID, or snapshot ID
+- `--data-max-age <sec>` (default `3600`)
+- `--on-stale <fail|warn>` (default `fail`)
+
+ENS options:
+
+- `--ens-name <name>`
+- `--ens-rpc-url <url>`
+
+State options:
+
+- `--state-dir <dir>`
+- `--no-state`
+
+Behavior notes:
+
+- Uses `execute({ simulate: true })`, which internally runs `preview()`.
+- Loads and saves persistent state by default via `SqliteStateStore`.
+- If `--advisory-replay` is set, advisory outputs are loaded from a prior run ledger.
+
+## `cast`
+
+Run spell through preview, then optionally commit transactions.
 
 ```bash
 grimoire cast <spell> [options]
 ```
 
-Options:
-- `-p, --params <json>` — parameters as JSON
-- `--vault <address>` — vault address
-- `--chain <id>` — chain ID (default: 1)
-- `--dry-run` — simulate without executing
-- `--key-env <name>` — env var containing private key (default: `PRIVATE_KEY`)
-- `--private-key <hex>` — private key directly (not recommended)
-- `--keystore <path>` — keystore file path (default: `~/.grimoire/keystore.json`)
-- `--password-env <name>` — env var containing keystore password (default: `KEYSTORE_PASSWORD`)
-- `--rpc-url <url>` — RPC URL (or set `RPC_URL` env var)
-- `--gas-multiplier <n>` — gas price multiplier (default: 1.1)
-- `--skip-confirm` — skip confirmation prompt
-- `-v, --verbose` — show verbose output
-- `--json` — machine-readable output
-- `--advisor-skills-dir <dir>` — directory to resolve advisor skills (repeatable)
-- `--advisory-pi` — force advisory steps via Pi SDK
-- `--advisory-replay <runId>` — replay advisory outputs from a previous run
-- `--advisory-provider <name>` — Pi provider for advisory (e.g., openai-codex, anthropic)
-- `--advisory-model <id>` — Pi model ID for advisory (e.g., gpt-5.2, claude-sonnet-4-20250514)
-- `--advisory-thinking <level>` — Pi thinking level (off|low|medium|high)
-- `--advisory-tools <mode>` — advisory tools: none|read|coding (default: read)
-- `--pi-agent-dir <dir>` — Pi agent directory (defaults to ~/.pi/agent)
-- `--data-replay <mode>` — external data replay mode: `off`, `auto`, or `<runId|snapshotId>` (default: `auto` for dry-run/simulate mode, `off` for live execution)
-- `--data-max-age <sec>` — maximum external data age in seconds (default: `3600`)
-- `--on-stale <fail|warn>` — stale data policy (default: `fail`)
-- `--ens-name <name>` — ENS name to hydrate params from ENS text records and resolved address
-- `--ens-rpc-url <url>` — RPC URL for ENS lookups (default: `ENS_RPC_URL`, fallback: `RPC_URL`)
-- `--state-dir <dir>` — directory for state database (default: `.grimoire/`)
-- `--no-state` — disable state persistence
+Core options:
 
-Notes:
-- Advisory runs automatically when a model is configured (spell model, CLI model/provider, or Pi defaults in `~/.pi/agent/settings.json`).
-- `--advisory-pi` forces the Pi SDK even if no model is configured (falls back to Pi’s first available model).
-- `--advisory-model` expects a Pi model ID (for example, `gpt-5.2`, `claude-sonnet-4-20250514`). Use `--advisory-provider` to pick the provider.
-- `--advisory-replay` requires state persistence (omit `--no-state`).
-- `--data-replay <runId|snapshotId>` requires state persistence (omit `--no-state`).
-- Data replay defaults to `auto` for `cast --dry-run` and cast-simulation, and defaults to `off` for live `cast`.
-- OAuth for `openai-codex` requires a Pi login (`pi` → `/login` → OpenAI Codex). Tokens are stored in `~/.pi/agent/auth.json` (or the directory passed via `--pi-agent-dir`).
+- `-p, --params <json>`
+- `--vault <address>`
+- `--chain <id>`
+- `--dry-run`
+- `--json`
+- `-v, --verbose`
 
-## Run provenance output
+Wallet/key options:
 
-`simulate` and `cast` now emit a shared run envelope with:
+- `--private-key <key>`
+- `--key-env <name>`
+- `--keystore <path>`
+- `--password-env <name>`
 
-- `Run` block (`spell`, `trigger`, `status`, `run_id`, `duration_ms`)
-- `Data` block (provenance + replay + freshness policy)
-- `Events` block (emitted `emit` events)
-- `Bindings` block (final binding values)
+Execution options:
 
-With `--json`, stdout contains full structured output including:
+- `--rpc-url <url>`
+- `--gas-multiplier <n>`
+- `--skip-confirm`
 
-- `data.provenance.schema_version` (`grimoire.runtime.provenance.v1`)
-- `data.provenance.input_params_hash`
-- `data.provenance.snapshot_hash` (when snapshot-like sources exist)
-- `data.provenance.chain_id` and optional `block_number`
-- `data.provenance.data_replay` metadata
+Advisory/data/ENS/state options are the same family as `simulate`.
 
-Provenance is also stored in persistent run records (when state is enabled), enabling `--data-replay`.
+Runtime mode selection in command logic:
 
-## grimoire history
+- `simulate`: no key available and not `--dry-run`
+- `dry-run`: `--dry-run`
+- `execute`: key available and no `--dry-run`
 
-View execution history for spells.
+Behavior notes:
+
+- Always runs preview first.
+- Commits only when mode is `execute`, a wallet exists, and receipt has planned actions.
+- Hyperliquid adapter is key-configured dynamically in wallet paths.
+
+## `venues`
+
+List registered venue adapter metadata.
 
 ```bash
-# List all spells with saved state
-grimoire history
-
-# Show run history for a specific spell
-grimoire history <spellId>
+grimoire venues [--json]
 ```
 
-Options:
-- `--limit <n>` — maximum number of runs to show (default: 20)
-- `--json` — output as JSON
-- `--state-dir <dir>` — directory for state database
+Table columns:
 
-## grimoire log
+- `Name`
+- `Exec` (`evm` or `offchain`)
+- `Actions`
+- `Chains`
+- `Description`
 
-View ledger events for a specific spell run.
+## `venue`
+
+Proxy to per-venue CLIs in `@grimoirelabs/venues`.
 
 ```bash
-grimoire log <spellId> <runId>
+grimoire venue <adapter> [args...]
 ```
 
-Options:
-- `--json` — output as JSON
-- `--state-dir <dir>` — directory for state database
+Primary adapters supported by proxy mapping:
 
-## grimoire venues
+- `aave` (`aave-v3` alias)
+- `uniswap` (`uniswap-v3`, `uniswap-v4` aliases)
+- `morpho-blue` (`morpho` alias)
+- `hyperliquid`
 
-List available adapters and supported chains.
+This command forwards args to `grimoire-aave`, `grimoire-uniswap`, etc.
+
+## `history`
+
+Inspect persisted run history.
 
 ```bash
-grimoire venues
+grimoire history [spell] [--limit <n>] [--json] [--state-dir <dir>]
 ```
 
-Options:
+Modes:
+
+- No `spell`: list spells with persisted state.
+- With `spell`: list runs plus session ledger and P&L rollups.
+
+## `log`
+
+Inspect ledger events for one run.
+
+```bash
+grimoire log <spell> <runId> [--json] [--state-dir <dir>]
+```
+
+Outputs chronological ledger entries with event-specific formatting.
+
+## `wallet`
+
+Wallet management and ETH/WETH helpers.
+
+```bash
+grimoire wallet <subcommand>
+```
+
+Subcommands:
+
+- `generate`: create new wallet + encrypted keystore
+- `address`: print resolved address
+- `balance`: query native balance
+- `import`: import existing private key into keystore
+- `wrap`: wrap native ETH to WETH (ETH-native chains only)
+- `unwrap`: unwrap WETH to native ETH
+
+Common options include:
+
+- `--keystore <path>`
+- `--password-env <name>`
+- `--key-env <name>` (where applicable)
+- `--chain <id>` and `--rpc-url <url>` for chain operations
 - `--json`
 
-## grimoire venue
+## Exit Code Conventions
 
-Proxy to venue metadata CLIs bundled in `@grimoirelabs/venues`.
+Most commands use:
 
-```bash
-grimoire venue morpho-blue info
-grimoire venue morpho-blue addresses --chain 8453
-grimoire venue aave markets --chain 1
-```
+- `0` success
+- `1` validation/compile/runtime/user-input failure
 
-## grimoire wallet
-
-Manage wallet operations (wrap/unwrap ETH, generate keystore).
-
-```bash
-# Generate a new keystore
-grimoire wallet generate
-
-# Wrap ETH to WETH
-grimoire wallet wrap --amount 0.01 --chain 8453 --keystore ~/.grimoire/keystore.json --password-env KEYSTORE_PASSWORD
-
-# Unwrap WETH to ETH
-grimoire wallet unwrap --amount 0.01 --chain 8453 --keystore ~/.grimoire/keystore.json --password-env KEYSTORE_PASSWORD
-```
-
-Options:
-- `--amount <n>` — amount in ETH
-- `--chain <id>` — chain ID
-- `--keystore <path>` — keystore file path
-- `--password-env <name>` — env var containing keystore password
-- `--rpc-url <url>` — RPC URL
-
-## Venue CLIs
-
-The following commands are available through `grimoire venue <adapter> ...` (recommended). If you install `@grimoirelabs/venues` directly, the standalone `grimoire-<venue>` bins are also available.
-
-Most venue commands accept `--format <json|table>`. Some commands (e.g. `morpho-blue vaults`) also support `--format spell` for VM snapshots.
-
-### grimoire-aave
-
-Commands:
-- `grimoire venue aave health`
-- `grimoire venue aave chains`
-- `grimoire venue aave markets --chain <id> [--user <address>]`
-- `grimoire venue aave market --chain <id> --address <market> [--user <address>]`
-- `grimoire venue aave reserve --chain <id> --market <address> --token <address>`
-- `grimoire venue aave reserves --chain <id> [--market <address>] [--asset <symbol|address>] [--format <json|table|spell>]`
-
-### grimoire-uniswap
-
-Commands:
-- `grimoire venue uniswap info`
-- `grimoire venue uniswap routers [--chain <id>]`
-- `grimoire venue uniswap tokens [--chain <id>] [--symbol <sym>] [--address <addr>] [--source <url>] [--format <json|table|spell>]`
-- `grimoire venue uniswap pools --chain <id> --token0 <address|symbol> --token1 <address|symbol> [--fee <bps>] [--limit <n>] [--source <url>] [--format <json|table|spell>] [--endpoint <url>] [--graph-key <key>] [--subgraph-id <id>] [--rpc-url <url>] [--factory <address>]`
-
-If you provide `--rpc-url` (or `RPC_URL`) and omit `--endpoint`/`--graph-key`, the pools command uses onchain factory lookups instead of The Graph.
-
-### grimoire-morpho-blue
-
-Commands:
-- `grimoire venue morpho-blue info`
-- `grimoire venue morpho-blue addresses [--chain <id>]`
-- `grimoire venue morpho-blue vaults [--chain <id>] [--asset <symbol>] [--min-tvl <usd>] [--min-apy <decimal>] [--min-net-apy <decimal>] [--sort <field>] [--order <asc|desc>] [--limit <n>] [--format <json|table|spell>]`
-
-### grimoire-hyperliquid
-
-Commands:
-- `grimoire venue hyperliquid mids [--format <json|table|spell>]`
-- `grimoire venue hyperliquid l2-book --coin <symbol> [--format <json|table|spell>]`
-- `grimoire venue hyperliquid open-orders --user <address> [--format <json|table|spell>]`
-- `grimoire venue hyperliquid meta [--format <json|table|spell>]`
-- `grimoire venue hyperliquid spot-meta [--format <json|table|spell>]`
-
-Use `--format spell` to emit VM-friendly snapshots of mid prices, order books, open orders, and asset metadata.
+For automation, prefer `--json` plus exit status.

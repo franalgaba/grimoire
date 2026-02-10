@@ -382,7 +382,19 @@ async function executeWithWallet(
 
   console.log();
   if (options.json) {
-    console.log(JSON.stringify(report, null, 2));
+    const payload = execResult.commit
+      ? {
+          success: execResult.success,
+          preview: execResult.receipt,
+          commit: execResult.commit,
+          error: execResult.structuredError,
+        }
+      : {
+          success: execResult.success,
+          receipt: execResult.receipt,
+          error: execResult.structuredError,
+        };
+    console.log(stringifyJson(payload));
   } else {
     console.log(formatRunReportText(report));
   }
@@ -433,6 +445,7 @@ async function executeSimulation(
     cwd: process.cwd(),
   });
 
+  // execute() with simulate:true internally uses preview()
   const result = await withStatePersistence(
     spell.id,
     {
@@ -456,9 +469,9 @@ async function executeSimulation(
   );
 
   if (result.success) {
-    spinner.succeed(chalk.green("Simulation successful"));
+    spinner.succeed(chalk.green("Preview successful"));
   } else {
-    spinner.fail(chalk.red(`Simulation failed: ${result.error}`));
+    spinner.fail(chalk.red(`Preview failed: ${result.error}`));
   }
 
   const report = buildRunReportEnvelope({
@@ -469,7 +482,12 @@ async function executeSimulation(
 
   console.log();
   if (options.json) {
-    console.log(JSON.stringify(report, null, 2));
+    const payload = {
+      success: result.success,
+      receipt: result.receipt,
+      error: result.structuredError,
+    };
+    console.log(stringifyJson(payload));
   } else {
     console.log(formatRunReportText(report));
   }
@@ -553,4 +571,12 @@ function resolveNoState(options: { noState?: boolean; state?: boolean }): boolea
   if (typeof options.noState === "boolean") return options.noState;
   if (options.state === false) return true;
   return false;
+}
+
+function stringifyJson(value: unknown): string {
+  return JSON.stringify(
+    value,
+    (_key, innerValue) => (typeof innerValue === "bigint" ? innerValue.toString() : innerValue),
+    2
+  );
 }

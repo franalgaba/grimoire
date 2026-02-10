@@ -4,7 +4,7 @@
  */
 
 import { join } from "node:path";
-import { SqliteStateStore } from "@grimoirelabs/core";
+import { SqliteStateStore, getSessionLedgerView, getSessionPnlView } from "@grimoirelabs/core";
 import chalk from "chalk";
 
 interface HistoryOptions {
@@ -52,6 +52,8 @@ export async function historyCommand(
       // Show runs for specific spell
       const limit = options.limit ? Number.parseInt(options.limit, 10) : 20;
       const runs = await store.getRuns(spellId, limit);
+      const sessionLedger = await getSessionLedgerView(store, spellId, limit);
+      const sessionPnl = await getSessionPnlView(store, spellId, limit);
 
       if (runs.length === 0) {
         console.log(chalk.dim(`No runs found for spell "${spellId}".`));
@@ -59,7 +61,17 @@ export async function historyCommand(
       }
 
       if (options.json) {
-        console.log(JSON.stringify(runs, null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              runs,
+              sessionLedger,
+              sessionPnl,
+            },
+            null,
+            2
+          )
+        );
         return;
       }
 
@@ -81,8 +93,43 @@ export async function historyCommand(
           console.log(`        ${chalk.red(run.error)}`);
         }
       }
+
+      console.log();
+      console.log(chalk.cyan("Session ledger:"));
+      console.log(
+        `  runs=${sessionLedger.runs.total} success=${sessionLedger.runs.success} failed=${sessionLedger.runs.failed}`
+      );
+      if (sessionLedger.runs.latestRunAt) {
+        console.log(`  latest=${chalk.dim(sessionLedger.runs.latestRunAt)}`);
+      }
+      console.log(`  triggers=${formatCounts(sessionLedger.triggers)}`);
+      console.log(`  receipts=${formatCounts(sessionLedger.receipts)}`);
+
+      console.log();
+      console.log(chalk.cyan("Session P&L (ledger-derived):"));
+      console.log(
+        `  runs=${sessionPnl.runCount} deltas=${sessionPnl.deltaCount} accounting=${sessionPnl.accountingPassed ? "ok" : "failed"}`
+      );
+      console.log(`  net=${sessionPnl.totalNet} total_unaccounted=${sessionPnl.totalUnaccounted}`);
+      if (sessionPnl.assets.length === 0) {
+        console.log(`  ${chalk.dim("(no value deltas)")}`);
+      } else {
+        for (const asset of sessionPnl.assets) {
+          console.log(
+            `  ${asset.asset} net=${asset.net} credits=${asset.credits} debits=${asset.debits} fees=${asset.fees} losses=${asset.losses}`
+          );
+        }
+      }
     }
   } finally {
     store.close();
   }
+}
+
+function formatCounts(counter: Record<string, number>): string {
+  const entries = Object.entries(counter).sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 0) {
+    return "none";
+  }
+  return entries.map(([key, value]) => `${key}:${value}`).join(", ");
 }

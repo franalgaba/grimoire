@@ -16,6 +16,7 @@ export {
   typeCheckIR,
 } from "./compiler/index.js";
 export type {
+  AdvisorySummary,
   ParseResult,
   IRGeneratorResult,
   ValidationResult,
@@ -25,6 +26,13 @@ export type {
 // Runtime
 export {
   execute,
+  preview,
+  commit,
+  runSession,
+  runOneShotSession,
+  runManagedSession,
+  getSessionLedgerView,
+  getSessionPnlView,
   createContext,
   InMemoryLedger,
   evaluate,
@@ -35,11 +43,19 @@ export {
 } from "./runtime/index.js";
 export type {
   ExecuteOptions,
+  PreviewOptions,
+  CommitOptions,
   CreateContextOptions,
   EvalContext,
   EvalValue,
   AdvisoryHandler,
   AdvisoryHandlerInput,
+  SessionMode,
+  SessionRunOptions,
+  SessionRunResult,
+  SessionLedgerView,
+  SessionPnlView,
+  SessionPnlAssetView,
   StateStore,
   RunRecord,
   RunMetrics,

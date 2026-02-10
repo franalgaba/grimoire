@@ -6,6 +6,7 @@ import type { Action, ActionConstraintsResolved } from "./actions.js";
 import type { SpellIR } from "./ir.js";
 import type { PolicySet } from "./policy.js";
 import type { Address, ChainId, Timestamp, VenueAlias } from "./primitives.js";
+import type { CommitResult, Receipt, StructuredError, ValueDelta } from "./receipt.js";
 
 /**
  * Execution context - passed through during spell execution
@@ -75,9 +76,14 @@ export interface ExecutionResult {
   endTime: Timestamp;
   duration: number; // milliseconds
   error?: string;
+  structuredError?: StructuredError;
   metrics: ExecutionMetrics;
   finalState: Record<string, unknown>;
   ledgerEvents: LedgerEntry[];
+  /** Preview receipt generated during execution */
+  receipt?: Receipt;
+  /** Commit result when irreversible actions are committed */
+  commit?: CommitResult;
 }
 
 /**
@@ -91,6 +97,11 @@ export interface StepResult {
   halted?: boolean;
   skipped?: boolean;
   fallback?: boolean;
+  rawOutput?: unknown;
+  effectiveOutput?: unknown;
+  violationPolicy?: "reject" | "clamp";
+  clamped?: boolean;
+  advisoryViolations?: AdvisoryViolationEventDetail[];
 }
 
 // =============================================================================
@@ -142,7 +153,16 @@ export type LedgerEvent =
   | RetryExhaustedEvent
   // Circuit breakers
   | CircuitBreakerTriggeredEvent
-  | CircuitBreakerActionEvent;
+  | CircuitBreakerActionEvent
+  // Preview/Commit lifecycle
+  | PreviewStartedEvent
+  | PreviewCompletedEvent
+  | CommitStartedEvent
+  | CommitCompletedEvent
+  | DriftCheckEvent
+  | ValueDeltaEvent
+  | ReceiptGeneratedEvent
+  | ApprovalRequiredEvent;
 
 // Run lifecycle events
 interface RunStartedEvent {
@@ -271,6 +291,13 @@ interface BindingSetEvent {
 }
 
 // Advisory events
+interface AdvisoryViolationEventDetail {
+  path: string;
+  message: string;
+  actual?: unknown;
+  expected?: unknown;
+}
+
 interface AdvisoryStartedEvent {
   type: "advisory_started";
   stepId: string;
@@ -287,6 +314,13 @@ interface AdvisoryCompletedEvent {
   stepId: string;
   advisor: string;
   output: unknown;
+  rawOutput?: unknown;
+  effectiveOutput?: unknown;
+  onViolation?: "reject" | "clamp";
+  policyScope?: string;
+  clampConstraints?: string[];
+  clamped?: boolean;
+  violations?: AdvisoryViolationEventDetail[];
 }
 
 interface AdvisoryFailedEvent {
@@ -395,6 +429,57 @@ export interface LedgerEntry {
   runId: string;
   spellId: string;
   event: LedgerEvent;
+}
+
+// Preview/Commit lifecycle events
+interface PreviewStartedEvent {
+  type: "preview_started";
+  runId: string;
+  spellId: string;
+}
+
+interface PreviewCompletedEvent {
+  type: "preview_completed";
+  runId: string;
+  receiptId: string;
+  status: string;
+}
+
+interface CommitStartedEvent {
+  type: "commit_started";
+  runId: string;
+  receiptId: string;
+}
+
+interface CommitCompletedEvent {
+  type: "commit_completed";
+  runId: string;
+  receiptId: string;
+  success: boolean;
+}
+
+interface DriftCheckEvent {
+  type: "drift_check";
+  field: string;
+  passed: boolean;
+  previewValue: unknown;
+  commitValue: unknown;
+}
+
+interface ValueDeltaEvent {
+  type: "value_delta";
+  delta: ValueDelta;
+}
+
+interface ReceiptGeneratedEvent {
+  type: "receipt_generated";
+  receiptId: string;
+}
+
+interface ApprovalRequiredEvent {
+  type: "approval_required";
+  receiptId: string;
+  reason: string;
 }
 
 export interface AdvisorySchemaEvent {

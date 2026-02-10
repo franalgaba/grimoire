@@ -4,7 +4,6 @@
 
 import { describe, expect, test } from "bun:test";
 import type {
-  AdvisoryExpr,
   ArrayLiteralNode,
   AssetsSection,
   AssignmentNode,
@@ -455,6 +454,8 @@ describe("Parser", () => {
 
   on manual: {
     decision = advise risk: "Check risk" {
+      context: balance, rates
+      within: constraints
       output: {
         type: object
         fields: {
@@ -468,6 +469,8 @@ describe("Parser", () => {
           }
         }
       }
+      on_violation: clamp
+      clamp_constraints: [max_slippage, min_output]
       timeout: 10
       fallback: true
     }
@@ -476,6 +479,35 @@ describe("Parser", () => {
       const ast = parse(source);
       const stmt = ast.triggers[0]?.body[0];
       expect(stmt?.kind).toBe("advise");
+      if (stmt?.kind === "advise") {
+        expect(stmt.context).toBeDefined();
+        expect(Object.keys(stmt.context ?? {})).toEqual(["balance", "rates"]);
+        expect(stmt.within).toBe("constraints");
+        expect(stmt.onViolation).toBe("clamp");
+        expect(stmt.clampConstraints).toEqual(["max_slippage", "min_output"]);
+      }
+    });
+
+    test("rejects invalid advise on_violation policy", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  advisors: {
+    risk: {
+      model: sonnet
+    }
+  }
+
+  on manual: {
+    decision = advise risk: "Check risk" {
+      output: boolean
+      on_violation: soften
+      timeout: 10
+      fallback: true
+    }
+  }
+}`;
+      expect(() => parse(source)).toThrow("Unsupported advisory on_violation policy");
     });
   });
 
@@ -675,7 +707,7 @@ describe("Parser", () => {
       expect((stmt.value as PercentageExpr).value).toBe(0.5);
     });
 
-    test("parses advisory expression in if condition", () => {
+    test("rejects inline advisory expression in if condition", () => {
       const source = `spell Test {
   version: "1.0.0"
 
@@ -685,13 +717,9 @@ describe("Parser", () => {
     }
   }
 }`;
-      const ast = parse(source);
-      const stmt = ast.triggers[0]?.body[0] as IfNode;
-      expect(stmt.condition.kind).toBe("advisory_expr");
-      if (stmt.condition.kind !== "advisory_expr") {
-        throw new Error("Expected advisory expression");
-      }
-      expect((stmt.condition as AdvisoryExpr).prompt).toBe("is this safe");
+      expect(() => parse(source)).toThrow(
+        "Inline advisory expressions (**...**) are no longer supported"
+      );
     });
   });
 

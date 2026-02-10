@@ -11,12 +11,21 @@ import type {
   SkillDef,
   SpellIR,
 } from "../types/ir.js";
-import type { AdvisoryStep, LoopStep, Step } from "../types/steps.js";
+import type { AdvisoryOutputSchema, AdvisoryStep, LoopStep, Step } from "../types/steps.js";
 
 export interface ValidationResult {
   valid: boolean;
   errors: CompilationError[];
   warnings: CompilationWarning[];
+  advisorySummaries: AdvisorySummary[];
+}
+
+export interface AdvisorySummary {
+  advisory_id: string;
+  output_schema: Record<string, unknown>;
+  dependent_paths: string[];
+  irreversible_actions_downstream: number;
+  governing_constraints: string[];
 }
 
 /**
@@ -96,6 +105,11 @@ export function validateIR(ir: SpellIR): ValidationResult {
   }
 
   // Validate advisory steps have timeout and fallback
+  const nonClampableConstraints = new Set([
+    "max_single_move",
+    "max_value_at_risk",
+    "allowed_venues",
+  ]);
   for (const step of ir.steps) {
     if (step.kind === "advisory") {
       const advisoryStep = step as AdvisoryStep;
@@ -111,11 +125,72 @@ export function validateIR(ir: SpellIR): ValidationResult {
           message: `Advisory step '${step.id}' must have a fallback value`,
         });
       }
+      if (!advisoryStep.prompt || advisoryStep.prompt.trim().length === 0) {
+        errors.push({
+          code: "ADVISORY_NO_PROMPT",
+          message: `Advisory step '${step.id}' must provide a prompt`,
+        });
+      }
+      if (!advisoryStep.outputBinding || advisoryStep.outputBinding.trim().length === 0) {
+        errors.push({
+          code: "ADVISORY_NO_OUTPUT_BINDING",
+          message: `Advisory step '${step.id}' must bind output to a named variable`,
+        });
+      }
+      if (!advisoryStep.outputSchema) {
+        errors.push({
+          code: "ADVISORY_NO_OUTPUT_SCHEMA",
+          message: `Advisory step '${step.id}' must define an output schema`,
+        });
+      }
       if (!advisorNames.has(advisoryStep.advisor)) {
         errors.push({
           code: "UNKNOWN_ADVISOR",
           message: `Advisory step '${step.id}' references unknown advisor '${advisoryStep.advisor}'`,
         });
+      }
+      if (!advisoryStep.context || Object.keys(advisoryStep.context).length === 0) {
+        warnings.push({
+          code: "ADVISORY_MISSING_CONTEXT",
+          message: `Advisory step '${step.id}' should declare explicit context inputs (required in strict mode)`,
+        });
+      }
+      if (!advisoryStep.policyScope) {
+        warnings.push({
+          code: "ADVISORY_MISSING_POLICY_SCOPE",
+          message: `Advisory step '${step.id}' should declare 'within' policy scope (required in strict mode)`,
+        });
+      }
+
+      const violationPolicy = advisoryStep.violationPolicy ?? "reject";
+      if (violationPolicy !== "reject" && violationPolicy !== "clamp") {
+        errors.push({
+          code: "ADVISORY_INVALID_VIOLATION_POLICY",
+          message: `Advisory step '${step.id}' has unsupported on_violation policy '${violationPolicy}'`,
+        });
+      }
+      if (!advisoryStep.violationPolicyExplicit) {
+        warnings.push({
+          code: "ADVISORY_MISSING_VIOLATION_POLICY",
+          message: `Advisory step '${step.id}' should explicitly declare on_violation (required in strict mode)`,
+        });
+      }
+      if (violationPolicy === "clamp") {
+        if (!advisoryStep.clampConstraints || advisoryStep.clampConstraints.length === 0) {
+          errors.push({
+            code: "ADVISORY_CLAMP_REQUIRES_CONSTRAINTS",
+            message: `Advisory step '${step.id}' enables clamp but has no clamp_constraints`,
+          });
+        } else {
+          for (const constraint of advisoryStep.clampConstraints) {
+            if (nonClampableConstraints.has(constraint)) {
+              errors.push({
+                code: "ADVISORY_NON_CLAMPABLE_CONSTRAINT",
+                message: `Advisory step '${step.id}' cannot clamp non-clampable constraint '${constraint}'`,
+              });
+            }
+          }
+        }
       }
     }
   }
@@ -128,10 +203,13 @@ export function validateIR(ir: SpellIR): ValidationResult {
     });
   }
 
+  const advisorySummaries = buildAdvisorySummaries(ir);
+
   return {
     valid: errors.length === 0,
     errors,
     warnings,
+    advisorySummaries,
   };
 }
 
@@ -491,4 +569,178 @@ function detectCycles(steps: Step[]): string[][] {
   }
 
   return cycles;
+}
+
+function buildAdvisorySummaries(ir: SpellIR): AdvisorySummary[] {
+  const stepMap = new Map(ir.steps.map((step) => [step.id, step]));
+  const summaries: AdvisorySummary[] = [];
+
+  for (const step of ir.steps) {
+    if (step.kind !== "advisory") continue;
+
+    const dependentPaths: string[] = [];
+    const downstreamRoots: string[] = [];
+
+    for (const candidate of ir.steps) {
+      if (candidate.kind !== "conditional") continue;
+      if (!expressionReferencesBinding(candidate.condition, step.outputBinding)) continue;
+      dependentPaths.push(`conditional:${candidate.id}:then`);
+      dependentPaths.push(`conditional:${candidate.id}:else`);
+      downstreamRoots.push(...candidate.thenSteps, ...candidate.elseSteps);
+    }
+
+    const downstreamActions = new Set<string>();
+    const governingConstraints = new Set<string>();
+    const visited = new Set<string>();
+    const stack = [...downstreamRoots];
+
+    while (stack.length > 0) {
+      const nextId = stack.pop();
+      if (!nextId || visited.has(nextId)) continue;
+      visited.add(nextId);
+
+      const child = stepMap.get(nextId);
+      if (!child) continue;
+
+      if (child.kind === "action") {
+        downstreamActions.add(child.id);
+        for (const [key, value] of Object.entries(child.constraints)) {
+          if (value !== undefined) {
+            governingConstraints.add(normalizeConstraintName(key));
+          }
+        }
+      }
+
+      for (const nested of getChildStepIds(child)) {
+        stack.push(nested);
+      }
+    }
+
+    if (step.policyScope) {
+      governingConstraints.add(step.policyScope);
+    }
+    if (step.clampConstraints) {
+      for (const constraint of step.clampConstraints) {
+        governingConstraints.add(constraint);
+      }
+    }
+
+    summaries.push({
+      advisory_id: step.id,
+      output_schema: advisorySchemaToSummary(step.outputSchema),
+      dependent_paths: dependentPaths,
+      irreversible_actions_downstream: downstreamActions.size,
+      governing_constraints: Array.from(governingConstraints).sort(),
+    });
+  }
+
+  return summaries;
+}
+
+function expressionReferencesBinding(expr: Expression, bindingName: string): boolean {
+  switch (expr.kind) {
+    case "binding":
+      return expr.name === bindingName;
+    case "binary":
+      return (
+        expressionReferencesBinding(expr.left, bindingName) ||
+        expressionReferencesBinding(expr.right, bindingName)
+      );
+    case "unary":
+      return expressionReferencesBinding(expr.arg, bindingName);
+    case "ternary":
+      return (
+        expressionReferencesBinding(expr.condition, bindingName) ||
+        expressionReferencesBinding(expr.then, bindingName) ||
+        expressionReferencesBinding(expr.else, bindingName)
+      );
+    case "call":
+      return expr.args.some((arg) => expressionReferencesBinding(arg, bindingName));
+    case "array_access":
+      return (
+        expressionReferencesBinding(expr.array, bindingName) ||
+        expressionReferencesBinding(expr.index, bindingName)
+      );
+    case "property_access":
+      return expressionReferencesBinding(expr.object, bindingName);
+    default:
+      return false;
+  }
+}
+
+function getChildStepIds(step: Step): string[] {
+  switch (step.kind) {
+    case "conditional":
+      return [...step.thenSteps, ...step.elseSteps];
+    case "loop":
+      return [...step.bodySteps];
+    case "parallel":
+      return step.branches.flatMap((branch) => branch.steps);
+    case "pipeline":
+      return step.stages
+        .flatMap((stage) => {
+          if (stage.op === "map" || stage.op === "filter" || stage.op === "reduce") {
+            return [stage.step];
+          }
+          return [];
+        })
+        .filter((id): id is string => typeof id === "string");
+    case "try":
+      return [
+        ...step.trySteps,
+        ...step.catchBlocks.flatMap((block) => block.steps ?? []),
+        ...(step.finallySteps ?? []),
+      ];
+    default:
+      return [];
+  }
+}
+
+function advisorySchemaToSummary(schema: AdvisoryOutputSchema): Record<string, unknown> {
+  switch (schema.type) {
+    case "boolean":
+      return { type: "boolean" };
+    case "number":
+      return { type: "number", min: schema.min, max: schema.max };
+    case "enum":
+      return { type: "enum", values: schema.values ?? [] };
+    case "string":
+      return {
+        type: "string",
+        min_length: schema.minLength,
+        max_length: schema.maxLength,
+        pattern: schema.pattern,
+      };
+    case "object":
+      return {
+        type: "object",
+        fields: schema.fields
+          ? Object.fromEntries(
+              Object.entries(schema.fields).map(([key, value]) => [
+                key,
+                advisorySchemaToSummary(value),
+              ])
+            )
+          : undefined,
+      };
+    case "array":
+      return {
+        type: "array",
+        items: schema.items ? advisorySchemaToSummary(schema.items) : undefined,
+      };
+  }
+}
+
+function normalizeConstraintName(key: string): string {
+  const map: Record<string, string> = {
+    maxSlippageBps: "max_slippage",
+    maxPriceImpactBps: "max_price_impact",
+    minOutput: "min_output",
+    maxInput: "max_input",
+    minLiquidity: "min_liquidity",
+    requireQuote: "require_quote",
+    requireSimulation: "require_simulation",
+    maxGas: "max_gas",
+  };
+  return map[key] ?? key;
 }

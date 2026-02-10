@@ -717,7 +717,7 @@ describe("E2E: Complex Spells", () => {
   });
 });
 
-describe("E2E: Diff-Stable Syntax (SPEC-002)", () => {
+describe("E2E: Diff-Stable Syntax", () => {
   test("parenthesized multi-line with clause compiles and executes", async () => {
     const source = `spell ParenConstraints {
 

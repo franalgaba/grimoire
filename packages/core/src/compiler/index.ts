@@ -5,7 +5,7 @@
 export { parseExpression, tryParseExpression } from "./expression-parser.js";
 export { generateIR, type IRGeneratorResult } from "./ir-generator.js";
 export { typeCheckIR, type TypeCheckResult } from "./type-checker.js";
-export { validateIR, type ValidationResult } from "./validator.js";
+export { validateIR, type AdvisorySummary, type ValidationResult } from "./validator.js";
 
 // Export new Grimoire syntax compiler
 export {
@@ -22,6 +22,7 @@ export {
 
 import { readFile } from "node:fs/promises";
 import type { CompilationResult, SpellSource } from "../types/ir.js";
+import { GrimoireError } from "./grimoire/errors.js";
 import { compileGrimoire, parseGrimoire } from "./grimoire/index.js";
 
 /** Parse result */
@@ -47,12 +48,15 @@ export function parseSpell(content: string): ParseResult {
     };
   } catch (error) {
     const err = error as Error;
+    const grimoireError = error instanceof GrimoireError ? error : undefined;
     return {
       success: false,
       errors: [
         {
-          code: "PARSE_ERROR",
+          code: grimoireError?.code ?? "PARSE_ERROR",
           message: err.message,
+          line: grimoireError?.location?.line,
+          column: grimoireError?.location?.column,
         },
       ],
       warnings: [],

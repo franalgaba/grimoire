@@ -174,6 +174,30 @@ describe("Transformer", () => {
       expect(result.params?.limit_max_allocation).toBe(0.5);
       expect(result.params?.limit_min_amount).toBe(100);
     });
+
+    test("preserves limits when params section appears after limits", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  limits: {
+    max_single_move: 2000
+    approval_required_above: 500
+  }
+
+  params: {
+    amount: 1000
+  }
+
+  on manual: {
+    pass
+  }
+}`;
+      const ast = parse(source);
+      const result = transform(ast);
+      expect(result.params?.limit_max_single_move).toBe(2000);
+      expect(result.params?.limit_approval_required_above).toBe(500);
+      expect(result.params?.amount).toBe(1000);
+    });
   });
 
   describe("venues transformation", () => {
@@ -582,7 +606,7 @@ describe("Transformer", () => {
   });
 
   describe("advisory transformation", () => {
-    test("transforms advisory if condition", () => {
+    test("inline advisory if condition is rejected", () => {
       const source = `spell Test {
   version: "1.0.0"
 
@@ -594,10 +618,46 @@ describe("Transformer", () => {
     }
   }
 }`;
+      // Inline advisory expressions are no longer supported.
+      expect(() => parse(source)).toThrow(
+        "Inline advisory expressions (**...**) are no longer supported"
+      );
+    });
+
+    test("transforms advisory contract fields on advise statements", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  advisors: {
+    risk: {
+      model: sonnet
+    }
+  }
+
+  on manual: {
+    decision = advise risk: "Check risk" {
+      context: balance, rates
+      within: constraints
+      output: boolean
+      on_violation: clamp
+      clamp_constraints: [max_slippage, min_output]
+      timeout: 10
+      fallback: true
+    }
+  }
+}`;
       const ast = parse(source);
       const result = transform(ast);
-      // Advisory conditions create special steps
-      expect(result.steps?.length).toBeGreaterThan(0);
+      const step = result.steps?.[0];
+      const advisory = (step?.advisory as Record<string, unknown>) ?? {};
+      expect(advisory.context).toEqual({
+        balance: "balance",
+        rates: "rates",
+      });
+      expect(advisory.within).toBe("constraints");
+      expect(advisory.on_violation).toBe("clamp");
+      expect(advisory.clamp_constraints).toEqual(["max_slippage", "min_output"]);
+      expect(advisory.on_violation_explicit).toBe(true);
     });
   });
 

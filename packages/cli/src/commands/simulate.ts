@@ -42,8 +42,41 @@ interface SimulateOptions {
   state?: boolean;
 }
 
-export async function simulateCommand(spellPath: string, options: SimulateOptions): Promise<void> {
-  const spinner = ora(`Simulating ${spellPath}...`).start();
+interface SimulateCommandIO {
+  log: typeof console.log;
+  exit: typeof process.exit;
+}
+
+class SimulateCommandExit extends Error {
+  readonly code: number;
+
+  constructor(code: number) {
+    super(`simulate.exit(${code})`);
+    this.code = code;
+  }
+}
+
+export async function simulateCommand(
+  spellPath: string,
+  options: SimulateOptions,
+  ioOverrides?: Partial<SimulateCommandIO>
+): Promise<void> {
+  const io: SimulateCommandIO = {
+    log: ioOverrides?.log ?? console.log,
+    exit: ioOverrides?.exit ?? ((code?: number) => process.exit(code)),
+  };
+  const terminate = (code: number): never => {
+    io.exit(code);
+    throw new SimulateCommandExit(code);
+  };
+
+  const interactive =
+    ioOverrides === undefined && process.stdin.isTTY === true && process.stdout.isTTY === true;
+  const spinner = ora({
+    text: `Simulating ${spellPath}...`,
+    isEnabled: interactive,
+    discardStdin: false,
+  }).start();
 
   try {
     let params: Record<string, unknown> = {};
@@ -52,7 +85,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
         params = JSON.parse(options.params);
       } catch {
         spinner.fail(chalk.red("Invalid params JSON"));
-        process.exit(1);
+        return terminate(1);
       }
     }
 
@@ -60,7 +93,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
       spinner.text = `Resolving ENS profile ${options.ensName}...`;
       const profile = await resolveEnsProfile(options.ensName, { rpcUrl: options.ensRpcUrl });
       params = hydrateParamsFromEnsProfile(params, profile);
-      console.log(
+      io.log(
         chalk.dim(
           `ENS profile ${profile.name} -> ${profile.address ?? "unresolved"} (risk=${profile.riskProfile ?? "n/a"}, slippage=${profile.maxSlippageBps ?? "n/a"})`
         )
@@ -73,9 +106,9 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
     if (!compileResult.success || !compileResult.ir) {
       spinner.fail(chalk.red("Compilation failed"));
       for (const error of compileResult.errors) {
-        console.log(chalk.red(`  [${error.code}] ${error.message}`));
+        io.log(chalk.red(`  [${error.code}] ${error.message}`));
       }
-      process.exit(1);
+      return terminate(1);
     }
 
     spinner.text = "Preparing simulation...";
@@ -110,10 +143,10 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
 
     const freshnessWarnings = enforceFreshnessPolicy(provenance);
     for (const warning of freshnessWarnings) {
-      console.log(chalk.yellow(`Warning: ${warning}`));
+      io.log(chalk.yellow(`Warning: ${warning}`));
     }
 
-    spinner.text = "Executing simulation...";
+    spinner.text = "Running preview...";
     const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir) ?? [];
     const onAdvisory = await resolveAdvisoryHandler(spell.id, {
       advisoryPi: options.advisoryPi,
@@ -129,6 +162,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
       cwd: process.cwd(),
     });
 
+    // execute() with simulate:true internally uses preview()
     const result = await withStatePersistence(
       spell.id,
       {
@@ -152,9 +186,9 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
     );
 
     if (result.success) {
-      spinner.succeed(chalk.green("Simulation completed successfully"));
+      spinner.succeed(chalk.green("Preview completed successfully"));
     } else {
-      spinner.fail(chalk.red(`Simulation failed: ${result.error}`));
+      spinner.fail(chalk.red(`Preview failed: ${result.error}`));
     }
 
     const report = buildRunReportEnvelope({
@@ -163,20 +197,36 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
       provenance,
     });
 
-    console.log();
+    io.log();
     if (options.json) {
-      console.log(JSON.stringify(report, null, 2));
+      const payload = {
+        success: result.success,
+        receipt: result.receipt,
+        error: result.structuredError,
+      };
+      io.log(stringifyJson(payload));
     } else {
-      console.log(formatRunReportText(report));
+      io.log(formatRunReportText(report));
     }
 
     if (!result.success) {
-      process.exit(1);
+      return terminate(1);
     }
   } catch (error) {
+    if (error instanceof SimulateCommandExit) {
+      throw error;
+    }
     spinner.fail(chalk.red(`Simulation failed: ${(error as Error).message}`));
-    process.exit(1);
+    return terminate(1);
   }
+}
+
+function stringifyJson(value: unknown): string {
+  return JSON.stringify(
+    value,
+    (_key, innerValue) => (typeof innerValue === "bigint" ? innerValue.toString() : innerValue),
+    2
+  );
 }
 
 function resolveNoState(options: { noState?: boolean; state?: boolean }): boolean {

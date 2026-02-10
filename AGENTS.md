@@ -47,7 +47,7 @@ Work in a feature branch if requested. Do not open PRs unless asked.
 - Bun for install/test/build: `bun install`, `bun test`, `bun run ...`
 - Biome for lint/format: `bun run lint`, `bun run format`
 - TypeScript: `bun run typecheck`
-- Skills validation: `bunx skills-ref validate skills/grimoire-vm`
+- Skills validation: `bunx skills-ref validate <skill-dir>` (for example `skills/grimoire`, `skills/grimoire-aave`)
 - Changesets: `bunx changeset`
 
 ## Style
@@ -102,7 +102,7 @@ packages/
   cli/                       # Grimoire CLI
   sdk/                       # (WIP) SDK for external integrations
 spells/                      # Example spell files
-skills/                      # Agent skills (per-venue + VM)
+skills/                      # Agent skills (core CLI + per-venue metadata workflows)
 docs/                        # Diataxis docs
 ```
 
@@ -191,7 +191,7 @@ spell YieldOptimizer {
 | Repeat loops | `repeat N {` | `repeat 3 {` |
 | Loop until | `loop until cond max N {` | `loop until done max 10 {` |
 | If/elif/else | `if cond {` | `if x > 0 {` |
-| Advisory (AI) | `**prompt**` | `if **is this safe** {` |
+| Advisory (AI) | `advise advisor: "prompt"` | `decision = advise risk: "is this safe" { output: { type: boolean }, fallback: true }` |
 | Advise | `x = advise advisor:` | `decision = advise risk: "..."` |
 | Atomic blocks | `atomic {` | Transaction grouping |
 | Try/catch | `try {` | `try { ... } catch *: {` |
@@ -232,6 +232,17 @@ Key files:
 - `packages/core/src/compiler/ir-generator.ts` - SpellSource -> SpellIR (executable format)
 - `packages/core/src/compiler/type-checker.ts` - Compile-time type checker (errors block compilation)
 - `packages/core/src/compiler/validator.ts` - IR validation (structural checks)
+
+# Execution Model (Preview / Commit)
+
+Grimoire uses an embedded runtime with a mandatory **preview / commit** model for any action that moves value (onchain or offchain). The runtime is the same whether invoked from the CLI or embedded in an agent.
+
+1. **Preview** -- Full execution against simulated or forked state. Produces a typed **receipt** listing every value-moving action, its parameters, and expected outcomes.
+2. **Commit** -- Settlement using an approved receipt. The runtime re-checks drift bounds before submitting transactions. If bounds are violated, commit rejects and requires a fresh preview.
+
+Local computation, state writes, and advisory calls do **not** cross the irreversibility boundary and therefore do not require the preview/commit cycle.
+
+This model is defined by the Value-Flow Mandate Runtime. The same preview/commit semantics apply to both CLI and embedded runtime usage.
 
 # Venues and Adapters
 
@@ -331,7 +342,7 @@ For swaps, **always set both `max_slippage` and `min_output`** to prevent unexpe
 
 - `grimoire compile <spell>` - compile a `.spell` file to IR
 - `grimoire compile-all [dir]` - compile all `.spell` files in a directory
-- `grimoire validate <spell>` - validate a `.spell` file
+- `grimoire validate <spell> [--strict] [--json]` - validate a `.spell` file
 - `grimoire simulate <spell>` - simulate execution (dry run), with state persistence
 - `grimoire cast <spell>` - execute a spell onchain, with state persistence
 - `grimoire history [spell]` - view execution history (all spells or runs for one spell)
@@ -350,13 +361,10 @@ Docs live in `docs/` and follow the Diataxis structure.
 
 Skills live in `skills/` and provide LLM-consumable context:
 - `skills/grimoire/` - Core CLI commands
-- `skills/grimoire-vm/` - In-agent VM spec and conformance references
 - `skills/grimoire-aave/` - Aave V3 venue CLI + amount format
 - `skills/grimoire-uniswap/` - Uniswap V3/V4 venue CLI
 - `skills/grimoire-morpho-blue/` - Morpho Blue venue CLI + default markets
 - `skills/grimoire-hyperliquid/` - Hyperliquid venue CLI
-- `skills/grimoire-yellow/` - Yellow session lifecycle adapter usage
-- `skills/grimoire-lifi/` - LI.FI swap/bridge/compose adapter usage
 
 Keep docs and skills in sync with code changes:
 

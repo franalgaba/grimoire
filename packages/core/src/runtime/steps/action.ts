@@ -13,7 +13,8 @@ import type {
 } from "../../types/actions.js";
 import type { ExecutionContext, StepResult } from "../../types/execution.js";
 import type { Expression } from "../../types/expressions.js";
-import type { VenueAlias } from "../../types/primitives.js";
+import type { Address, VenueAlias } from "../../types/primitives.js";
+import type { PlannedAction, ValueDelta } from "../../types/receipt.js";
 import type { ActionStep } from "../../types/steps.js";
 import type { Executor } from "../../wallet/executor.js";
 import type { ExecutionMode } from "../../wallet/executor.js";
@@ -22,6 +23,7 @@ import { addGasUsed, incrementActions, setBinding } from "../context.js";
 import type { InMemoryLedger } from "../context.js";
 import { classifyError } from "../error-classifier.js";
 import { type EvalValue, createEvalContext, evaluateAsync } from "../expression-evaluator.js";
+import { FEE_BUCKET_ADDRESS, LOSS_BUCKET_ADDRESS } from "../value-flow.js";
 
 export interface ActionExecutionOptions {
   mode: ExecutionMode;
@@ -601,6 +603,123 @@ function resolveVenueAlias(action: Action, ctx: ExecutionContext): VenueAlias {
   };
 }
 
+function deriveSimulationInput(
+  action: Action,
+  amountText: string
+): { asset: string; amount: string } {
+  switch (action.type) {
+    case "swap":
+      return { asset: String(action.assetIn), amount: amountText };
+    case "lend":
+    case "withdraw":
+    case "borrow":
+    case "repay":
+    case "stake":
+    case "unstake":
+    case "bridge":
+    case "transfer":
+    case "approve":
+      return { asset: String(action.asset), amount: amountText };
+    default:
+      return { asset: "", amount: amountText };
+  }
+}
+
+function deriveSimulationOutput(
+  action: Action,
+  amountText: string
+): { asset: string; amount: string } {
+  switch (action.type) {
+    case "swap":
+      return { asset: String(action.assetOut), amount: amountText };
+    case "withdraw":
+    case "borrow":
+    case "unstake":
+    case "bridge":
+    case "transfer":
+    case "approve":
+      return { asset: String(action.asset), amount: amountText };
+    case "lend":
+    case "repay":
+    case "stake":
+      return { asset: String(action.asset), amount: "0" };
+    default:
+      return { asset: "", amount: "0" };
+  }
+}
+
+function buildValueDeltas(input: {
+  stepId: string;
+  vault: Address;
+  venueAddress: Address;
+  simulationResult: {
+    input: { asset: string; amount: string };
+    output: { asset: string; amount: string };
+  };
+}): ValueDelta[] {
+  const deltas: ValueDelta[] = [];
+  const inputAmount = parseAmount(input.simulationResult.input.amount);
+  const outputAmount = parseAmount(input.simulationResult.output.amount);
+  const inputAsset = input.simulationResult.input.asset;
+  const outputAsset = input.simulationResult.output.asset;
+
+  if (inputAmount > 0n && inputAsset.length > 0) {
+    deltas.push({
+      asset: inputAsset,
+      amount: inputAmount,
+      from: input.vault,
+      to: input.venueAddress,
+      reason: `action:${input.stepId}:input`,
+    });
+  }
+
+  if (outputAmount > 0n && outputAsset.length > 0) {
+    deltas.push({
+      asset: outputAsset,
+      amount: outputAmount,
+      from: input.venueAddress,
+      to: input.vault,
+      reason: `action:${input.stepId}:output`,
+    });
+  }
+
+  if (inputAsset.length > 0 && outputAsset.length > 0 && inputAsset === outputAsset) {
+    const difference = inputAmount - outputAmount;
+    if (difference > 0n) {
+      deltas.push({
+        asset: inputAsset,
+        amount: difference,
+        from: input.vault,
+        to: LOSS_BUCKET_ADDRESS,
+        reason: `loss:${input.stepId}:slippage`,
+      });
+    } else if (difference < 0n) {
+      deltas.push({
+        asset: inputAsset,
+        amount: -difference,
+        from: input.venueAddress,
+        to: FEE_BUCKET_ADDRESS,
+        reason: `fee:${input.stepId}:rebate`,
+      });
+    }
+  }
+
+  return deltas;
+}
+
+function parseAmount(value: string): bigint {
+  const trimmed = value.trim();
+  if (!trimmed || !/^[-+]?\d+$/.test(trimmed)) {
+    return 0n;
+  }
+  try {
+    const parsed = BigInt(trimmed);
+    return parsed > 0n ? parsed : 0n;
+  } catch {
+    return 0n;
+  }
+}
+
 function serializeValue(value: unknown): unknown {
   if (typeof value === "bigint") {
     return value.toString();
@@ -616,4 +735,162 @@ function serializeValue(value: unknown): unknown {
     return result;
   }
   return value;
+}
+
+// =============================================================================
+// PREVIEW ACTION STEP
+// =============================================================================
+
+export interface PreviewActionResult {
+  stepResult: StepResult;
+  plannedAction?: PlannedAction;
+  valueDeltas?: ValueDelta[];
+}
+
+/**
+ * Preview an action step — resolves the action and simulates it,
+ * returning a PlannedAction instead of executing a real transaction.
+ */
+export async function previewActionStep(
+  step: ActionStep,
+  ctx: ExecutionContext,
+  ledger: InMemoryLedger,
+  _options: ActionExecutionOptions
+): Promise<PreviewActionResult> {
+  ledger.emit({ type: "step_started", stepId: step.id, kind: "action" });
+  incrementActions(ctx);
+
+  try {
+    const evalCtx = createEvalContext(ctx);
+    const explicitSkill = step.skill
+      ? ctx.spell.skills.find((s) => s.name === step.skill)
+      : undefined;
+    const actionVenue = hasVenue(step.action) ? step.action.venue : undefined;
+    const inferredSkill =
+      !explicitSkill && actionVenue
+        ? ctx.spell.skills.find((s) => s.name === actionVenue)
+        : undefined;
+    const skill = explicitSkill ?? inferredSkill;
+    const skillName = skill?.name;
+
+    const actionWithVenue = resolveActionVenue(step.action, skill, ctx, skillName);
+    const resolvedAction = await resolveAction(actionWithVenue, evalCtx);
+
+    const mergedConstraints = applySkillDefaults(step.constraints, skill);
+    const resolvedConstraints = await resolveConstraints(mergedConstraints, evalCtx);
+    const actionWithConstraints = { ...resolvedAction, constraints: resolvedConstraints } as Action;
+
+    ledger.emit({
+      type: "constraint_evaluated",
+      stepId: step.id,
+      constraints: resolvedConstraints,
+    });
+
+    const venue = resolveVenueAlias(actionWithConstraints, ctx);
+    const amountValue =
+      "amount" in actionWithConstraints
+        ? (actionWithConstraints as { amount?: unknown }).amount
+        : undefined;
+    const amountText = amountValue !== undefined ? String(amountValue) : "";
+
+    const simulationResult = {
+      success: true,
+      gasEstimate: "0",
+      input: deriveSimulationInput(actionWithConstraints, amountText),
+      output: deriveSimulationOutput(actionWithConstraints, amountText),
+    };
+
+    ledger.emit({
+      type: "action_simulated",
+      action: actionWithConstraints,
+      venue,
+      result: simulationResult,
+    });
+
+    const valueDeltas = buildValueDeltas({
+      stepId: step.id,
+      vault: ctx.vault,
+      venueAddress: venue.address,
+      simulationResult,
+    });
+
+    const plannedAction: PlannedAction = {
+      stepId: step.id,
+      action: actionWithConstraints,
+      venue: venue.alias,
+      constraints: resolvedConstraints,
+      onFailure: step.onFailure,
+      simulationResult,
+      valueDeltas,
+    };
+
+    ledger.emit({
+      type: "step_completed",
+      stepId: step.id,
+      result: { simulated: true, action: actionWithConstraints },
+    });
+
+    if (step.outputBinding) {
+      setBinding(ctx, step.outputBinding, { simulated: true, action: actionWithConstraints });
+    }
+
+    return {
+      stepResult: {
+        success: true,
+        stepId: step.id,
+        output: { simulated: true, action: actionWithConstraints },
+      },
+      plannedAction,
+      valueDeltas,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    ledger.emit({ type: "step_failed", stepId: step.id, error: message });
+
+    return {
+      stepResult: { success: false, stepId: step.id, error: message },
+    };
+  }
+}
+
+// =============================================================================
+// COMMIT ACTION STEP
+// =============================================================================
+
+export interface CommitActionResult {
+  success: boolean;
+  hash?: string;
+  gasUsed?: bigint;
+  error?: string;
+}
+
+/**
+ * Commit a planned action — takes a PlannedAction from the receipt
+ * and executes the real transaction via the executor.
+ */
+export async function commitActionStep(
+  planned: PlannedAction,
+  executor: Executor
+): Promise<CommitActionResult> {
+  try {
+    const result = await executor.executeAction(planned.action);
+
+    if (!result.success) {
+      return {
+        success: false,
+        hash: result.hash,
+        error: result.error ?? "Action execution failed",
+      };
+    }
+
+    return {
+      success: true,
+      hash: result.hash,
+      gasUsed: result.receipt?.gasUsed ?? result.gasUsed,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
+  }
 }

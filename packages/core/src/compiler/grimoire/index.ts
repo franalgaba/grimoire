@@ -14,6 +14,7 @@ import type { CompilationResult, SpellSource } from "../../types/ir.js";
 import { generateIR } from "../ir-generator.js";
 import { typeCheckIR } from "../type-checker.js";
 import { validateIR } from "../validator.js";
+import { GrimoireError } from "./errors.js";
 import { parse } from "./parser.js";
 import { transform } from "./transformer.js";
 
@@ -71,12 +72,19 @@ export function compileGrimoire(
     };
   } catch (error) {
     const err = error as Error;
+    const grimoireError = error instanceof GrimoireError ? error : undefined;
+    const code =
+      grimoireError?.code === "ADVISORY_INLINE_UNSUPPORTED"
+        ? "ADVISORY_INLINE_UNSUPPORTED"
+        : "GRIMOIRE_PARSE_ERROR";
     return {
       success: false,
       errors: [
         {
-          code: "GRIMOIRE_PARSE_ERROR",
+          code,
           message: err.message,
+          line: grimoireError?.location?.line,
+          column: grimoireError?.location?.column,
         },
       ],
       warnings: [],

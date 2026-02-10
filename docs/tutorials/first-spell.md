@@ -1,52 +1,77 @@
-# Write your first spell
+# Tutorial: First Spell
 
-This tutorial builds a minimal spell and runs it in either VM mode or the deterministic runtime.
+This tutorial walks through creating, validating, and simulating a minimal spell.
 
-## 1) Create a new spell
+If you are onboarding from scratch (human or agent-assisted), start with `docs/tutorials/quickstart-users-and-agents.md` first.
 
-Create `spells/hello-world.spell`:
+## Goal
+
+Create a spell that emits an event and uses one parameter.
+
+## 1. Create the Spell
+
+Create `spells/hello-grimoire.spell`:
 
 ```spell
-spell HelloWorld {
-
+spell HelloGrimoire {
   version: "1.0.0"
-  description: "Simple compute + emit"
+  description: "Minimal tutorial spell"
 
   params: {
-    x: 1
-    y: 2
+    amount: 42
   }
 
   on manual: {
-    sum = params.x + params.y
-    emit done(sum=sum)
+    doubled = params.amount * 2
+    emit hello(amount=params.amount, doubled=doubled)
   }
 }
 ```
 
-## 2) Run the spell
-
-### VM mode (in-agent)
-
-```
-Run spells/hello-world.spell in the Grimoire VM with trigger manual. Use defaults and no side effects.
-```
-
-### Deterministic runtime (CLI)
+## 2. Compile
 
 ```bash
-grimoire simulate spells/hello-world.spell --chain 1
+grimoire compile spells/hello-grimoire.spell --pretty
 ```
 
-### Optional: programmatic (local)
+You should see IR JSON with one trigger and compute/emit steps.
 
-If you want to run directly from source:
+## 3. Validate
 
 ```bash
-bun -e "import { compileFile, execute } from './packages/core/src/index.ts'; const res = await compileFile('spells/hello-world.spell'); if (res.success) { const exec = await execute({ spell: res.ir, vault: '0x0000000000000000000000000000000000000000', chain: 1, executionMode: 'simulate' }); console.log(exec.success); }"
+grimoire validate spells/hello-grimoire.spell
 ```
 
-## Next steps
+Validation should pass.
 
-- Learn spell execution with adapters: [execute-with-venues.md](execute-with-venues.md)
-- Look up syntax details: [spell-syntax.md](../reference/spell-syntax.md)
+## 4. Simulate
+
+```bash
+grimoire simulate spells/hello-grimoire.spell
+```
+
+Expected behavior:
+
+- preview completes successfully
+- ledger contains `event_emitted` for `hello`
+- run is persisted unless `--no-state` is used
+
+## 5. Override Params
+
+```bash
+grimoire simulate spells/hello-grimoire.spell --params '{"amount":100}'
+```
+
+Now event payload should reflect new values.
+
+## 6. Inspect History
+
+```bash
+grimoire history
+grimoire history HelloGrimoire
+grimoire log HelloGrimoire <run-id>
+```
+
+## Next Step
+
+Move to a value-moving action spell (swap/lend) and run `cast --dry-run` before live execution.

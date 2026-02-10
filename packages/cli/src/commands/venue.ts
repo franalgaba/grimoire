@@ -43,13 +43,39 @@ export function resolveVenueCliPath(cliName: string): string {
 
 function resolveVenuesRoot(): string {
   try {
+    const venuesEntry = require.resolve("@grimoirelabs/venues");
+    const venuesRoot = findPackageRootFromEntry(venuesEntry);
+    if (venuesRoot) return venuesRoot;
+  } catch {
+    // no-op; handled by fallbacks
+  }
+
+  try {
     const venuesPkg = require.resolve("@grimoirelabs/venues/package.json");
     return path.dirname(venuesPkg);
   } catch {
-    const workspaceRoot = findWorkspaceVenuesRoot();
-    if (workspaceRoot) return workspaceRoot;
-    throw new Error("Unable to resolve @grimoirelabs/venues. Is it installed?");
+    // no-op; handled by workspace fallback
   }
+
+  const workspaceRoot = findWorkspaceVenuesRoot();
+  if (workspaceRoot) return workspaceRoot;
+  throw new Error("Unable to resolve @grimoirelabs/venues. Is it installed?");
+}
+
+function findPackageRootFromEntry(entryPath: string): string | null {
+  let current = path.dirname(entryPath);
+  for (let i = 0; i < 6; i++) {
+    const pkgPath = path.join(current, "package.json");
+    const distCliPath = path.join(current, "dist", "cli");
+    if (existsSync(pkgPath) && existsSync(distCliPath)) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  return null;
 }
 
 function findWorkspaceVenuesRoot(): string | null {

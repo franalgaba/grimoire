@@ -546,6 +546,17 @@ function transformStep(
     const advisory = raw.advisory as Record<string, unknown>;
     const prompt = advisory.prompt as string;
     const advisor = (advisory.advisor as string) ?? "default";
+    const contextRaw = advisory.context as Record<string, unknown> | undefined;
+    const context = contextRaw ? parseContextExpressions(contextRaw, errors) : undefined;
+    const policyScope = advisory.within as string | undefined;
+    const violationPolicy =
+      advisory.on_violation === "clamp" ? ("clamp" as const) : ("reject" as const);
+    const violationPolicyExplicit =
+      advisory.on_violation_explicit === true || advisory.on_violation !== undefined;
+    const clampConstraintsRaw = advisory.clamp_constraints as unknown[] | undefined;
+    const clampConstraints = clampConstraintsRaw
+      ? clampConstraintsRaw.map((value) => String(value))
+      : undefined;
     const timeout = (advisory.timeout as number) ?? 30;
     const fallbackValue = advisory.fallback ?? true;
     const outputBinding = (advisory.output as string) ?? `${id}_result`;
@@ -559,8 +570,13 @@ function transformStep(
       id,
       advisor,
       prompt,
+      context,
+      policyScope,
       outputSchema,
       outputBinding,
+      violationPolicy,
+      violationPolicyExplicit,
+      clampConstraints,
       timeout,
       fallback: fallbackToExpression(fallbackValue, errors),
       dependsOn: [],
@@ -928,6 +944,29 @@ function literalFromValue(input: unknown): Expression {
     return { kind: "literal", value: input, type: "string" };
   }
   return { kind: "literal", value: input as Record<string, unknown>, type: "json" };
+}
+
+function parseContextExpressions(
+  raw: Record<string, unknown>,
+  errors: CompilationError[]
+): Record<string, Expression> {
+  const context: Record<string, Expression> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") {
+      try {
+        context[key] = parseExpression(value);
+      } catch (e) {
+        errors.push({
+          code: "EXPRESSION_PARSE_ERROR",
+          message: `Failed to parse advisory context '${key}': ${(e as Error).message}`,
+        });
+      }
+      continue;
+    }
+
+    context[key] = literalFromValue(value);
+  }
+  return context;
 }
 
 function parseOutputSchema(raw: Record<string, unknown>): AdvisoryStep["outputSchema"] {
