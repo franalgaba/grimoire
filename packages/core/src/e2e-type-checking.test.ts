@@ -1,5 +1,5 @@
 /**
- * E2E validation for SPEC-003 Phase 2: Error Mode + Conversion Builtins
+ * E2E validation for strict type checking + conversion builtins
  *
  * Validates:
  * 1. to_number(balance(X)) * price(X, Y) compiles with zero errors
@@ -32,7 +32,7 @@ function assertIR(
 // E2E: COMPILATION — WELL-TYPED SPELLS
 // =============================================================================
 
-describe("SPEC-003 Phase 2 E2E — Well-typed spells", () => {
+describe("Type-checking E2E — Well-typed spells", () => {
   test("to_number(balance(X)) * price(X, Y) compiles with zero errors", () => {
     const result = compile(`
 spell WellTyped {
@@ -146,7 +146,7 @@ spell MinPattern {
 // E2E: COMPILATION — TYPE ERRORS BLOCK COMPILATION
 // =============================================================================
 
-describe("SPEC-003 Phase 2 E2E — Type errors block compilation", () => {
+describe("Type-checking E2E — Type errors block compilation", () => {
   test("balance(X) * price(X, Y) without conversion => TYPE_MISMATCH, success: false", () => {
     const result = compile(`
 spell IllTyped {
@@ -223,7 +223,7 @@ spell AddMismatch {
 // E2E: ALL FIXTURE .SPELL FILES COMPILE CLEANLY
 // =============================================================================
 
-describe("SPEC-003 Phase 2 E2E — Fixture files", () => {
+describe("Type-checking E2E — Fixture files", () => {
   const spellFiles = readdirSync("spells").filter((f) => f.endsWith(".spell"));
 
   for (const file of spellFiles) {
@@ -243,7 +243,7 @@ describe("SPEC-003 Phase 2 E2E — Fixture files", () => {
 // E2E: RUNTIME EVALUATION
 // =============================================================================
 
-describe("SPEC-003 Phase 2 E2E — Runtime evaluation", () => {
+describe("Type-checking E2E — Runtime evaluation", () => {
   const ctx: EvalContext = {
     params: new Map(),
     bindings: new Map(),

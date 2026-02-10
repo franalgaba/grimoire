@@ -166,7 +166,12 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
 
     console.log();
     if (options.json) {
-      console.log(JSON.stringify(report, null, 2));
+      const payload = {
+        success: result.success,
+        receipt: result.receipt,
+        error: result.structuredError,
+      };
+      console.log(stringifyJson(payload));
     } else {
       console.log(formatRunReportText(report));
     }
@@ -178,6 +183,14 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
     spinner.fail(chalk.red(`Simulation failed: ${(error as Error).message}`));
     process.exit(1);
   }
+}
+
+function stringifyJson(value: unknown): string {
+  return JSON.stringify(
+    value,
+    (_key, innerValue) => (typeof innerValue === "bigint" ? innerValue.toString() : innerValue),
+    2
+  );
 }
 
 function resolveNoState(options: { noState?: boolean; state?: boolean }): boolean {

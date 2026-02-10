@@ -1,5 +1,5 @@
 /**
- * Preview function tests (SPEC-004 Phase 1)
+ * Preview function tests
  */
 
 import { describe, expect, test } from "bun:test";
@@ -108,7 +108,8 @@ describe("preview()", () => {
     expect(result.success).toBe(false);
     expect(result.receipt).toBeDefined();
     expect(result.receipt?.status).toBe("rejected");
-    expect(result.error).toContain("Guard failed");
+    expect(result.error?.code).toBe("GUARD_FAILED");
+    expect(result.error?.message).toContain("Guard failed");
   });
 
   test("collects PlannedActions for action steps", async () => {

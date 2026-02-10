@@ -6,7 +6,7 @@ import type { Action, ActionConstraintsResolved } from "./actions.js";
 import type { SpellIR } from "./ir.js";
 import type { PolicySet } from "./policy.js";
 import type { Address, ChainId, Timestamp, VenueAlias } from "./primitives.js";
-import type { ValueDelta } from "./receipt.js";
+import type { CommitResult, Receipt, StructuredError, ValueDelta } from "./receipt.js";
 
 /**
  * Execution context - passed through during spell execution
@@ -76,9 +76,14 @@ export interface ExecutionResult {
   endTime: Timestamp;
   duration: number; // milliseconds
   error?: string;
+  structuredError?: StructuredError;
   metrics: ExecutionMetrics;
   finalState: Record<string, unknown>;
   ledgerEvents: LedgerEntry[];
+  /** Preview receipt generated during execution */
+  receipt?: Receipt;
+  /** Commit result when irreversible actions are committed */
+  commit?: CommitResult;
 }
 
 /**
@@ -144,7 +149,7 @@ export type LedgerEvent =
   // Circuit breakers
   | CircuitBreakerTriggeredEvent
   | CircuitBreakerActionEvent
-  // Preview/Commit lifecycle (SPEC-004)
+  // Preview/Commit lifecycle
   | PreviewStartedEvent
   | PreviewCompletedEvent
   | CommitStartedEvent
@@ -407,7 +412,7 @@ export interface LedgerEntry {
   event: LedgerEvent;
 }
 
-// Preview/Commit lifecycle events (SPEC-004)
+// Preview/Commit lifecycle events
 interface PreviewStartedEvent {
   type: "preview_started";
   runId: string;

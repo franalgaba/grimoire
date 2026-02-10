@@ -674,7 +674,7 @@ describe("Parser", () => {
       expect((stmt.value as PercentageExpr).value).toBe(0.5);
     });
 
-    test("rejects inline advisory expression in if condition (SPEC-004)", () => {
+    test("rejects inline advisory expression in if condition", () => {
       const source = `spell Test {
   version: "1.0.0"
 

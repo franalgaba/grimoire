@@ -30,7 +30,7 @@ program
   .command("init")
   .description("Initialize a new .grimoire directory")
   .option("-f, --force", "Overwrite existing files")
-  .option("--vm", "Create a VM quickstart scaffold")
+  .option("--runtime-quickstart", "Create an embedded runtime quickstart scaffold")
   .action(initCommand);
 
 // Compile command

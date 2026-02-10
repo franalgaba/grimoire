@@ -1,11 +1,13 @@
 /**
- * E2E tests for SPEC-004 Phase 1: Preview/Commit Foundation
+ * E2E tests for preview/commit foundation behavior.
  */
 
 import { describe, expect, test } from "bun:test";
 import { compile, execute, preview } from "./index.js";
 import type { SpellIR } from "./types/ir.js";
 import type { Address } from "./types/primitives.js";
+import type { Provider } from "./wallet/provider.js";
+import type { Wallet } from "./wallet/types.js";
 
 function assertIR(
   result: ReturnType<typeof compile>
@@ -19,7 +21,7 @@ function assertIR(
 
 const VAULT: Address = "0x0000000000000000000000000000000000000000";
 
-describe("SPEC-004 Phase 1 E2E", () => {
+describe("Preview/Commit E2E", () => {
   describe("preview → commit round trip", () => {
     test("full preview for simple spell produces receipt", async () => {
       const source = `spell RoundTrip {
@@ -108,9 +110,76 @@ describe("SPEC-004 Phase 1 E2E", () => {
       expect(eventTypes).toContain("preview_started");
       expect(eventTypes).toContain("preview_completed");
     });
+
+    test("execute() with wallet enforces preview then commit", async () => {
+      const source = `spell WalletFlow {
+  version: "1.0.0"
+  assets: [ETH]
+
+  venues: {
+    wallet: @wallet
+  }
+
+  params: {
+    amount: 1000
+    to: "0x0000000000000000000000000000000000000002"
+  }
+
+  on manual: {
+    wallet.transfer(ETH, params.amount, params.to)
+  }
+}`;
+      const compileResult = compile(source);
+      assertIR(compileResult);
+
+      const wallet = {
+        address: "0x0000000000000000000000000000000000000009",
+        chainId: 1,
+        signTransaction: async () => "0x",
+        signMessage: async () => "0x",
+        sendTransaction: async () => ({
+          hash: "0xabc",
+          blockNumber: 1n,
+          blockHash: "0xdef",
+          gasUsed: 21000n,
+          effectiveGasPrice: 100n,
+          status: "success",
+          logs: [],
+        }),
+      } as Wallet;
+
+      const provider = {
+        chainId: 1,
+        rpcUrl: "http://localhost",
+        getGasEstimate: async () => ({
+          gasLimit: 21000n,
+          maxFeePerGas: 100n,
+          maxPriorityFeePerGas: 2n,
+          estimatedCost: 21000n * 100n,
+        }),
+        readContract: async () => 0n,
+      } as unknown as Provider;
+
+      const result = await execute({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+        wallet,
+        provider,
+        executionMode: "execute",
+        confirmCallback: async () => true,
+      });
+
+      expect(result.success).toBe(true);
+      const eventTypes = result.ledgerEvents.map((e) => e.event.type);
+      expect(eventTypes).toContain("preview_started");
+      expect(eventTypes).toContain("preview_completed");
+      expect(eventTypes).toContain("commit_started");
+      expect(eventTypes).toContain("commit_completed");
+    });
   });
 
-  describe("Receipt schema matches SPEC-004", () => {
+  describe("Receipt schema contract", () => {
     test("receipt has all required fields from §9.1", async () => {
       const source = `spell ReceiptSchema {
   version: "1.0.0"
@@ -140,7 +209,7 @@ describe("SPEC-004 Phase 1 E2E", () => {
       expect(previewResult.success).toBe(true);
       const receipt = previewResult.receipt as NonNullable<typeof previewResult.receipt>;
 
-      // §9.1 required fields
+      // Required receipt fields
       expect(receipt.id).toBeDefined();
       expect(receipt.spellId).toBeDefined();
       expect(receipt.phase).toBe("preview");

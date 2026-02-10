@@ -582,7 +582,7 @@ describe("Transformer", () => {
   });
 
   describe("advisory transformation", () => {
-    test("inline advisory if condition is rejected (SPEC-004)", () => {
+    test("inline advisory if condition is rejected", () => {
       const source = `spell Test {
   version: "1.0.0"
 
@@ -594,7 +594,7 @@ describe("Transformer", () => {
     }
   }
 }`;
-      // Inline advisory expressions are no longer supported per SPEC-004 §11.6
+      // Inline advisory expressions are no longer supported.
       expect(() => parse(source)).toThrow(
         "Inline advisory expressions (**...**) are no longer supported"
       );

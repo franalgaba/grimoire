@@ -242,7 +242,7 @@ Grimoire uses an embedded runtime with a mandatory **preview / commit** model fo
 
 Local computation, state writes, and advisory calls do **not** cross the irreversibility boundary and therefore do not require the preview/commit cycle.
 
-This model is defined by SPEC-004 (Value-Flow Mandate Runtime). The same preview/commit semantics apply to both CLI and embedded runtime usage.
+This model is defined by the Value-Flow Mandate Runtime. The same preview/commit semantics apply to both CLI and embedded runtime usage.
 
 # Venues and Adapters
 

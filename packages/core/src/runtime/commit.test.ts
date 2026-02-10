@@ -1,10 +1,25 @@
 /**
- * Commit function tests (SPEC-004 Phase 1)
+ * Commit function tests
  */
 
 import { describe, expect, test } from "bun:test";
+import { compile } from "../compiler/index.js";
+import type { SpellIR } from "../types/ir.js";
+import type { Address } from "../types/primitives.js";
 import type { Receipt } from "../types/receipt.js";
-import { commit } from "./interpreter.js";
+import { commit, preview } from "./interpreter.js";
+
+function assertIR(
+  result: ReturnType<typeof compile>
+): asserts result is { success: true; ir: SpellIR; errors: never[]; warnings: never[] } {
+  if (!result.success || !result.ir) {
+    throw new Error(
+      `Expected successful compilation: ${result.errors.map((e) => e.message).join(", ")}`
+    );
+  }
+}
+
+const VAULT: Address = "0x0000000000000000000000000000000000000000";
 
 function createMockReceipt(overrides?: Partial<Receipt>): Receipt {
   return {
@@ -14,7 +29,7 @@ function createMockReceipt(overrides?: Partial<Receipt>): Receipt {
     timestamp: Date.now(),
     chainContext: {
       chainId: 1,
-      vault: "0x0000000000000000000000000000000000000000",
+      vault: VAULT,
     },
     guardResults: [],
     advisoryResults: [],
@@ -33,6 +48,34 @@ function createMockReceipt(overrides?: Partial<Receipt>): Receipt {
       retries: 0,
     },
     finalState: {},
+    ...overrides,
+  };
+}
+
+async function createReadyReceipt(overrides?: Partial<Receipt>): Promise<Receipt> {
+  const source = `spell CommitReady {
+  version: "1.0.0"
+
+  on manual: {
+    x = 42
+  }
+}`;
+
+  const compileResult = compile(source);
+  assertIR(compileResult);
+
+  const result = await preview({
+    spell: compileResult.ir,
+    vault: VAULT,
+    chain: 1,
+  });
+
+  if (!result.success || !result.receipt) {
+    throw new Error(`Expected successful preview: ${result.error?.message}`);
+  }
+
+  return {
+    ...result.receipt,
     ...overrides,
   };
 }
@@ -65,7 +108,8 @@ describe("commit()", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("status is 'rejected'");
+    expect(result.error?.code).toBe("RECEIPT_INVALID_STATUS");
+    expect(result.error?.message).toContain("status is 'rejected'");
     expect(result.receiptId).toBe("rcpt_test-001");
   });
 
@@ -78,27 +122,40 @@ describe("commit()", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("status is 'expired'");
+    expect(result.error?.code).toBe("RECEIPT_INVALID_STATUS");
+    expect(result.error?.message).toContain("status is 'expired'");
   });
 
-  test("fails when receipt is expired (maxAge)", async () => {
-    const receipt = createMockReceipt({
-      timestamp: Date.now() - 120_000, // 2 minutes ago
-    });
+  test("fails when receipt is unknown to runtime", async () => {
+    const receipt = createMockReceipt({ status: "ready" });
 
     const result = await commit({
       receipt,
       wallet: createMockWallet(),
-      driftPolicy: { maxAge: 60 }, // 60 second max age
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("Receipt expired");
-    expect(result.error).toContain("maxAge");
+    expect(result.error?.code).toBe("PREVIEW_RECEIPT_UNKNOWN");
+  });
+
+  test("fails when receipt is expired (maxAge)", async () => {
+    const receipt = await createReadyReceipt();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const result = await commit({
+      receipt,
+      wallet: createMockWallet(),
+      driftPolicy: { maxAge: 0.001 },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("RECEIPT_EXPIRED");
+    expect(result.error?.message).toContain("Receipt expired");
+    expect(result.error?.message).toContain("maxAge");
   });
 
   test("succeeds with empty planned actions", async () => {
-    const receipt = createMockReceipt();
+    const receipt = await createReadyReceipt();
 
     const result = await commit({
       receipt,
@@ -106,13 +163,13 @@ describe("commit()", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.receiptId).toBe("rcpt_test-001");
+    expect(result.receiptId).toBe(receipt.id);
     expect(result.transactions).toHaveLength(0);
     expect(result.driftChecks).toHaveLength(0);
   });
 
   test("performs drift checks on drift keys", async () => {
-    const receipt = createMockReceipt({
+    const receipt = await createReadyReceipt({
       driftKeys: [
         { field: "balance", previewValue: 1000n, timestamp: Date.now(), source: "test" },
         { field: "quote", previewValue: 2500, timestamp: Date.now(), source: "test" },
@@ -133,7 +190,7 @@ describe("commit()", () => {
   });
 
   test("emits commit lifecycle events", async () => {
-    const receipt = createMockReceipt();
+    const receipt = await createReadyReceipt();
 
     const result = await commit({
       receipt,
@@ -147,7 +204,7 @@ describe("commit()", () => {
   });
 
   test("returns finalState from receipt", async () => {
-    const receipt = createMockReceipt({
+    const receipt = await createReadyReceipt({
       finalState: { counter: 42, name: "test" },
     });
 

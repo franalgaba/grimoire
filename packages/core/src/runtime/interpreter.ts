@@ -1,6 +1,6 @@
 /**
  * Spell Interpreter
- * Executes compiled SpellIR via preview/commit model (SPEC-004)
+ * Executes compiled SpellIR via the preview/commit model.
  */
 
 import type { ExecutionContext, ExecutionResult, StepResult } from "../types/execution.js";
@@ -17,6 +17,7 @@ import type {
   PreviewResult,
   Receipt,
   ReceiptStatus,
+  StructuredError,
   ValueDelta,
 } from "../types/receipt.js";
 import type { Step } from "../types/steps.js";
@@ -52,6 +53,13 @@ import { executeParallelStep } from "./steps/parallel.js";
 import { executePipelineStep } from "./steps/pipeline.js";
 import { executeTryStep } from "./steps/try.js";
 import { executeWaitStep } from "./steps/wait.js";
+
+// Keep preview-issued receipts in-process so commit only accepts known receipts.
+const issuedReceipts = new Map<
+  string,
+  { spellId: string; chainId: ChainId; vault: Address; timestamp: number }
+>();
+const committedReceipts = new Set<string>();
 
 // =============================================================================
 // EXECUTE OPTIONS (backward-compat)
@@ -160,6 +168,11 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
     collectGuardResults(guardResults, spell.guards, guardCheck);
 
     if (!guardCheck.success) {
+      const structuredError = createStructuredError(
+        "preview",
+        "GUARD_FAILED",
+        `Guard failed: ${guardCheck.error}`
+      );
       const receipt = buildReceipt({
         id: receiptId,
         spell,
@@ -169,8 +182,9 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
         plannedActions,
         valueDeltas,
         status: "rejected",
-        error: `Guard failed: ${guardCheck.error}`,
+        error: structuredError.message,
       });
+      registerIssuedReceipt(receipt);
 
       ledger.emit({ type: "receipt_generated", receiptId });
       ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "rejected" });
@@ -178,7 +192,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
       return {
         success: false,
         receipt,
-        error: `Guard failed: ${guardCheck.error}`,
+        error: structuredError,
         ledgerEvents: ledger.getEntries(),
       };
     }
@@ -196,6 +210,11 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
     );
 
     if (!stepLoopResult.success) {
+      const structuredError = createStructuredError(
+        "preview",
+        "STEP_FAILED",
+        stepLoopResult.error ?? "Step execution failed"
+      );
       const receipt = buildReceipt({
         id: receiptId,
         spell,
@@ -205,8 +224,9 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
         plannedActions,
         valueDeltas,
         status: "rejected",
-        error: stepLoopResult.error,
+        error: structuredError.message,
       });
+      registerIssuedReceipt(receipt);
 
       ledger.emit({ type: "receipt_generated", receiptId });
       ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "rejected" });
@@ -214,7 +234,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
       return {
         success: false,
         receipt,
-        error: stepLoopResult.error,
+        error: structuredError,
         ledgerEvents: ledger.getEntries(),
       };
     }
@@ -222,6 +242,11 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
     // Post-execution guards
     const postGuardCheck = await checkGuards(spell.guards, ctx, ledger);
     if (!postGuardCheck.success && postGuardCheck.severity === "halt") {
+      const structuredError = createStructuredError(
+        "preview",
+        "POST_GUARD_FAILED",
+        `Post-execution guard failed: ${postGuardCheck.error}`
+      );
       const receipt = buildReceipt({
         id: receiptId,
         spell,
@@ -231,13 +256,19 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
         plannedActions,
         valueDeltas,
         status: "rejected",
-        error: `Post-execution guard failed: ${postGuardCheck.error}`,
+        error: structuredError.message,
       });
+      registerIssuedReceipt(receipt);
 
       ledger.emit({ type: "receipt_generated", receiptId });
       ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "rejected" });
 
-      return { success: false, receipt, error: receipt.error, ledgerEvents: ledger.getEntries() };
+      return {
+        success: false,
+        receipt,
+        error: structuredError,
+        ledgerEvents: ledger.getEntries(),
+      };
     }
 
     const requiresApproval = plannedActions.length > 0;
@@ -251,6 +282,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
       valueDeltas,
       status: "ready",
     });
+    registerIssuedReceipt(receipt);
 
     if (requiresApproval) {
       ledger.emit({
@@ -272,11 +304,12 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
     return { success: true, receipt, ledgerEvents: ledger.getEntries() };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const structuredError = createStructuredError("preview", "PREVIEW_INTERNAL_ERROR", message);
 
     ledger.emit({ type: "run_failed", runId: ctx.runId, error: message });
     ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "rejected" });
 
-    return { success: false, error: message, ledgerEvents: ledger.getEntries() };
+    return { success: false, error: structuredError, ledgerEvents: ledger.getEntries() };
   }
 }
 
@@ -312,6 +345,11 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
 
   // Validate receipt status
   if (receipt.status !== "ready") {
+    const structuredError = createStructuredError(
+      "commit",
+      "RECEIPT_INVALID_STATUS",
+      `Receipt status is '${receipt.status}', expected 'ready'`
+    );
     ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
     return {
       success: false,
@@ -320,7 +358,21 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
       driftChecks: [],
       finalState: receipt.finalState,
       ledgerEvents: ledger.getEntries(),
-      error: `Receipt status is '${receipt.status}', expected 'ready'`,
+      error: structuredError,
+    };
+  }
+
+  const receiptValidationError = validateCommitReceipt(receipt);
+  if (receiptValidationError) {
+    ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+    return {
+      success: false,
+      receiptId: receipt.id,
+      transactions: [],
+      driftChecks: [],
+      finalState: receipt.finalState,
+      ledgerEvents: ledger.getEntries(),
+      error: receiptValidationError,
     };
   }
 
@@ -328,6 +380,16 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
   if (options.driftPolicy?.maxAge) {
     const ageSec = (Date.now() - receipt.timestamp) / 1000;
     if (ageSec > options.driftPolicy.maxAge) {
+      const structuredError = createStructuredError(
+        "commit",
+        "RECEIPT_EXPIRED",
+        `Receipt expired: age ${Math.round(ageSec)}s exceeds maxAge ${options.driftPolicy.maxAge}s`,
+        {
+          actual: Math.round(ageSec),
+          limit: options.driftPolicy.maxAge,
+          suggestion: "Run preview again to generate a fresh receipt.",
+        }
+      );
       ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
       return {
         success: false,
@@ -336,18 +398,18 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
         driftChecks: [],
         finalState: receipt.finalState,
         ledgerEvents: ledger.getEntries(),
-        error: `Receipt expired: age ${Math.round(ageSec)}s exceeds maxAge ${options.driftPolicy.maxAge}s`,
+        error: structuredError,
       };
     }
   }
 
-  // Run drift checks (placeholder — real drift checking in Phase 2)
+  // Run drift checks (placeholder: uses preview values until external checks are wired).
   const driftChecks: DriftCheckResult[] = receipt.driftKeys.map((dk) => {
     const result: DriftCheckResult = {
       field: dk.field,
       passed: true,
       previewValue: dk.previewValue,
-      commitValue: dk.previewValue, // Same for now — real fetch in Phase 2
+      commitValue: dk.previewValue, // Same for now until commit-time fetch is implemented
     };
     ledger.emit({
       type: "drift_check",
@@ -409,6 +471,20 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
           error: txResult.error,
         });
 
+        if (planned.onFailure === "skip") {
+          ledger.emit({
+            type: "step_skipped",
+            stepId: planned.stepId,
+            reason: txResult.error ?? "Action execution failed",
+          });
+          continue;
+        }
+
+        const structuredError = createStructuredError(
+          "commit",
+          "ACTION_COMMIT_FAILED",
+          `Action step '${planned.stepId}' failed: ${txResult.error}`
+        );
         ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
         return {
           success: false,
@@ -417,13 +493,14 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
           driftChecks,
           finalState: receipt.finalState,
           ledgerEvents: ledger.getEntries(),
-          error: `Action step '${planned.stepId}' failed: ${txResult.error}`,
+          error: structuredError,
         };
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       transactions.push({ stepId: planned.stepId, success: false, error: message });
 
+      const structuredError = createStructuredError("commit", "COMMIT_INTERNAL_ERROR", message);
       ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
       return {
         success: false,
@@ -432,11 +509,12 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
         driftChecks,
         finalState: receipt.finalState,
         ledgerEvents: ledger.getEntries(),
-        error: message,
+        error: structuredError,
       };
     }
   }
 
+  committedReceipts.add(receipt.id);
   ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: true });
 
   return {
@@ -461,125 +539,48 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
   const { spell, vault, chain, params = {}, persistentState = {}, simulate = false } = options;
 
   const actionMode = resolveExecutionMode(options, simulate);
+  const previewResult = await preview({
+    spell,
+    vault,
+    chain,
+    params,
+    persistentState,
+    adapters: options.adapters,
+    policy: options.policy,
+    advisorSkillsDirs: options.advisorSkillsDirs,
+    onAdvisory: options.onAdvisory,
+    progressCallback: options.progressCallback,
+  });
 
-  // If we're simulating or have no wallet, use preview-only path
-  if (actionMode === "simulate" || !options.wallet) {
-    const previewResult = await preview({
-      spell,
-      vault,
-      chain,
-      params,
-      persistentState,
-      adapters: options.adapters,
-      policy: options.policy,
-      advisorSkillsDirs: options.advisorSkillsDirs,
-      onAdvisory: options.onAdvisory,
-      progressCallback: options.progressCallback,
-    });
-
+  if (!previewResult.success || !previewResult.receipt) {
     return convertPreviewToExecutionResult(previewResult, spell);
   }
 
-  // Full execute path: run the original step loop with real action execution
-  const actionExecution = createActionExecutionOptions(options, actionMode, chain);
+  const receipt = previewResult.receipt;
 
-  if (options.policy?.circuitBreakers?.length) {
-    actionExecution.circuitBreakerManager = new CircuitBreakerManager(
-      options.policy.circuitBreakers
-    );
+  // Preview-only execution for simulate/dry-run/no-wallet and compute-only spells.
+  if (
+    actionMode === "simulate" ||
+    actionMode === "dry-run" ||
+    !options.wallet ||
+    receipt.plannedActions.length === 0
+  ) {
+    return convertPreviewToExecutionResult(previewResult, spell);
   }
 
-  const ctx = createContext({ spell, vault, chain, params, persistentState });
-  ctx.advisorTooling = buildAdvisorTooling(spell.advisors, options.advisorSkillsDirs);
-
-  const ledger = new InMemoryLedger(ctx.runId, spell.id);
-
-  ledger.emit({
-    type: "run_started",
-    runId: ctx.runId,
-    spellId: spell.id,
-    trigger: ctx.trigger,
+  const commitResult = await commit({
+    receipt,
+    wallet: options.wallet,
+    provider: options.provider,
+    rpcUrl: options.rpcUrl,
+    gasMultiplier: options.gasMultiplier,
+    adapters: options.adapters,
+    confirmCallback: options.confirmCallback,
+    progressCallback: options.progressCallback,
+    skipTestnetConfirmation: options.skipTestnetConfirmation,
   });
 
-  try {
-    const guardCheck = await checkGuards(spell.guards, ctx, ledger);
-    if (!guardCheck.success) {
-      throw new Error(`Guard failed: ${guardCheck.error}`);
-    }
-
-    const stepMap = new Map(spell.steps.map((s) => [s.id, s]));
-    const stepLoopResult = await executeStepLoop(
-      spell,
-      ctx,
-      ledger,
-      stepMap,
-      actionExecution,
-      options.onAdvisory
-    );
-
-    if (!stepLoopResult.success) {
-      throw new Error(stepLoopResult.error);
-    }
-
-    if (stepLoopResult.halted) {
-      ledger.emit({
-        type: "run_completed",
-        runId: ctx.runId,
-        success: true,
-        metrics: ctx.metrics,
-      });
-
-      return {
-        success: true,
-        runId: ctx.runId,
-        startTime: ctx.startTime,
-        endTime: Date.now(),
-        duration: Date.now() - ctx.startTime,
-        metrics: ctx.metrics,
-        finalState: getPersistentStateObject(ctx),
-        ledgerEvents: ledger.getEntries(),
-      };
-    }
-
-    const postGuardCheck = await checkGuards(spell.guards, ctx, ledger);
-    if (!postGuardCheck.success && postGuardCheck.severity === "halt") {
-      throw new Error(`Post-execution guard failed: ${postGuardCheck.error}`);
-    }
-
-    ledger.emit({
-      type: "run_completed",
-      runId: ctx.runId,
-      success: true,
-      metrics: ctx.metrics,
-    });
-
-    return {
-      success: true,
-      runId: ctx.runId,
-      startTime: ctx.startTime,
-      endTime: Date.now(),
-      duration: Date.now() - ctx.startTime,
-      metrics: ctx.metrics,
-      finalState: getPersistentStateObject(ctx),
-      ledgerEvents: ledger.getEntries(),
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    ledger.emit({ type: "run_failed", runId: ctx.runId, error: message });
-
-    return {
-      success: false,
-      runId: ctx.runId,
-      startTime: ctx.startTime,
-      endTime: Date.now(),
-      duration: Date.now() - ctx.startTime,
-      error: message,
-      metrics: ctx.metrics,
-      finalState: getPersistentStateObject(ctx),
-      ledgerEvents: ledger.getEntries(),
-    };
-  }
+  return convertPreviewCommitToExecutionResult(previewResult, commitResult);
 }
 
 // =============================================================================
@@ -716,7 +717,8 @@ function convertPreviewToExecutionResult(
     startTime,
     endTime: now,
     duration: now - startTime,
-    error: previewResult.error,
+    error: previewResult.error ? formatStructuredError(previewResult.error) : undefined,
+    structuredError: previewResult.error,
     metrics: receipt?.metrics ?? {
       stepsExecuted: 0,
       actionsExecuted: 0,
@@ -727,6 +729,43 @@ function convertPreviewToExecutionResult(
     },
     finalState: receipt?.finalState ?? {},
     ledgerEvents: previewResult.ledgerEvents,
+    receipt,
+  };
+}
+
+function convertPreviewCommitToExecutionResult(
+  previewResult: PreviewResult,
+  commitResult: CommitResult
+): ExecutionResult {
+  const receipt = previewResult.receipt;
+  const endTime = Date.now();
+  const startTime = receipt?.timestamp ?? endTime;
+  const txGasUsed = commitResult.transactions.reduce((sum, tx) => sum + (tx.gasUsed ?? 0n), 0n);
+  const baseMetrics = receipt?.metrics ?? {
+    stepsExecuted: 0,
+    actionsExecuted: 0,
+    gasUsed: 0n,
+    advisoryCalls: 0,
+    errors: 0,
+    retries: 0,
+  };
+
+  return {
+    success: commitResult.success,
+    runId: receipt?.id.replace("rcpt_", "") ?? `commit_${endTime}`,
+    startTime,
+    endTime,
+    duration: endTime - startTime,
+    error: commitResult.error ? formatStructuredError(commitResult.error) : undefined,
+    structuredError: commitResult.error,
+    metrics: {
+      ...baseMetrics,
+      gasUsed: baseMetrics.gasUsed + txGasUsed,
+    },
+    finalState: commitResult.finalState,
+    ledgerEvents: [...previewResult.ledgerEvents, ...commitResult.ledgerEvents],
+    receipt,
+    commit: commitResult,
   };
 }
 
@@ -795,32 +834,81 @@ function resolveExecutionMode(options: ExecuteOptions, simulate: boolean): Execu
   return "simulate";
 }
 
-function createActionExecutionOptions(
-  options: ExecuteOptions,
-  mode: ExecutionMode,
-  chainId: ChainId
-): ActionExecutionOptions {
-  if (mode === "simulate") {
-    return { mode };
-  }
+function createStructuredError(
+  phase: StructuredError["phase"],
+  code: string,
+  message: string,
+  extras?: Omit<StructuredError, "phase" | "code" | "message">
+): StructuredError {
+  return {
+    phase,
+    code,
+    message,
+    ...extras,
+  };
+}
 
-  if (!options.wallet) {
-    throw new Error("Wallet is required for non-simulated execution");
-  }
+function formatStructuredError(error: StructuredError): string {
+  return `[${error.code}] ${error.message}`;
+}
 
-  const provider = options.provider ?? createProvider(chainId, options.rpcUrl);
-  const executor = createExecutor({
-    wallet: options.wallet,
-    provider,
-    mode,
-    gasMultiplier: options.gasMultiplier,
-    confirmCallback: options.confirmCallback,
-    progressCallback: options.progressCallback,
-    skipTestnetConfirmation: options.skipTestnetConfirmation,
-    adapters: options.adapters,
+function registerIssuedReceipt(receipt: Receipt): void {
+  issuedReceipts.set(receipt.id, {
+    spellId: receipt.spellId,
+    chainId: receipt.chainContext.chainId,
+    vault: receipt.chainContext.vault,
+    timestamp: receipt.timestamp,
   });
+}
 
-  return { mode, executor };
+function validateCommitReceipt(receipt: Receipt): StructuredError | undefined {
+  if (receipt.phase !== "preview") {
+    return createStructuredError(
+      "commit",
+      "RECEIPT_INVALID_PHASE",
+      `Receipt phase is '${receipt.phase}', expected 'preview'`
+    );
+  }
+
+  if (!receipt.id.startsWith("rcpt_")) {
+    return createStructuredError(
+      "commit",
+      "RECEIPT_INVALID_ID",
+      "Receipt ID must start with 'rcpt_'"
+    );
+  }
+
+  if (committedReceipts.has(receipt.id)) {
+    return createStructuredError(
+      "commit",
+      "RECEIPT_ALREADY_COMMITTED",
+      "Receipt has already been committed."
+    );
+  }
+
+  const issuedReceipt = issuedReceipts.get(receipt.id);
+  if (!issuedReceipt) {
+    return createStructuredError(
+      "commit",
+      "PREVIEW_RECEIPT_UNKNOWN",
+      "Commit requires a valid preview receipt generated by this runtime."
+    );
+  }
+
+  if (
+    issuedReceipt.spellId !== receipt.spellId ||
+    issuedReceipt.chainId !== receipt.chainContext.chainId ||
+    issuedReceipt.vault !== receipt.chainContext.vault ||
+    issuedReceipt.timestamp !== receipt.timestamp
+  ) {
+    return createStructuredError(
+      "commit",
+      "PREVIEW_RECEIPT_TAMPERED",
+      "Receipt identity does not match the preview-generated artifact."
+    );
+  }
+
+  return undefined;
 }
 
 function buildAdvisorTooling(

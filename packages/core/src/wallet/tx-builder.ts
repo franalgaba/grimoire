@@ -173,7 +173,7 @@ export class TransactionBuilder {
       throw new Error("Invalid action type for swap");
     }
 
-    // TODO: Implement with venue adapters in Phase 2
+    // TODO: Implement with venue adapters.
     throw new Error(
       `Swap transactions require venue adapters. Venue: ${action.venue}, ` +
         `${action.assetIn} → ${action.assetOut}`
@@ -188,7 +188,7 @@ export class TransactionBuilder {
       throw new Error("Invalid action type for lend");
     }
 
-    // TODO: Implement with venue adapters in Phase 2
+    // TODO: Implement with venue adapters.
     throw new Error(
       `Lend transactions require venue adapters. Venue: ${action.venue}, ` +
         `Asset: ${action.asset}`
@@ -203,7 +203,7 @@ export class TransactionBuilder {
       throw new Error("Invalid action type for withdraw");
     }
 
-    // TODO: Implement with venue adapters in Phase 2
+    // TODO: Implement with venue adapters.
     throw new Error(
       `Withdraw transactions require venue adapters. Venue: ${action.venue}, ` +
         `Asset: ${action.asset}`

@@ -142,7 +142,7 @@ export type {
   LedgerEntry,
 } from "./execution.js";
 
-// Receipt / Value-Flow (SPEC-004)
+// Receipt / Value-Flow
 export type {
   ValueDelta,
   DriftKey,

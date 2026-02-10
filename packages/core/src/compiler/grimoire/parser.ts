@@ -1836,7 +1836,7 @@ export class Parser {
     const startToken = this.current();
     this.expect("KEYWORD", "if");
 
-    // Inline advisory expressions (**...**) in conditions are no longer supported (SPEC-004 §11.6)
+    // Inline advisory expressions (**...**) in conditions are no longer supported.
     if (this.check("ADVISORY")) {
       const token = this.current();
       throw new ParseError(
@@ -2255,7 +2255,7 @@ export class Parser {
       return { kind: "venue_ref_expr", name: token.value } as VenueRefExpr;
     }
 
-    // Advisory: **text** — inline advisory expressions are no longer supported (SPEC-004 §11.6)
+    // Advisory: **text** — inline advisory expressions are no longer supported.
     if (token.type === "ADVISORY") {
       throw new ParseError(
         'Inline advisory expressions (**...**) are no longer supported. Use explicit advisory binding: `decision = advise advisor: "prompt" { output: ..., timeout: N, fallback: expr }` then branch on `decision` fields.',

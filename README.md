@@ -55,7 +55,7 @@ For quick protocol prototyping, use the venue CLI to fetch metadata or snapshot 
 
 See `@grimoirelabs/core` for the embedded runtime API.
 
-### Deterministic runtime (CLI)
+### CLI runtime
 
 Use this for reproducible simulation and onchain execution with adapters and state persistence.
 
@@ -78,7 +78,7 @@ When you are ready to execute live:
 grimoire cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url <rpc>
 ```
 
-Advisory steps (`**...**` and `advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell’s fallback. Record advisory outputs with `simulate` (or `cast --dry-run`), then replay deterministically with `--advisory-replay` for live execution.
+Advisory steps (`advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell’s fallback. Record advisory outputs with `simulate` (or `cast --dry-run`), then replay deterministically with `--advisory-replay` for live execution.
 
 See `grimoire --help` for all CLI commands.
 
@@ -91,6 +91,12 @@ spell YieldOptimizer {
 
   assets: [USDC, DAI]
 
+  advisors: {
+    risk: {
+      model: "anthropic:haiku"
+    }
+  }
+
   venues: {
     aave_v3: @aave_v3
     morpho_blue: @morpho_blue
@@ -101,7 +107,15 @@ spell YieldOptimizer {
   }
 
   on hourly: {
-    if **gas costs justify the move** {
+    decision = advise risk: "Do gas costs justify rebalancing now?" {
+      output: {
+        type: boolean
+      }
+      timeout: 10
+      fallback: true
+    }
+
+    if decision {
       amount_to_move = to_number(balance(USDC)) * 50%
       aave_v3.withdraw(USDC, amount_to_move)
       morpho_blue.lend(USDC, amount_to_move)
@@ -116,7 +130,7 @@ spell YieldOptimizer {
 - **Explicit constraints** and limits via `with` and `limits`
 - **Adapter-based venues** (SDKs live in `@grimoirelabs/venues`)
 - **Onchain + offchain** actions (EVM + Hyperliquid + Yellow + LI.FI)
-- **Judgment boundary** with `**...**` and `advise`
+- **Judgment boundary** with explicit `advise` blocks
 - **Structured control flow** (loops, conditionals, try/catch, atomic)
 - **State persistence** and run history for deterministic execution
 - **Two delivery modes**: embedded runtime (in-process library) and CLI

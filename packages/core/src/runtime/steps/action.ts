@@ -620,7 +620,7 @@ function serializeValue(value: unknown): unknown {
 }
 
 // =============================================================================
-// PREVIEW ACTION STEP (SPEC-004)
+// PREVIEW ACTION STEP
 // =============================================================================
 
 export interface PreviewActionResult {
@@ -700,6 +700,7 @@ export async function previewActionStep(
       action: actionWithConstraints,
       venue: venue.alias,
       constraints: resolvedConstraints,
+      onFailure: step.onFailure,
       simulationResult,
       valueDeltas: [],
     };
@@ -735,7 +736,7 @@ export async function previewActionStep(
 }
 
 // =============================================================================
-// COMMIT ACTION STEP (SPEC-004)
+// COMMIT ACTION STEP
 // =============================================================================
 
 export interface CommitActionResult {

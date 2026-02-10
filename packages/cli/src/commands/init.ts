@@ -10,7 +10,7 @@ import ora from "ora";
 
 interface InitOptions {
   force?: boolean;
-  vm?: boolean;
+  runtimeQuickstart?: boolean;
 }
 
 const DEFAULT_CONFIG = `# Grimoire Configuration
@@ -133,7 +133,7 @@ guards:
     message: "Insufficient USDC balance"
 `;
 
-const VM_QUICKSTART_SPELL = `# VM quickstart: snapshot-driven compute spell
+const RUNTIME_QUICKSTART_SPELL = `# Embedded runtime quickstart: snapshot-driven compute spell
 
 spell VmQuickstart
 
@@ -162,7 +162,7 @@ spell VmQuickstart
     )
 `;
 
-const VM_QUICKSTART_README = `# VM quickstart (snapshot-driven)
+const RUNTIME_QUICKSTART_README = `# Embedded runtime quickstart (snapshot-driven)
 
 1) Generate a snapshot:
 
@@ -170,9 +170,9 @@ grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --
 
 2) Paste the output into spell.spell (replace the params block).
 
-3) Run in the VM:
+3) Run in the embedded runtime:
 
-Run .grimoire/spells/vm-quickstart/spell.spell in the Grimoire VM with trigger manual. Use defaults and no side effects.
+Run .grimoire/spells/runtime-quickstart/spell.spell in the Grimoire runtime with trigger manual. Use defaults and no side effects.
 `;
 
 export async function initCommand(options: InitOptions): Promise<void> {
@@ -208,16 +208,16 @@ export async function initCommand(options: InitOptions): Promise<void> {
     // Write default aliases
     await writeFile(join(baseDir, "aliases", "default.yaml"), DEFAULT_ALIASES, "utf8");
 
-    if (options.vm) {
-      await mkdir(join(baseDir, "spells", "vm-quickstart"), { recursive: true });
+    if (options.runtimeQuickstart) {
+      await mkdir(join(baseDir, "spells", "runtime-quickstart"), { recursive: true });
       await writeFile(
-        join(baseDir, "spells", "vm-quickstart", "spell.spell"),
-        VM_QUICKSTART_SPELL,
+        join(baseDir, "spells", "runtime-quickstart", "spell.spell"),
+        RUNTIME_QUICKSTART_SPELL,
         "utf8"
       );
       await writeFile(
-        join(baseDir, "spells", "vm-quickstart", "README.md"),
-        VM_QUICKSTART_README,
+        join(baseDir, "spells", "runtime-quickstart", "README.md"),
+        RUNTIME_QUICKSTART_README,
         "utf8"
       );
     } else {
@@ -236,26 +236,28 @@ export async function initCommand(options: InitOptions): Promise<void> {
     console.log(chalk.dim("Created:"));
     console.log(chalk.dim(`  ${baseDir}/config.yaml`));
     console.log(chalk.dim(`  ${baseDir}/aliases/default.yaml`));
-    if (options.vm) {
-      console.log(chalk.dim(`  ${baseDir}/spells/vm-quickstart/spell.spell`));
-      console.log(chalk.dim(`  ${baseDir}/spells/vm-quickstart/README.md`));
+    if (options.runtimeQuickstart) {
+      console.log(chalk.dim(`  ${baseDir}/spells/runtime-quickstart/spell.spell`));
+      console.log(chalk.dim(`  ${baseDir}/spells/runtime-quickstart/README.md`));
     } else {
       console.log(chalk.dim(`  ${baseDir}/spells/example-swap/spell.spell`));
     }
     console.log();
     console.log(chalk.cyan("Next steps:"));
-    if (options.vm) {
+    if (options.runtimeQuickstart) {
       console.log(
         chalk.white(
           "  1. Run: grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell"
         )
       );
       console.log(
-        chalk.white("  2. Paste the params block into .grimoire/spells/vm-quickstart/spell.spell")
+        chalk.white(
+          "  2. Paste the params block into .grimoire/spells/runtime-quickstart/spell.spell"
+        )
       );
       console.log(
         chalk.white(
-          "  3. Run in VM: spells/vm-quickstart/spell.spell (trigger manual, no side effects)"
+          "  3. Run in embedded runtime: spells/runtime-quickstart/spell.spell (trigger manual, no side effects)"
         )
       );
     } else {

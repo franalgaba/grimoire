@@ -26,10 +26,10 @@ For prototyping with snapshots, use the venue skills (`grimoire-aave`, `grimoire
 Initialize a new `.grimoire` directory with config and examples.
 
 ```bash
-grimoire init [--force] [--vm]
+grimoire init [--force] [--runtime-quickstart]
 ```
 
-Use `--vm` to scaffold a VM quickstart spell and README.
+Use `--runtime-quickstart` to scaffold an embedded runtime quickstart spell and README.
 
 ### grimoire compile
 

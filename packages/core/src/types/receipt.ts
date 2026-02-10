@@ -1,10 +1,11 @@
 /**
- * Receipt and Value-Flow types for preview/commit execution model (SPEC-004)
+ * Receipt and Value-Flow types for the preview/commit execution model.
  */
 
 import type { Action, ActionConstraintsResolved } from "./actions.js";
 import type { ExecutionMetrics, LedgerEntry } from "./execution.js";
 import type { Address, AssetId, BasisPoints, ChainId, Timestamp } from "./primitives.js";
+import type { OnFailure } from "./steps.js";
 
 // =============================================================================
 // VALUE DELTA
@@ -76,6 +77,7 @@ export interface PlannedAction {
   action: Action;
   venue: string;
   constraints: ActionConstraintsResolved;
+  onFailure: OnFailure;
   simulationResult?: {
     success: boolean;
     gasEstimate: string;
@@ -85,13 +87,13 @@ export interface PlannedAction {
   valueDeltas: ValueDelta[];
 }
 
-/** Stub for Phase 5 — provenance tracking for preview values */
+/** Reserved for future provenance tracking for preview values */
 export type PreviewProvenance =
   | { type: "deterministic_stub" }
   | { type: "provider_quote"; provider: string; timestamp: Timestamp }
   | { type: "fork_call"; blockNumber: bigint; timestamp: Timestamp };
 
-/** Stub for Phase 2 — constraint check results */
+/** Reserved for future constraint check result enrichment */
 export interface ConstraintCheckResult {
   stepId: string;
   constraintName: string;
@@ -139,7 +141,7 @@ export interface Receipt {
 export interface PreviewResult {
   success: boolean;
   receipt?: Receipt;
-  error?: string;
+  error?: StructuredError;
   ledgerEvents: LedgerEntry[];
 }
 
@@ -157,7 +159,7 @@ export interface CommitResult {
   driftChecks: DriftCheckResult[];
   finalState: Record<string, unknown>;
   ledgerEvents: LedgerEntry[];
-  error?: string;
+  error?: StructuredError;
 }
 
 // =============================================================================

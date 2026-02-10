@@ -2,7 +2,7 @@
  * Compile-time type checker for SpellIR
  *
  * Operates on SpellIR (same input as the validator), walks all steps/guards,
- * and infers types bottom-up from expressions. Phase 2: type issues are errors.
+ * and infers types bottom-up from expressions. Type issues are compile errors.
  */
 
 import type { ActionConstraints } from "../types/actions.js";
@@ -764,7 +764,7 @@ function checkGuard(
 
 /**
  * Type-check a SpellIR and return errors and warnings.
- * Phase 2: type issues are errors that block compilation.
+ * Type issues block compilation.
  */
 export function typeCheckIR(ir: SpellIR): TypeCheckResult {
   const errors: CompilationError[] = [];
