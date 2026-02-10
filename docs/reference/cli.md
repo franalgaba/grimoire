@@ -117,6 +117,11 @@ Core options:
 - `--chain <id>`: EVM chain id (default `1`)
 - `--json`: JSON output
 
+Custom RPC note:
+
+- `simulate` does not expose `--rpc-url`.
+- To run preview against custom or forked RPC, use `cast --dry-run` with wallet or key options and `--rpc-url`.
+
 Advisory options:
 
 - `--advisor-skills-dir <dir...>`

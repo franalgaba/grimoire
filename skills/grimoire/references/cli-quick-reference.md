@@ -43,6 +43,11 @@ Common options:
 - `--data-max-age <sec>`
 - `--on-stale <fail|warn>`
 
+Important:
+
+- `simulate` does not expose `--rpc-url`.
+- For preview against local or forked RPC, use `cast --dry-run` with wallet options and `--rpc-url`.
+
 ## Cast (Dry-Run / Live)
 
 Common options:

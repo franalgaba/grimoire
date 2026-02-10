@@ -3,7 +3,7 @@ name: grimoire
 description: Install and operate Grimoire, author .spell files with full syntax coverage (including advisory decision logic), and run compile/validate/simulate/cast safely. Use when users ask to create, edit, debug, validate, simulate, execute, or explain Grimoire strategies.
 compatibility: "Requires one of: global grimoire CLI, npx access to @grimoirelabs/cli, or repo-local Bun execution."
 metadata:
-  version: "2.1"
+  version: "2.2"
   focus: "installation usage syntax advisory execution"
 ---
 
@@ -35,6 +35,10 @@ These rules are required and solve syntax coverage gaps.
    - read `docs/how-to/use-advisory-decisions.md`
    - read `docs/explanation/advisory-decision-flow.md`
 4. Do not rely on memory for DSL syntax when authoring; use the references above.
+5. For local fork preview workflows:
+   - read `docs/how-to/simulate-on-anvil-fork.md`
+6. For wallet setup and execution key flows:
+   - read `docs/how-to/use-wallet-commands-end-to-end.md`
 
 ## Installation Resolution
 
@@ -115,6 +119,8 @@ Use venue skills for snapshot parameters and market metadata:
 - `references/syntax-capabilities.md`
 - `references/authoring-workflow.md`
 - `references/cli-quick-reference.md`
+- `docs/how-to/simulate-on-anvil-fork.md`
+- `docs/how-to/use-wallet-commands-end-to-end.md`
 - `docs/how-to/use-advisory-decisions.md`
 - `docs/explanation/advisory-decision-flow.md`
 - `docs/reference/cli.md`

@@ -343,6 +343,13 @@ async function executeWithWallet(
       stateDir: options.stateDir,
       noState,
       buildRunProvenance: () => provenance,
+      onUnavailable: () => {
+        console.log(
+          chalk.yellow(
+            "State persistence unavailable in Node (missing better-sqlite3). Continuing without persisted state."
+          )
+        );
+      },
     },
     async (persistentState) => {
       return execute({
@@ -452,6 +459,13 @@ async function executeSimulation(
       stateDir: options.stateDir,
       noState,
       buildRunProvenance: () => provenance,
+      onUnavailable: () => {
+        console.log(
+          chalk.yellow(
+            "State persistence unavailable in Node (missing better-sqlite3). Continuing without persisted state."
+          )
+        );
+      },
     },
     async (persistentState) => {
       return execute({

@@ -18,6 +18,8 @@ Typical examples:
 ## Pages
 
 - `docs/how-to/install-grimoire-skills.md`
+- `docs/how-to/simulate-on-anvil-fork.md`
+- `docs/how-to/use-wallet-commands-end-to-end.md`
 - `docs/how-to/run-tests.md`
 - `docs/how-to/bridge-with-across.md`
 - `docs/how-to/use-advisory-decisions.md`
