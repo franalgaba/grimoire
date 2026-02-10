@@ -169,6 +169,13 @@ export async function simulateCommand(
         stateDir: options.stateDir,
         noState,
         buildRunProvenance: () => provenance,
+        onUnavailable: () => {
+          io.log(
+            chalk.yellow(
+              "State persistence unavailable in Node (missing better-sqlite3). Continuing without persisted state."
+            )
+          );
+        },
       },
       async (persistentState) => {
         return execute({

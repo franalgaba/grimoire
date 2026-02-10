@@ -15,6 +15,7 @@ interface StatePersistenceOptions {
   stateDir?: string;
   noState?: boolean;
   buildRunProvenance?: (result: ExecutionResult) => RunProvenance | undefined;
+  onUnavailable?: (error: Error) => void;
 }
 
 /**
@@ -34,8 +35,16 @@ export async function withStatePersistence(
   }
 
   const dbPath = options.stateDir ? join(options.stateDir, "grimoire.db") : undefined;
-
-  const store = new SqliteStateStore({ dbPath });
+  let store: SqliteStateStore;
+  try {
+    store = new SqliteStateStore({ dbPath });
+  } catch (error) {
+    if (isMissingNodeSqliteBackend(error)) {
+      options.onUnavailable?.(toError(error));
+      return executeFn({});
+    }
+    throw error;
+  }
 
   try {
     // Load existing state
@@ -66,4 +75,16 @@ export async function loadRunRecords(
   } finally {
     store.close();
   }
+}
+
+function isMissingNodeSqliteBackend(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.message.includes(
+    "SqliteStateStore requires bun:sqlite (Bun) or better-sqlite3 (Node)"
+  );
+}
+
+function toError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  return new Error(String(error));
 }

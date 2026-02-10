@@ -108,6 +108,8 @@ grimoire cast <spell> --chain <id> --key-env PRIVATE_KEY --rpc-url <rpc>
 - `docs/tutorials/first-spell.md`
 - `docs/tutorials/preview-to-commit.md`
 - `docs/how-to/install-grimoire-skills.md`
+- `docs/how-to/simulate-on-anvil-fork.md`
+- `docs/how-to/use-wallet-commands-end-to-end.md`
 - `docs/how-to/use-advisory-decisions.md`
 - `docs/reference/spell-syntax.md`
 - `docs/reference/cli.md`
