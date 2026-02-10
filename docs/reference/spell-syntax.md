@@ -90,13 +90,27 @@ on manual: {
 
 ## Constraints
 
-Attach constraints to an action step:
+Attach constraints to an action step (inline form):
 
 ```spell
 on manual: {
   uniswap_v3.swap(USDC, WETH, params.amount) with max_slippage=50, deadline=300
 }
 ```
+
+For diff-stable multi-line constraints, use the parenthesized form:
+
+```spell
+on manual: {
+  uniswap_v3.swap(USDC, WETH, params.amount) with (
+    max_slippage=50,
+    deadline=300,
+    max_price_impact=200,
+  )
+}
+```
+
+Adding or removing a constraint touches exactly one line. Trailing commas are allowed in both forms.
 
 For swaps, you can specify explicit bounds:
 

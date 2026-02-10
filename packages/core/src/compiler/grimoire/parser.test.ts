@@ -10,11 +10,14 @@ import type {
   AssignmentNode,
   AtomicNode,
   BinaryExprNode,
+  BlockDef,
   CallExprNode,
+  EmitNode,
   ForNode,
   GuardsSection,
   IfNode,
   MethodCallNode,
+  ObjectLiteralNode,
   ParamsSection,
   PercentageExpr,
   StateSection,
@@ -888,6 +891,223 @@ describe("Parser", () => {
       const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
       expect(stmt.kind).toBe("method_call");
       expect(stmt.constraints).toBeUndefined();
+    });
+
+    test("parenthesized with clause on method call", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    venue.swap(USDC, ETH, 1000) with (slippage=50, deadline=300)
+  }
+}`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
+      expect(stmt.kind).toBe("method_call");
+      expect(stmt.constraints).toBeDefined();
+      expect(stmt.constraints?.constraints.length).toBe(2);
+      expect(stmt.constraints?.constraints[0]?.key).toBe("slippage");
+      expect(stmt.constraints?.constraints[1]?.key).toBe("deadline");
+    });
+
+    test("multi-line parenthesized with clause", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    venue.swap(USDC, ETH, 1000) with (
+      slippage=50,
+      deadline=300,
+    )
+  }
+}`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
+      expect(stmt.kind).toBe("method_call");
+      expect(stmt.constraints).toBeDefined();
+      expect(stmt.constraints?.constraints.length).toBe(2);
+      expect(stmt.constraints?.constraints[0]?.key).toBe("slippage");
+      expect(stmt.constraints?.constraints[1]?.key).toBe("deadline");
+    });
+
+    test("parenthesized single constraint with trailing comma", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    venue.swap(USDC, ETH, 1000) with (slippage=50,)
+  }
+}`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
+      expect(stmt.constraints?.constraints.length).toBe(1);
+      expect(stmt.constraints?.constraints[0]?.key).toBe("slippage");
+    });
+
+    test("rejects empty with ()", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    venue.swap(USDC, ETH, 1000) with ()
+  }
+}`;
+      expect(() => parse(source)).toThrow("Empty constraint clause");
+    });
+
+    test("parenthesized with clause on assignment", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    result = venue.swap(USDC, ETH, 1000) with (slippage=50, deadline=300)
+  }
+}`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as AssignmentNode;
+      expect(stmt.kind).toBe("assignment");
+      expect(stmt.constraints).toBeDefined();
+      expect(stmt.constraints?.constraints.length).toBe(2);
+    });
+  });
+
+  describe("trailing commas", () => {
+    test("assets array with trailing comma", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  assets: [USDC, ETH,]
+
+  on manual: {
+    emit done()
+  }
+}`;
+      const ast = parse(source);
+      const assets = ast.sections.find((s): s is AssetsSection => s.kind === "assets");
+      expect(assets).toBeDefined();
+      expect(assets?.items.length).toBe(2);
+      expect(assets?.items.map((i) => i.symbol)).toEqual(["USDC", "ETH"]);
+    });
+
+    test("method call args with trailing comma", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    venue.swap(USDC, ETH, 1000,)
+  }
+}`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
+      expect(stmt.kind).toBe("method_call");
+      expect(stmt.args.length).toBe(3);
+    });
+
+    test("emit data with trailing comma", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    emit done(amount=100,)
+  }
+}`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as EmitNode;
+      expect(stmt.kind).toBe("emit");
+      expect(stmt.data.length).toBe(1);
+      expect(stmt.data[0]?.key).toBe("amount");
+    });
+
+    test("expression-level object literal with trailing comma", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    venue.call({a: 1, b: 2,})
+  }
+}`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
+      expect(stmt.kind).toBe("method_call");
+      const arg = stmt.args[0] as ObjectLiteralNode;
+      expect(arg.kind).toBe("object_literal");
+      expect(arg.entries.length).toBe(2);
+    });
+
+    test("block params with trailing comma", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  block helper(x, y,) {
+    emit done()
+  }
+
+  on manual: {
+    emit start()
+  }
+}`;
+      const ast = parse(source);
+      const block = ast.blocks[0] as BlockDef;
+      expect(block.params.length).toBe(2);
+      expect(block.params).toContain("x");
+      expect(block.params).toContain("y");
+    });
+  });
+
+  describe("multi-line object literals", () => {
+    test("multi-line object as function argument", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    venue.call({
+      a: 1,
+      b: 2,
+    })
+  }
+}`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
+      expect(stmt.kind).toBe("method_call");
+      const arg = stmt.args[0] as ObjectLiteralNode;
+      expect(arg.kind).toBe("object_literal");
+      expect(arg.entries.length).toBe(2);
+      expect(arg.entries[0]?.key).toBe("a");
+      expect(arg.entries[1]?.key).toBe("b");
+    });
+
+    test("multi-line object with array values as function argument", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    venue.call({
+      accounts: [0x1111, 0x2222],
+      amounts: [100, 200],
+    })
+  }
+}`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
+      const arg = stmt.args[0] as ObjectLiteralNode;
+      expect(arg.entries.length).toBe(2);
+      expect(arg.entries[0]?.key).toBe("accounts");
+      expect(arg.entries[1]?.key).toBe("amounts");
+    });
+
+    test("empty object literal as function argument", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    venue.call({})
+  }
+}`;
+      const ast = parse(source);
+      const stmt = ast.triggers[0]?.body[0] as MethodCallNode;
+      const arg = stmt.args[0] as ObjectLiteralNode;
+      expect(arg.kind).toBe("object_literal");
+      expect(arg.entries.length).toBe(0);
     });
   });
 

@@ -8,9 +8,16 @@ spell YellowSessionTrack {
   assets: [USDC]
 
   params: {
-    open_payload: {session_id: "yellow-track-session-1", v: 1, signers: ["judge-signer-1"], quorum: 1}
+    open_payload: {
+      session_id: "yellow-track-session-1"
+      v: 1
+      signers: ["judge-signer-1"]
+      quorum: 1
+    }
     update_payloads: [{session_id: "yellow-track-session-1", v: 2, intent: "operate", allocations: [{account: "0x1111111111111111111111111111111111111111", amount: "900"}], signatures: ["judge-signer-1"]}, {session_id: "yellow-track-session-1", v: 3, intent: "withdraw", allocations: [{account: "0x2222222222222222222222222222222222222222", amount: "450"}], signatures: ["judge-signer-1"]}]
-    close_payload: {session_id: "yellow-track-session-1"}
+    close_payload: {
+      session_id: "yellow-track-session-1"
+    }
 
   }
   venues: {
