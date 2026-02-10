@@ -35,6 +35,11 @@ function createMockReceipt(overrides?: Partial<Receipt>): Receipt {
     advisoryResults: [],
     plannedActions: [],
     valueDeltas: [],
+    accounting: {
+      assets: [],
+      totalUnaccounted: 0n,
+      passed: true,
+    },
     constraintResults: [],
     driftKeys: [],
     requiresApproval: false,
@@ -187,6 +192,87 @@ describe("commit()", () => {
     expect(result.driftChecks[0]?.passed).toBe(true);
     expect(result.driftChecks[1]?.field).toBe("quote");
     expect(result.driftChecks[1]?.passed).toBe(true);
+  });
+
+  test("rejects when drift policy is set but commit-time values are missing", async () => {
+    const receipt = await createReadyReceipt({
+      driftKeys: [
+        {
+          field: "quote:step_1:USDC",
+          class: "quote",
+          previewValue: 1000n,
+          timestamp: Date.now(),
+          source: "test",
+        },
+      ],
+    });
+
+    const result = await commit({
+      receipt,
+      wallet: createMockWallet(),
+      driftPolicy: {
+        quote: { toleranceBps: 50 },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("DRIFT_VALUE_MISSING");
+  });
+
+  test("passes drift checks when values are within tolerance", async () => {
+    const receipt = await createReadyReceipt({
+      driftKeys: [
+        {
+          field: "quote:step_1:USDC",
+          class: "quote",
+          previewValue: 1000n,
+          timestamp: Date.now(),
+          source: "test",
+        },
+      ],
+    });
+
+    const result = await commit({
+      receipt,
+      wallet: createMockWallet(),
+      driftPolicy: {
+        quote: { toleranceBps: 100 },
+      },
+      driftValues: {
+        "quote:step_1:USDC": 1005n,
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.driftChecks[0]?.passed).toBe(true);
+  });
+
+  test("rejects when drift exceeds tolerance", async () => {
+    const receipt = await createReadyReceipt({
+      driftKeys: [
+        {
+          field: "quote:step_1:USDC",
+          class: "quote",
+          previewValue: 1000n,
+          timestamp: Date.now(),
+          source: "test",
+        },
+      ],
+    });
+
+    const result = await commit({
+      receipt,
+      wallet: createMockWallet(),
+      driftPolicy: {
+        quote: { toleranceBps: 50 },
+      },
+      driftValues: {
+        "quote:step_1:USDC": 1100n,
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("DRIFT_EXCEEDED");
   });
 
   test("emits commit lifecycle events", async () => {

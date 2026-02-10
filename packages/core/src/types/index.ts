@@ -145,6 +145,8 @@ export type {
 // Receipt / Value-Flow
 export type {
   ValueDelta,
+  AssetAccounting,
+  AccountingSummary,
   DriftKey,
   DriftPolicy,
   DriftCheckResult,

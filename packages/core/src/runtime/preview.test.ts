@@ -78,6 +78,8 @@ describe("preview()", () => {
     expect(receipt.advisoryResults).toBeInstanceOf(Array);
     expect(receipt.plannedActions).toBeInstanceOf(Array);
     expect(receipt.valueDeltas).toBeInstanceOf(Array);
+    expect(receipt.accounting).toBeDefined();
+    expect(receipt.accounting.assets).toBeInstanceOf(Array);
     expect(receipt.constraintResults).toBeInstanceOf(Array);
     expect(receipt.driftKeys).toBeInstanceOf(Array);
     expect(typeof receipt.requiresApproval).toBe("boolean");
@@ -142,7 +144,85 @@ describe("preview()", () => {
     expect(result.receipt).toBeDefined();
     expect(result.receipt?.plannedActions.length).toBeGreaterThan(0);
     expect(result.receipt?.plannedActions[0]?.action.type).toBe("swap");
+    expect(result.receipt?.requiresApproval).toBe(false);
+  });
+
+  test("requires approval when approval_required_above is exceeded", async () => {
+    const source = `spell ApprovalThreshold {
+  version: "1.0.0"
+  assets: [ETH, USDC]
+
+  venues: {
+    uniswap: @uniswap
+  }
+
+  limits: {
+    max_single_move: 2000
+    approval_required_above: 500
+  }
+
+  params: {
+    amount: 1000
+  }
+
+  on manual: {
+    uniswap.swap(ETH, USDC, params.amount) with max_slippage=50
+  }
+}`;
+    const compileResult = compile(source);
+    assertIR(compileResult);
+
+    const result = await preview({
+      spell: compileResult.ir,
+      vault: VAULT,
+      chain: 1,
+    });
+
+    expect(result.success).toBe(true);
     expect(result.receipt?.requiresApproval).toBe(true);
+    const approvalConstraint = result.receipt?.constraintResults.find(
+      (item) => item.constraintName === "approval_required_above"
+    );
+    expect(approvalConstraint?.passed).toBe(true);
+    expect(approvalConstraint?.message).toContain("Approval required");
+  });
+
+  test("rejects preview when max_single_move is exceeded", async () => {
+    const source = `spell MaxSingleMoveViolation {
+  version: "1.0.0"
+  assets: [ETH, USDC]
+
+  venues: {
+    uniswap: @uniswap
+  }
+
+  limits: {
+    max_single_move: 500
+  }
+
+  params: {
+    amount: 1000
+  }
+
+  on manual: {
+    uniswap.swap(ETH, USDC, params.amount) with max_slippage=50
+  }
+}`;
+    const compileResult = compile(source);
+    assertIR(compileResult);
+
+    const result = await preview({
+      spell: compileResult.ir,
+      vault: VAULT,
+      chain: 1,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("CONSTRAINT_VIOLATION");
+    const maxSingleMoveConstraint = result.receipt?.constraintResults.find(
+      (item) => item.constraintName === "max_single_move"
+    );
+    expect(maxSingleMoveConstraint?.passed).toBe(false);
   });
 
   test("does NOT execute actual transactions", async () => {

@@ -174,6 +174,30 @@ describe("Transformer", () => {
       expect(result.params?.limit_max_allocation).toBe(0.5);
       expect(result.params?.limit_min_amount).toBe(100);
     });
+
+    test("preserves limits when params section appears after limits", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  limits: {
+    max_single_move: 2000
+    approval_required_above: 500
+  }
+
+  params: {
+    amount: 1000
+  }
+
+  on manual: {
+    pass
+  }
+}`;
+      const ast = parse(source);
+      const result = transform(ast);
+      expect(result.params?.limit_max_single_move).toBe(2000);
+      expect(result.params?.limit_approval_required_above).toBe(500);
+      expect(result.params?.amount).toBe(1000);
+    });
   });
 
   describe("venues transformation", () => {

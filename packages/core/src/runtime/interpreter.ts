@@ -8,9 +8,11 @@ import type { AdvisorDef, Guard, GuardDef, SpellIR } from "../types/ir.js";
 import type { PolicySet } from "../types/policy.js";
 import type { Address, ChainId } from "../types/primitives.js";
 import type {
+  AccountingSummary,
   AdvisoryResult,
   CommitResult,
   DriftCheckResult,
+  DriftKey,
   DriftPolicy,
   GuardResult,
   PlannedAction,
@@ -35,6 +37,11 @@ import {
 } from "./context.js";
 import { type EvalContext, createEvalContext, evaluateAsync } from "./expression-evaluator.js";
 import { resolveAdvisorSkill } from "./skills/registry.js";
+import {
+  type ValueFlowViolation,
+  evaluatePreviewValueFlow,
+  inferDriftClass,
+} from "./value-flow.js";
 
 // Step executors
 import {
@@ -271,7 +278,38 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
       };
     }
 
-    const requiresApproval = plannedActions.length > 0;
+    const valueFlow = evaluatePreviewValueFlow(ctx, plannedActions, valueDeltas);
+    if (valueFlow.violation) {
+      const structuredError = structuredErrorFromValueFlowViolation("preview", valueFlow.violation);
+      const receipt = buildReceipt({
+        id: receiptId,
+        spell,
+        ctx,
+        guardResults,
+        advisoryResults,
+        plannedActions,
+        valueDeltas,
+        status: "rejected",
+        error: structuredError.message,
+        constraintResults: valueFlow.constraintResults,
+        driftKeys: valueFlow.driftKeys,
+        requiresApproval: valueFlow.requiresApproval,
+        accounting: valueFlow.accounting,
+      });
+      registerIssuedReceipt(receipt);
+
+      ledger.emit({ type: "receipt_generated", receiptId });
+      ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "rejected" });
+
+      return {
+        success: false,
+        receipt,
+        error: structuredError,
+        ledgerEvents: ledger.getEntries(),
+      };
+    }
+
+    const requiresApproval = valueFlow.requiresApproval;
     const receipt = buildReceipt({
       id: receiptId,
       spell,
@@ -281,6 +319,10 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
       plannedActions,
       valueDeltas,
       status: "ready",
+      constraintResults: valueFlow.constraintResults,
+      driftKeys: valueFlow.driftKeys,
+      requiresApproval: valueFlow.requiresApproval,
+      accounting: valueFlow.accounting,
     });
     registerIssuedReceipt(receipt);
 
@@ -288,7 +330,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
       ledger.emit({
         type: "approval_required",
         receiptId,
-        reason: "Planned actions require approval",
+        reason: "One or more actions crossed approval_required_above",
       });
     }
 
@@ -331,6 +373,8 @@ export interface CommitOptions {
   progressCallback?: (message: string) => void;
   skipTestnetConfirmation?: boolean;
   driftPolicy?: DriftPolicy;
+  driftValues?: Record<string, unknown>;
+  resolveDriftValue?: (key: DriftKey) => Promise<unknown>;
 }
 
 /**
@@ -403,23 +447,123 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
     }
   }
 
-  // Run drift checks (placeholder: uses preview values until external checks are wired).
-  const driftChecks: DriftCheckResult[] = receipt.driftKeys.map((dk) => {
-    const result: DriftCheckResult = {
-      field: dk.field,
-      passed: true,
-      previewValue: dk.previewValue,
-      commitValue: dk.previewValue, // Same for now until commit-time fetch is implemented
-    };
+  const driftChecks: DriftCheckResult[] = [];
+  for (const driftKey of receipt.driftKeys) {
+    if (options.driftPolicy?.maxAge) {
+      const keyAgeSec = Math.max(0, Math.floor((Date.now() - driftKey.timestamp) / 1000));
+      if (keyAgeSec > options.driftPolicy.maxAge) {
+        const structuredError = createStructuredError(
+          "commit",
+          "DRIFT_KEY_STALE",
+          `Drift key '${driftKey.field}' is stale (${keyAgeSec}s > ${options.driftPolicy.maxAge}s)`,
+          {
+            constraint: "drift_key_freshness",
+            actual: keyAgeSec,
+            limit: options.driftPolicy.maxAge,
+            path: driftKey.field,
+            suggestion: "Run preview again to refresh drift keys.",
+          }
+        );
+        ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+        return {
+          success: false,
+          receiptId: receipt.id,
+          transactions: [],
+          driftChecks,
+          finalState: receipt.finalState,
+          ledgerEvents: ledger.getEntries(),
+          error: structuredError,
+        };
+      }
+    }
+
+    let resolvedValue: { found: boolean; value: unknown };
+    try {
+      resolvedValue = await resolveCommitDriftValue(driftKey, options);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const structuredError = createStructuredError(
+        "commit",
+        "DRIFT_RESOLUTION_FAILED",
+        `Failed to resolve drift value for '${driftKey.field}': ${message}`,
+        {
+          constraint: "drift_keys",
+          path: driftKey.field,
+        }
+      );
+      ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+      return {
+        success: false,
+        receiptId: receipt.id,
+        transactions: [],
+        driftChecks,
+        finalState: receipt.finalState,
+        ledgerEvents: ledger.getEntries(),
+        error: structuredError,
+      };
+    }
+    if (!resolvedValue.found && options.driftPolicy) {
+      const structuredError = createStructuredError(
+        "commit",
+        "DRIFT_VALUE_MISSING",
+        `Missing commit-time drift value for '${driftKey.field}'`,
+        {
+          constraint: "drift_keys",
+          path: driftKey.field,
+          suggestion:
+            "Provide driftValues for this key or configure resolveDriftValue to fetch commit-time values.",
+        }
+      );
+      ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+      return {
+        success: false,
+        receiptId: receipt.id,
+        transactions: [],
+        driftChecks,
+        finalState: receipt.finalState,
+        ledgerEvents: ledger.getEntries(),
+        error: structuredError,
+      };
+    }
+
+    const commitValue = resolvedValue.found ? resolvedValue.value : driftKey.previewValue;
+    const driftResult = evaluateDriftKey(driftKey, commitValue, options.driftPolicy);
+    driftChecks.push(driftResult);
+
     ledger.emit({
       type: "drift_check",
-      field: dk.field,
-      passed: true,
-      previewValue: dk.previewValue,
-      commitValue: dk.previewValue,
+      field: driftKey.field,
+      passed: driftResult.passed,
+      previewValue: driftResult.previewValue,
+      commitValue: driftResult.commitValue,
     });
-    return result;
-  });
+
+    if (!driftResult.passed) {
+      const tolerance = resolveToleranceBps(driftKey, options.driftPolicy);
+      const structuredError = createStructuredError(
+        "commit",
+        "DRIFT_EXCEEDED",
+        `Drift exceeded for '${driftKey.field}'`,
+        {
+          constraint: "drift_policy",
+          actual: driftResult.driftBps,
+          limit: tolerance,
+          path: driftKey.field,
+          suggestion: "Run preview again or increase drift tolerance for this key class.",
+        }
+      );
+      ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+      return {
+        success: false,
+        receiptId: receipt.id,
+        transactions: [],
+        driftChecks,
+        finalState: receipt.finalState,
+        ledgerEvents: ledger.getEntries(),
+        error: structuredError,
+      };
+    }
+  }
 
   // Execute planned actions
   const { chainId } = receipt.chainContext;
@@ -779,6 +923,10 @@ function buildReceipt(opts: {
   valueDeltas: ValueDelta[];
   status: ReceiptStatus;
   error?: string;
+  constraintResults?: Receipt["constraintResults"];
+  driftKeys?: Receipt["driftKeys"];
+  requiresApproval?: boolean;
+  accounting?: AccountingSummary;
 }): Receipt {
   return {
     id: opts.id,
@@ -793,9 +941,16 @@ function buildReceipt(opts: {
     advisoryResults: opts.advisoryResults,
     plannedActions: opts.plannedActions,
     valueDeltas: opts.valueDeltas,
-    constraintResults: [],
-    driftKeys: [],
-    requiresApproval: opts.plannedActions.length > 0,
+    accounting:
+      opts.accounting ??
+      ({
+        assets: [],
+        totalUnaccounted: 0n,
+        passed: true,
+      } satisfies AccountingSummary),
+    constraintResults: opts.constraintResults ?? [],
+    driftKeys: opts.driftKeys ?? [],
+    requiresApproval: opts.requiresApproval ?? false,
     status: opts.status,
     metrics: { ...opts.ctx.metrics },
     finalState: getPersistentStateObject(opts.ctx),
@@ -846,6 +1001,19 @@ function createStructuredError(
     message,
     ...extras,
   };
+}
+
+function structuredErrorFromValueFlowViolation(
+  phase: StructuredError["phase"],
+  violation: ValueFlowViolation
+): StructuredError {
+  return createStructuredError(phase, violation.code, violation.message, {
+    constraint: violation.constraint,
+    actual: violation.actual,
+    limit: violation.limit,
+    path: violation.path,
+    suggestion: violation.suggestion,
+  });
 }
 
 function formatStructuredError(error: StructuredError): string {
@@ -909,6 +1077,132 @@ function validateCommitReceipt(receipt: Receipt): StructuredError | undefined {
   }
 
   return undefined;
+}
+
+async function resolveCommitDriftValue(
+  driftKey: DriftKey,
+  options: CommitOptions
+): Promise<{ found: boolean; value: unknown }> {
+  if (
+    options.driftValues &&
+    Object.prototype.hasOwnProperty.call(options.driftValues, driftKey.field)
+  ) {
+    return { found: true, value: options.driftValues[driftKey.field] };
+  }
+
+  if (options.resolveDriftValue) {
+    const value = await options.resolveDriftValue(driftKey);
+    if (value !== undefined) {
+      return { found: true, value };
+    }
+  }
+
+  return { found: false, value: undefined };
+}
+
+function evaluateDriftKey(
+  driftKey: DriftKey,
+  commitValue: unknown,
+  policy?: DriftPolicy
+): DriftCheckResult {
+  const tolerance = resolveToleranceBps(driftKey, policy);
+  const numericPreview = toNumeric(driftKey.previewValue);
+  const numericCommit = toNumeric(commitValue);
+
+  if (tolerance !== undefined && numericPreview !== undefined && numericCommit !== undefined) {
+    const driftBps = computeDriftBps(numericPreview, numericCommit);
+    return {
+      field: driftKey.field,
+      passed: driftBps <= tolerance,
+      previewValue: driftKey.previewValue,
+      commitValue,
+      driftBps,
+    };
+  }
+
+  if (tolerance !== undefined) {
+    return {
+      field: driftKey.field,
+      passed: false,
+      previewValue: driftKey.previewValue,
+      commitValue,
+    };
+  }
+
+  return {
+    field: driftKey.field,
+    passed: valuesEquivalent(driftKey.previewValue, commitValue),
+    previewValue: driftKey.previewValue,
+    commitValue,
+  };
+}
+
+function resolveToleranceBps(driftKey: DriftKey, policy?: DriftPolicy): number | undefined {
+  if (!policy) return undefined;
+
+  const driftClass = driftKey.class ?? inferDriftClass(driftKey.field);
+  switch (driftClass) {
+    case "balance":
+      return policy.balance?.toleranceBps;
+    case "quote":
+      return policy.quote?.toleranceBps;
+    case "rate":
+      return policy.rate?.toleranceBps;
+    case "gas":
+      return policy.gas?.toleranceBps;
+    default:
+      return undefined;
+  }
+}
+
+function toNumeric(value: unknown): bigint | undefined {
+  if (typeof value === "bigint") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return undefined;
+    return BigInt(Math.trunc(value));
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!/^[-+]?\d+$/.test(trimmed)) return undefined;
+    try {
+      return BigInt(trimmed);
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function computeDriftBps(preview: bigint, commit: bigint): number {
+  const delta = preview >= commit ? preview - commit : commit - preview;
+  if (preview === 0n) {
+    return delta === 0n ? 0 : 10_000;
+  }
+  return Number((delta * 10_000n) / (preview >= 0n ? preview : -preview));
+}
+
+function valuesEquivalent(left: unknown, right: unknown): boolean {
+  if (typeof left === "bigint" || typeof right === "bigint") {
+    const leftBigint = toNumeric(left);
+    const rightBigint = toNumeric(right);
+    if (leftBigint === undefined || rightBigint === undefined) return false;
+    return leftBigint === rightBigint;
+  }
+
+  if (typeof left === "number" && typeof right === "number") {
+    return Number.isFinite(left) && Number.isFinite(right) && left === right;
+  }
+
+  if (typeof left === "string" && typeof right === "string") {
+    return left === right;
+  }
+
+  return Object.is(left, right);
 }
 
 function buildAdvisorTooling(

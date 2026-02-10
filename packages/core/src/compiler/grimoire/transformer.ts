@@ -179,7 +179,7 @@ export class Transformer {
         break;
 
       case "params":
-        source.params = {};
+        source.params = source.params ?? {};
         for (const item of section.items) {
           if (item.type || item.min !== undefined || item.max !== undefined || item.asset) {
             source.params[item.name] = {

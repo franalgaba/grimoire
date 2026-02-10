@@ -20,6 +20,23 @@ export interface ValueDelta {
   reason: string;
 }
 
+/** Per-asset accounting row derived from preview value deltas */
+export interface AssetAccounting {
+  asset: AssetId;
+  debits: bigint;
+  credits: bigint;
+  fees: bigint;
+  losses: bigint;
+  unaccounted: bigint;
+}
+
+/** Aggregate accounting summary for a preview run */
+export interface AccountingSummary {
+  assets: AssetAccounting[];
+  totalUnaccounted: bigint;
+  passed: boolean;
+}
+
 // =============================================================================
 // DRIFT KEYS
 // =============================================================================
@@ -27,6 +44,7 @@ export interface ValueDelta {
 /** Captures a preview-time value for commit-time drift checking */
 export interface DriftKey {
   field: string;
+  class?: "balance" | "quote" | "rate" | "gas";
   previewValue: unknown;
   timestamp: Timestamp;
   source: string;
@@ -124,6 +142,7 @@ export interface Receipt {
   advisoryResults: AdvisoryResult[];
   plannedActions: PlannedAction[];
   valueDeltas: ValueDelta[];
+  accounting: AccountingSummary;
   constraintResults: ConstraintCheckResult[];
   driftKeys: DriftKey[];
   requiresApproval: boolean;

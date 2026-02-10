@@ -13,7 +13,7 @@ import type {
 } from "../../types/actions.js";
 import type { ExecutionContext, StepResult } from "../../types/execution.js";
 import type { Expression } from "../../types/expressions.js";
-import type { VenueAlias } from "../../types/primitives.js";
+import type { Address, VenueAlias } from "../../types/primitives.js";
 import type { PlannedAction, ValueDelta } from "../../types/receipt.js";
 import type { ActionStep } from "../../types/steps.js";
 import type { Executor } from "../../wallet/executor.js";
@@ -23,6 +23,7 @@ import { addGasUsed, incrementActions, setBinding } from "../context.js";
 import type { InMemoryLedger } from "../context.js";
 import { classifyError } from "../error-classifier.js";
 import { type EvalValue, createEvalContext, evaluateAsync } from "../expression-evaluator.js";
+import { FEE_BUCKET_ADDRESS, LOSS_BUCKET_ADDRESS } from "../value-flow.js";
 
 export interface ActionExecutionOptions {
   mode: ExecutionMode;
@@ -602,6 +603,123 @@ function resolveVenueAlias(action: Action, ctx: ExecutionContext): VenueAlias {
   };
 }
 
+function deriveSimulationInput(
+  action: Action,
+  amountText: string
+): { asset: string; amount: string } {
+  switch (action.type) {
+    case "swap":
+      return { asset: String(action.assetIn), amount: amountText };
+    case "lend":
+    case "withdraw":
+    case "borrow":
+    case "repay":
+    case "stake":
+    case "unstake":
+    case "bridge":
+    case "transfer":
+    case "approve":
+      return { asset: String(action.asset), amount: amountText };
+    default:
+      return { asset: "", amount: amountText };
+  }
+}
+
+function deriveSimulationOutput(
+  action: Action,
+  amountText: string
+): { asset: string; amount: string } {
+  switch (action.type) {
+    case "swap":
+      return { asset: String(action.assetOut), amount: amountText };
+    case "withdraw":
+    case "borrow":
+    case "unstake":
+    case "bridge":
+    case "transfer":
+    case "approve":
+      return { asset: String(action.asset), amount: amountText };
+    case "lend":
+    case "repay":
+    case "stake":
+      return { asset: String(action.asset), amount: "0" };
+    default:
+      return { asset: "", amount: "0" };
+  }
+}
+
+function buildValueDeltas(input: {
+  stepId: string;
+  vault: Address;
+  venueAddress: Address;
+  simulationResult: {
+    input: { asset: string; amount: string };
+    output: { asset: string; amount: string };
+  };
+}): ValueDelta[] {
+  const deltas: ValueDelta[] = [];
+  const inputAmount = parseAmount(input.simulationResult.input.amount);
+  const outputAmount = parseAmount(input.simulationResult.output.amount);
+  const inputAsset = input.simulationResult.input.asset;
+  const outputAsset = input.simulationResult.output.asset;
+
+  if (inputAmount > 0n && inputAsset.length > 0) {
+    deltas.push({
+      asset: inputAsset,
+      amount: inputAmount,
+      from: input.vault,
+      to: input.venueAddress,
+      reason: `action:${input.stepId}:input`,
+    });
+  }
+
+  if (outputAmount > 0n && outputAsset.length > 0) {
+    deltas.push({
+      asset: outputAsset,
+      amount: outputAmount,
+      from: input.venueAddress,
+      to: input.vault,
+      reason: `action:${input.stepId}:output`,
+    });
+  }
+
+  if (inputAsset.length > 0 && outputAsset.length > 0 && inputAsset === outputAsset) {
+    const difference = inputAmount - outputAmount;
+    if (difference > 0n) {
+      deltas.push({
+        asset: inputAsset,
+        amount: difference,
+        from: input.vault,
+        to: LOSS_BUCKET_ADDRESS,
+        reason: `loss:${input.stepId}:slippage`,
+      });
+    } else if (difference < 0n) {
+      deltas.push({
+        asset: inputAsset,
+        amount: -difference,
+        from: input.venueAddress,
+        to: FEE_BUCKET_ADDRESS,
+        reason: `fee:${input.stepId}:rebate`,
+      });
+    }
+  }
+
+  return deltas;
+}
+
+function parseAmount(value: string): bigint {
+  const trimmed = value.trim();
+  if (!trimmed || !/^[-+]?\d+$/.test(trimmed)) {
+    return 0n;
+  }
+  try {
+    const parsed = BigInt(trimmed);
+    return parsed > 0n ? parsed : 0n;
+  } catch {
+    return 0n;
+  }
+}
+
 function serializeValue(value: unknown): unknown {
   if (typeof value === "bigint") {
     return value.toString();
@@ -678,14 +796,8 @@ export async function previewActionStep(
     const simulationResult = {
       success: true,
       gasEstimate: "0",
-      input: {
-        asset: "asset" in resolvedAction ? String(resolvedAction.asset ?? "") : "",
-        amount: amountText,
-      },
-      output: {
-        asset: "asset" in resolvedAction ? String(resolvedAction.asset ?? "") : "",
-        amount: amountText,
-      },
+      input: deriveSimulationInput(actionWithConstraints, amountText),
+      output: deriveSimulationOutput(actionWithConstraints, amountText),
     };
 
     ledger.emit({
@@ -695,6 +807,13 @@ export async function previewActionStep(
       result: simulationResult,
     });
 
+    const valueDeltas = buildValueDeltas({
+      stepId: step.id,
+      vault: ctx.vault,
+      venueAddress: venue.address,
+      simulationResult,
+    });
+
     const plannedAction: PlannedAction = {
       stepId: step.id,
       action: actionWithConstraints,
@@ -702,7 +821,7 @@ export async function previewActionStep(
       constraints: resolvedConstraints,
       onFailure: step.onFailure,
       simulationResult,
-      valueDeltas: [],
+      valueDeltas,
     };
 
     ledger.emit({
@@ -722,7 +841,7 @@ export async function previewActionStep(
         output: { simulated: true, action: actionWithConstraints },
       },
       plannedAction,
-      valueDeltas: [],
+      valueDeltas,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

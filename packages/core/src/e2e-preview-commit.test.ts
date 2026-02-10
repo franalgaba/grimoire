@@ -221,6 +221,7 @@ describe("Preview/Commit E2E", () => {
       expect(receipt.advisoryResults).toBeInstanceOf(Array);
       expect(receipt.plannedActions).toBeInstanceOf(Array);
       expect(receipt.valueDeltas).toBeInstanceOf(Array);
+      expect(receipt.accounting).toBeDefined();
       expect(receipt.constraintResults).toBeInstanceOf(Array);
       expect(receipt.driftKeys).toBeInstanceOf(Array);
       expect(typeof receipt.requiresApproval).toBe("boolean");
