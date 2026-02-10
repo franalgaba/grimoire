@@ -47,6 +47,15 @@ interface SimulateCommandIO {
   exit: typeof process.exit;
 }
 
+class SimulateCommandExit extends Error {
+  readonly code: number;
+
+  constructor(code: number) {
+    super(`simulate.exit(${code})`);
+    this.code = code;
+  }
+}
+
 export async function simulateCommand(
   spellPath: string,
   options: SimulateOptions,
@@ -55,6 +64,10 @@ export async function simulateCommand(
   const io: SimulateCommandIO = {
     log: ioOverrides?.log ?? console.log,
     exit: ioOverrides?.exit ?? ((code?: number) => process.exit(code)),
+  };
+  const terminate = (code: number): never => {
+    io.exit(code);
+    throw new SimulateCommandExit(code);
   };
 
   const spinner = ora(`Simulating ${spellPath}...`).start();
@@ -66,7 +79,7 @@ export async function simulateCommand(
         params = JSON.parse(options.params);
       } catch {
         spinner.fail(chalk.red("Invalid params JSON"));
-        io.exit(1);
+        return terminate(1);
       }
     }
 
@@ -89,7 +102,7 @@ export async function simulateCommand(
       for (const error of compileResult.errors) {
         io.log(chalk.red(`  [${error.code}] ${error.message}`));
       }
-      io.exit(1);
+      return terminate(1);
     }
 
     spinner.text = "Preparing simulation...";
@@ -191,11 +204,14 @@ export async function simulateCommand(
     }
 
     if (!result.success) {
-      io.exit(1);
+      return terminate(1);
     }
   } catch (error) {
+    if (error instanceof SimulateCommandExit) {
+      throw error;
+    }
     spinner.fail(chalk.red(`Simulation failed: ${(error as Error).message}`));
-    io.exit(1);
+    return terminate(1);
   }
 }
 
