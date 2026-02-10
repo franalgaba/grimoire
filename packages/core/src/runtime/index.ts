@@ -2,7 +2,14 @@
  * Runtime exports
  */
 
-export { execute, type ExecuteOptions } from "./interpreter.js";
+export {
+  execute,
+  preview,
+  commit,
+  type ExecuteOptions,
+  type PreviewOptions,
+  type CommitOptions,
+} from "./interpreter.js";
 export type { AdvisoryHandler, AdvisoryHandlerInput } from "./steps/advisory.js";
 export {
   createContext,

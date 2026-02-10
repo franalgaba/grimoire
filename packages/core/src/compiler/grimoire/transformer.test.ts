@@ -582,7 +582,7 @@ describe("Transformer", () => {
   });
 
   describe("advisory transformation", () => {
-    test("transforms advisory if condition", () => {
+    test("inline advisory if condition is rejected (SPEC-004)", () => {
       const source = `spell Test {
   version: "1.0.0"
 
@@ -594,10 +594,10 @@ describe("Transformer", () => {
     }
   }
 }`;
-      const ast = parse(source);
-      const result = transform(ast);
-      // Advisory conditions create special steps
-      expect(result.steps?.length).toBeGreaterThan(0);
+      // Inline advisory expressions are no longer supported per SPEC-004 §11.6
+      expect(() => parse(source)).toThrow(
+        "Inline advisory expressions (**...**) are no longer supported"
+      );
     });
   });
 

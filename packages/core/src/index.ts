@@ -25,6 +25,8 @@ export type {
 // Runtime
 export {
   execute,
+  preview,
+  commit,
   createContext,
   InMemoryLedger,
   evaluate,
@@ -35,6 +37,8 @@ export {
 } from "./runtime/index.js";
 export type {
   ExecuteOptions,
+  PreviewOptions,
+  CommitOptions,
   CreateContextOptions,
   EvalContext,
   EvalValue,

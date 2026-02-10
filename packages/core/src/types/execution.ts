@@ -6,6 +6,7 @@ import type { Action, ActionConstraintsResolved } from "./actions.js";
 import type { SpellIR } from "./ir.js";
 import type { PolicySet } from "./policy.js";
 import type { Address, ChainId, Timestamp, VenueAlias } from "./primitives.js";
+import type { ValueDelta } from "./receipt.js";
 
 /**
  * Execution context - passed through during spell execution
@@ -142,7 +143,16 @@ export type LedgerEvent =
   | RetryExhaustedEvent
   // Circuit breakers
   | CircuitBreakerTriggeredEvent
-  | CircuitBreakerActionEvent;
+  | CircuitBreakerActionEvent
+  // Preview/Commit lifecycle (SPEC-004)
+  | PreviewStartedEvent
+  | PreviewCompletedEvent
+  | CommitStartedEvent
+  | CommitCompletedEvent
+  | DriftCheckEvent
+  | ValueDeltaEvent
+  | ReceiptGeneratedEvent
+  | ApprovalRequiredEvent;
 
 // Run lifecycle events
 interface RunStartedEvent {
@@ -395,6 +405,57 @@ export interface LedgerEntry {
   runId: string;
   spellId: string;
   event: LedgerEvent;
+}
+
+// Preview/Commit lifecycle events (SPEC-004)
+interface PreviewStartedEvent {
+  type: "preview_started";
+  runId: string;
+  spellId: string;
+}
+
+interface PreviewCompletedEvent {
+  type: "preview_completed";
+  runId: string;
+  receiptId: string;
+  status: string;
+}
+
+interface CommitStartedEvent {
+  type: "commit_started";
+  runId: string;
+  receiptId: string;
+}
+
+interface CommitCompletedEvent {
+  type: "commit_completed";
+  runId: string;
+  receiptId: string;
+  success: boolean;
+}
+
+interface DriftCheckEvent {
+  type: "drift_check";
+  field: string;
+  passed: boolean;
+  previewValue: unknown;
+  commitValue: unknown;
+}
+
+interface ValueDeltaEvent {
+  type: "value_delta";
+  delta: ValueDelta;
+}
+
+interface ReceiptGeneratedEvent {
+  type: "receipt_generated";
+  receiptId: string;
+}
+
+interface ApprovalRequiredEvent {
+  type: "approval_required";
+  receiptId: string;
+  reason: string;
 }
 
 export interface AdvisorySchemaEvent {

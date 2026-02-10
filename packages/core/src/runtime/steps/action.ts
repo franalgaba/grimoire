@@ -14,6 +14,7 @@ import type {
 import type { ExecutionContext, StepResult } from "../../types/execution.js";
 import type { Expression } from "../../types/expressions.js";
 import type { VenueAlias } from "../../types/primitives.js";
+import type { PlannedAction, ValueDelta } from "../../types/receipt.js";
 import type { ActionStep } from "../../types/steps.js";
 import type { Executor } from "../../wallet/executor.js";
 import type { ExecutionMode } from "../../wallet/executor.js";
@@ -616,4 +617,160 @@ function serializeValue(value: unknown): unknown {
     return result;
   }
   return value;
+}
+
+// =============================================================================
+// PREVIEW ACTION STEP (SPEC-004)
+// =============================================================================
+
+export interface PreviewActionResult {
+  stepResult: StepResult;
+  plannedAction?: PlannedAction;
+  valueDeltas?: ValueDelta[];
+}
+
+/**
+ * Preview an action step — resolves the action and simulates it,
+ * returning a PlannedAction instead of executing a real transaction.
+ */
+export async function previewActionStep(
+  step: ActionStep,
+  ctx: ExecutionContext,
+  ledger: InMemoryLedger,
+  _options: ActionExecutionOptions
+): Promise<PreviewActionResult> {
+  ledger.emit({ type: "step_started", stepId: step.id, kind: "action" });
+  incrementActions(ctx);
+
+  try {
+    const evalCtx = createEvalContext(ctx);
+    const explicitSkill = step.skill
+      ? ctx.spell.skills.find((s) => s.name === step.skill)
+      : undefined;
+    const actionVenue = hasVenue(step.action) ? step.action.venue : undefined;
+    const inferredSkill =
+      !explicitSkill && actionVenue
+        ? ctx.spell.skills.find((s) => s.name === actionVenue)
+        : undefined;
+    const skill = explicitSkill ?? inferredSkill;
+    const skillName = skill?.name;
+
+    const actionWithVenue = resolveActionVenue(step.action, skill, ctx, skillName);
+    const resolvedAction = await resolveAction(actionWithVenue, evalCtx);
+
+    const mergedConstraints = applySkillDefaults(step.constraints, skill);
+    const resolvedConstraints = await resolveConstraints(mergedConstraints, evalCtx);
+    const actionWithConstraints = { ...resolvedAction, constraints: resolvedConstraints } as Action;
+
+    ledger.emit({
+      type: "constraint_evaluated",
+      stepId: step.id,
+      constraints: resolvedConstraints,
+    });
+
+    const venue = resolveVenueAlias(actionWithConstraints, ctx);
+    const amountValue =
+      "amount" in actionWithConstraints
+        ? (actionWithConstraints as { amount?: unknown }).amount
+        : undefined;
+    const amountText = amountValue !== undefined ? String(amountValue) : "";
+
+    const simulationResult = {
+      success: true,
+      gasEstimate: "0",
+      input: {
+        asset: "asset" in resolvedAction ? String(resolvedAction.asset ?? "") : "",
+        amount: amountText,
+      },
+      output: {
+        asset: "asset" in resolvedAction ? String(resolvedAction.asset ?? "") : "",
+        amount: amountText,
+      },
+    };
+
+    ledger.emit({
+      type: "action_simulated",
+      action: actionWithConstraints,
+      venue,
+      result: simulationResult,
+    });
+
+    const plannedAction: PlannedAction = {
+      stepId: step.id,
+      action: actionWithConstraints,
+      venue: venue.alias,
+      constraints: resolvedConstraints,
+      simulationResult,
+      valueDeltas: [],
+    };
+
+    ledger.emit({
+      type: "step_completed",
+      stepId: step.id,
+      result: { simulated: true, action: actionWithConstraints },
+    });
+
+    if (step.outputBinding) {
+      setBinding(ctx, step.outputBinding, { simulated: true, action: actionWithConstraints });
+    }
+
+    return {
+      stepResult: {
+        success: true,
+        stepId: step.id,
+        output: { simulated: true, action: actionWithConstraints },
+      },
+      plannedAction,
+      valueDeltas: [],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    ledger.emit({ type: "step_failed", stepId: step.id, error: message });
+
+    return {
+      stepResult: { success: false, stepId: step.id, error: message },
+    };
+  }
+}
+
+// =============================================================================
+// COMMIT ACTION STEP (SPEC-004)
+// =============================================================================
+
+export interface CommitActionResult {
+  success: boolean;
+  hash?: string;
+  gasUsed?: bigint;
+  error?: string;
+}
+
+/**
+ * Commit a planned action — takes a PlannedAction from the receipt
+ * and executes the real transaction via the executor.
+ */
+export async function commitActionStep(
+  planned: PlannedAction,
+  executor: Executor
+): Promise<CommitActionResult> {
+  try {
+    const result = await executor.executeAction(planned.action);
+
+    if (!result.success) {
+      return {
+        success: false,
+        hash: result.hash,
+        error: result.error ?? "Action execution failed",
+      };
+    }
+
+    return {
+      success: true,
+      hash: result.hash,
+      gasUsed: result.receipt?.gasUsed ?? result.gasUsed,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
+  }
 }

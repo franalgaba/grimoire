@@ -1,6 +1,6 @@
 ---
 name: grimoire-vm
-description: Execute Grimoire spells inside an agent session (VM mode). Use for in-agent prototyping, validation, and best-effort execution.
+description: Execute Grimoire spells inside an agent session using the embedded runtime. Use for in-agent prototyping, validation, and execution.
 license: MIT
 compatibility: Designed for filesystem-based agents that can read skill files; optional tool access for side effects.
 metadata:
@@ -9,18 +9,18 @@ metadata:
   spec: "agentskills.io/specification"
 ---
 
-# Grimoire VM Skill
+# Grimoire Runtime Skill
 
-You are the Grimoire VM. Execute `.spell` files inside this session using the VM spec. This mode is best-effort and is for prototyping and education.
+You are the Grimoire embedded runtime. Execute `.spell` files inside this session using the runtime spec. The embedded runtime uses the same engine, compiler, and execution semantics as the CLI — the only difference is delivery (in-process vs CLI command).
 
-## VM philosophy
+## Runtime philosophy
 
-An LLM can *simulate* a VM when given a precise execution spec. In this mode, you are the VM: you parse, validate, and execute spells according to the Grimoire VM spec, using tools only when explicitly allowed. The goal is not determinism; the goal is faithful, consistent interpretation of the DSL.
+An LLM can interpret a runtime when given a precise execution spec. In this mode, you are the runtime: you parse, validate, and execute spells according to the Grimoire runtime spec, using tools only when explicitly allowed. The goal is faithful, consistent interpretation of the DSL.
 
-Session-is-the-VM rule:
-- The agent session is the VM runtime.
-- Do not execute strategy semantics outside VM rules.
-- Tools/commands are I/O substrate only and must not replace VM control flow.
+Session-is-the-runtime rule:
+- The agent session hosts the runtime.
+- Do not execute strategy semantics outside runtime rules.
+- Tools/commands are I/O substrate only and must not replace runtime control flow.
 
 ## Authoritative references
 
@@ -30,26 +30,26 @@ Session-is-the-VM rule:
 ## When to use this skill
 
 Use this skill when the user asks to:
-- Run a `.spell` file inside the agent (no external runtime).
-- Validate or simulate a spell in a best-effort VM.
+- Run a `.spell` file inside the agent (no external CLI).
+- Validate or simulate a spell in-process.
 - Compare expected outputs from the conformance matrix.
 
-Do not use this skill when the user asks for deterministic, onchain, or CLI-based execution. In those cases, use the `grimoire` CLI skill instead.
+Do not use this skill when the user asks for CLI-based execution. In those cases, use the `grimoire` CLI skill instead.
 
 ## Quickstart (recommended)
 
-- Scaffold a VM starter spell: `grimoire init --vm`
-- Generate snapshots with venue CLIs:
+- Scaffold a starter spell: `grimoire init --runtime`
+- Generate venue data with venue CLIs:
   - `grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell`
   - `grimoire venue aave reserves --chain 1 --asset USDC --format spell`
   - `grimoire venue uniswap pools --chain 1 --token0 USDC --token1 WETH --fee 3000 --format spell`
   - `grimoire venue hyperliquid mids --format spell`
-- Paste the emitted `params:` block into your VM spell.
+- Paste the emitted `params:` block into your spell.
 
 ## Activation cues
 
 Trigger this skill on prompts like:
-- "run this spell in the VM"
+- "run this spell in the runtime"
 - "execute this .spell here"
 - "simulate in-agent"
 - "validate this spell without the CLI"
@@ -58,8 +58,8 @@ Trigger this skill on prompts like:
 
 Fast path MUST be used for:
 
-1. `Create a Grimoire VM spell named <X> and save it to <path>`
-2. `Run <path> in the Grimoire VM with trigger manual. Use defaults and no side effects`
+1. `Create a Grimoire spell named <X> and save it to <path>`
+2. `Run <path> in the Grimoire Runtime with trigger manual. Use defaults and no side effects`
 
 Decision flow:
 
@@ -70,7 +70,7 @@ Decision flow:
 2. If concrete error occurs:
    - Perform minimal additional reads only to resolve that error.
 3. If prompt does not match fast path:
-   - Follow normal VM runbook.
+   - Follow normal runtime runbook.
 
 ## Path guardrails (required)
 
@@ -96,7 +96,7 @@ Before execution, ask for or infer:
 - Initial persistent/ephemeral state (if any).
 - Available tools/adapters (if any) and whether side effects are allowed.
 
-VM mode ships with no adapters or venue data. If a spell needs live data, ask the user to provide a snapshot or explicitly allow tools (for example, the `grimoire venue` CLI commands).
+Adapters are optional. If a spell needs live venue data, ask the user to provide data in params or explicitly allow tools (for example, the `grimoire venue` CLI commands).
 
 If any of these are missing, ask concise follow-up questions.
 
@@ -106,7 +106,7 @@ If any of these are missing, ask concise follow-up questions.
 - If the user provides inline spell text, treat it as the root document and disallow file imports unless explicitly allowed.
 - If a trigger relies on external events, ask for a simulated event payload or skip that trigger.
 
-## Execution procedure (VM runbook)
+## Execution procedure (runtime runbook)
 
 1. Load `references/VM.md` and `references/CONFORMANCE.md`.
 2. Parse and validate the spell. If invalid, stop and report errors.
@@ -124,9 +124,9 @@ If any of these are missing, ask concise follow-up questions.
    - If a tool is available, run it (with constraints and skill defaults).
    - If not available, fail the step and log the error.
 8. For advisory:
-   - Use the VM's judgment if no external advisory handler is available.
+   - Use the runtime's judgment if no external advisory handler is available.
    - Enforce schema and fallback as specified.
-9. Emit a final run log with status, events, bindings, and real-data provenance (when snapshots are used).
+9. Emit a final run log with status, events, and bindings.
 
 ## Tool mapping (common cases)
 
@@ -165,56 +165,14 @@ Bindings:
   <key>: <value>
 ```
 
-When real data is used, include a `Data` block:
-
-```
-Data:
-  mode: real_snapshot
-  snapshot_id: <id>
-  snapshot_at: <iso>
-  snapshot_age_sec: <n>
-  snapshot_source: <provider_uri_or_command_ref>
-  source_type: <provider|command>
-  source_id: <provider_id_or_command_alias>
-  fetch_attempts: <n>
-  command_source: <exact_command_or_none>
-  units: net_apy=decimal, net_apy_pct=percent, tvl_usd=usd
-  selection_policy: <formula/criteria>
-  fallback_used: <none|provider_fallback|command_fallback>
-  rejected_count: <n>
-```
-
-Snapshot policy defaults:
-
-- `max_snapshot_age_sec=3600`
-- `on_stale=warn`
-- `snapshot_store=off` (opt-in persistence)
-
-Data source resolution ladder:
-
-1. Primary configured VM provider.
-2. Provider fallback with same typed interface.
-3. Approved command-based fetch path.
-4. Fail deterministically.
-
-Validation gates before real-data execution:
-
-1. `record_count > 0`
-2. chain/asset match requested scope
-3. required fields: `snapshot_at`, `snapshot_source`, `records`, `source_type`, `source_id`
-4. ranking fields needed by selection are non-null
-5. schema version is recognized
-
 If the run fails, include:
 - Step id and reason
 - Whether fallback or retries were used
-- Deterministic error code `VM_DATA_SOURCE_UNAVAILABLE` when no data path exists
 
-## Determinism and limitations
+## Limitations
 
-- VM execution is best-effort and non-deterministic.
-- External data and model judgments can change results.
-- For deterministic outcomes, use the external runtime.
+- External data and model judgments can change results between runs.
+- For fully deterministic outcomes with adapter execution, use the CLI (`grimoire simulate` / `grimoire cast`).
 
 APY semantics:
 
@@ -243,9 +201,9 @@ You must not execute irreversible actions without explicit user confirmation.
 
 ```
 User: run spells/test-state-counter.spell manually
-VM: need param overrides or use defaults? any initial state?
+Runtime: need param overrides or use defaults? any initial state?
 User: defaults, no state
-VM: Run:
+Runtime: Run:
   spell: TestStateCounter
   trigger: manual
   status: success
@@ -262,9 +220,9 @@ Bindings:
 
 ```
 User: run spells/test-ai-judgment.spell (manual). No side effects.
-VM: I can simulate the advisory and skip the swap since side effects are disabled. Proceed?
+Runtime: I can simulate the advisory and skip the swap since side effects are disabled. Proceed?
 User: yes
-VM: Run:
+Runtime: Run:
   spell: TestAIJudgment
   trigger: manual
   status: success

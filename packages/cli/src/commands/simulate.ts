@@ -113,7 +113,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
       console.log(chalk.yellow(`Warning: ${warning}`));
     }
 
-    spinner.text = "Executing simulation...";
+    spinner.text = "Running preview...";
     const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir) ?? [];
     const onAdvisory = await resolveAdvisoryHandler(spell.id, {
       advisoryPi: options.advisoryPi,
@@ -129,6 +129,7 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
       cwd: process.cwd(),
     });
 
+    // execute() with simulate:true internally uses preview()
     const result = await withStatePersistence(
       spell.id,
       {
@@ -152,9 +153,9 @@ export async function simulateCommand(spellPath: string, options: SimulateOption
     );
 
     if (result.success) {
-      spinner.succeed(chalk.green("Simulation completed successfully"));
+      spinner.succeed(chalk.green("Preview completed successfully"));
     } else {
-      spinner.fail(chalk.red(`Simulation failed: ${result.error}`));
+      spinner.fail(chalk.red(`Preview failed: ${result.error}`));
     }
 
     const report = buildRunReportEnvelope({

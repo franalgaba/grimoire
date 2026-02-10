@@ -1,0 +1,284 @@
+/**
+ * E2E tests for SPEC-004 Phase 1: Preview/Commit Foundation
+ */
+
+import { describe, expect, test } from "bun:test";
+import { compile, execute, preview } from "./index.js";
+import type { SpellIR } from "./types/ir.js";
+import type { Address } from "./types/primitives.js";
+
+function assertIR(
+  result: ReturnType<typeof compile>
+): asserts result is { success: true; ir: SpellIR; errors: never[]; warnings: never[] } {
+  if (!result.success || !result.ir) {
+    throw new Error(
+      `Expected successful compilation: ${result.errors.map((e) => e.message).join(", ")}`
+    );
+  }
+}
+
+const VAULT: Address = "0x0000000000000000000000000000000000000000";
+
+describe("SPEC-004 Phase 1 E2E", () => {
+  describe("preview → commit round trip", () => {
+    test("full preview for simple spell produces receipt", async () => {
+      const source = `spell RoundTrip {
+  version: "1.0.0"
+
+  params: {
+    amount: 100
+  }
+
+  on manual: {
+    result = params.amount * 2
+  }
+}`;
+      const compileResult = compile(source);
+      assertIR(compileResult);
+
+      const previewResult = await preview({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+      });
+
+      expect(previewResult.success).toBe(true);
+      expect(previewResult.receipt).toBeDefined();
+      expect(previewResult.receipt?.status).toBe("ready");
+      expect(previewResult.receipt?.plannedActions).toHaveLength(0);
+      expect(previewResult.receipt?.requiresApproval).toBe(false);
+    });
+  });
+
+  describe("execute() backward compat", () => {
+    test("execute() still returns ExecutionResult", async () => {
+      const source = `spell BackwardCompat {
+  version: "1.0.0"
+
+  params: {
+    x: 5
+  }
+
+  on manual: {
+    y = params.x * 10
+  }
+}`;
+      const compileResult = compile(source);
+      assertIR(compileResult);
+
+      const result = await execute({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+      });
+
+      // Same ExecutionResult shape as before
+      expect(result.success).toBe(true);
+      expect(result.runId).toBeDefined();
+      expect(result.startTime).toBeGreaterThan(0);
+      expect(result.endTime).toBeGreaterThanOrEqual(result.startTime);
+      expect(result.duration).toBeGreaterThanOrEqual(0);
+      expect(result.metrics).toBeDefined();
+      expect(result.metrics.stepsExecuted).toBeGreaterThan(0);
+      expect(result.finalState).toBeDefined();
+      expect(result.ledgerEvents).toBeInstanceOf(Array);
+    });
+
+    test("execute() with simulate:true uses preview internally", async () => {
+      const source = `spell SimulatePreview {
+  version: "1.0.0"
+
+  on manual: {
+    x = 1
+  }
+}`;
+      const compileResult = compile(source);
+      assertIR(compileResult);
+
+      const result = await execute({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+        simulate: true,
+      });
+
+      expect(result.success).toBe(true);
+      // Preview lifecycle events should be present
+      const eventTypes = result.ledgerEvents.map((e) => e.event.type);
+      expect(eventTypes).toContain("preview_started");
+      expect(eventTypes).toContain("preview_completed");
+    });
+  });
+
+  describe("Receipt schema matches SPEC-004", () => {
+    test("receipt has all required fields from §9.1", async () => {
+      const source = `spell ReceiptSchema {
+  version: "1.0.0"
+  assets: [ETH, USDC]
+
+  venues: {
+    uniswap: @uniswap
+  }
+
+  params: {
+    amount: 1000
+  }
+
+  on manual: {
+    uniswap.swap(ETH, USDC, params.amount)
+  }
+}`;
+      const compileResult = compile(source);
+      assertIR(compileResult);
+
+      const previewResult = await preview({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+      });
+
+      expect(previewResult.success).toBe(true);
+      const receipt = previewResult.receipt as NonNullable<typeof previewResult.receipt>;
+
+      // §9.1 required fields
+      expect(receipt.id).toBeDefined();
+      expect(receipt.spellId).toBeDefined();
+      expect(receipt.phase).toBe("preview");
+      expect(receipt.timestamp).toBeGreaterThan(0);
+      expect(receipt.chainContext).toBeDefined();
+      expect(receipt.chainContext.chainId).toBe(1);
+      expect(receipt.chainContext.vault).toBe(VAULT);
+      expect(receipt.guardResults).toBeInstanceOf(Array);
+      expect(receipt.advisoryResults).toBeInstanceOf(Array);
+      expect(receipt.plannedActions).toBeInstanceOf(Array);
+      expect(receipt.valueDeltas).toBeInstanceOf(Array);
+      expect(receipt.constraintResults).toBeInstanceOf(Array);
+      expect(receipt.driftKeys).toBeInstanceOf(Array);
+      expect(typeof receipt.requiresApproval).toBe("boolean");
+      expect(typeof receipt.status).toBe("string");
+      expect(receipt.metrics).toBeDefined();
+      expect(receipt.finalState).toBeDefined();
+    });
+  });
+
+  describe("inline advisory expressions", () => {
+    test("inline advisory expression now produces compilation error", () => {
+      const source = `spell InlineAdvisory {
+  version: "1.0.0"
+
+  on manual: {
+    if **is this safe** {
+      x = 1
+    }
+  }
+}`;
+      const compileResult = compile(source);
+      expect(compileResult.success).toBe(false);
+      expect(compileResult.errors.length).toBeGreaterThan(0);
+      const errorMessages = compileResult.errors.map((e) => e.message);
+      expect(errorMessages.some((m) => m.includes("Inline advisory expressions"))).toBe(true);
+    });
+  });
+
+  describe("migrated advisory spells", () => {
+    test("explicit advise binding compiles and executes", async () => {
+      const source = `spell ExplicitAdvise {
+  version: "1.0.0"
+
+  advisors: {
+    analyst: {
+      model: "anthropic:haiku"
+    }
+  }
+
+  on manual: {
+    decision = advise analyst: "should we proceed" {
+      output: {
+        type: boolean
+      }
+      timeout: 10
+      fallback: true
+    }
+    if decision {
+      result = "approved"
+    } else {
+      result = "rejected"
+    }
+  }
+}`;
+      const compileResult = compile(source);
+      expect(compileResult.success).toBe(true);
+      assertIR(compileResult);
+
+      const result = await execute({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+      });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("preview with state", () => {
+    test("preview preserves persistent state", async () => {
+      const source = `spell StatefulPreview {
+  version: "1.0.0"
+
+  state: {
+    persistent: {
+      counter: 0
+    }
+  }
+
+  on manual: {
+    counter = counter + 1
+  }
+}`;
+      const compileResult = compile(source);
+      assertIR(compileResult);
+
+      const result = await preview({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+        persistentState: { counter: 5 },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.receipt?.finalState.counter).toBe(6);
+    });
+  });
+
+  describe("preview with conditional", () => {
+    test("preview evaluates conditionals correctly", async () => {
+      const source = `spell ConditionalPreview {
+  version: "1.0.0"
+
+  params: {
+    threshold: 100
+    value: 150
+  }
+
+  on manual: {
+    if params.value > params.threshold {
+      result = "above"
+    } else {
+      result = "below"
+    }
+  }
+}`;
+      const compileResult = compile(source);
+      assertIR(compileResult);
+
+      const result = await preview({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.receipt?.status).toBe("ready");
+    });
+  });
+});

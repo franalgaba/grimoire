@@ -141,3 +141,21 @@ export type {
   LedgerEvent,
   LedgerEntry,
 } from "./execution.js";
+
+// Receipt / Value-Flow (SPEC-004)
+export type {
+  ValueDelta,
+  DriftKey,
+  DriftPolicy,
+  DriftCheckResult,
+  GuardResult,
+  AdvisoryResult,
+  PlannedAction,
+  PreviewProvenance,
+  ConstraintCheckResult,
+  ReceiptStatus,
+  Receipt,
+  PreviewResult,
+  CommitResult,
+  StructuredError,
+} from "./receipt.js";

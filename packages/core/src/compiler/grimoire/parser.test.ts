@@ -4,7 +4,6 @@
 
 import { describe, expect, test } from "bun:test";
 import type {
-  AdvisoryExpr,
   ArrayLiteralNode,
   AssetsSection,
   AssignmentNode,
@@ -675,7 +674,7 @@ describe("Parser", () => {
       expect((stmt.value as PercentageExpr).value).toBe(0.5);
     });
 
-    test("parses advisory expression in if condition", () => {
+    test("rejects inline advisory expression in if condition (SPEC-004)", () => {
       const source = `spell Test {
   version: "1.0.0"
 
@@ -685,13 +684,9 @@ describe("Parser", () => {
     }
   }
 }`;
-      const ast = parse(source);
-      const stmt = ast.triggers[0]?.body[0] as IfNode;
-      expect(stmt.condition.kind).toBe("advisory_expr");
-      if (stmt.condition.kind !== "advisory_expr") {
-        throw new Error("Expected advisory expression");
-      }
-      expect((stmt.condition as AdvisoryExpr).prompt).toBe("is this safe");
+      expect(() => parse(source)).toThrow(
+        "Inline advisory expressions (**...**) are no longer supported"
+      );
     });
   });
 

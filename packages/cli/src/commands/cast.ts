@@ -433,6 +433,7 @@ async function executeSimulation(
     cwd: process.cwd(),
   });
 
+  // execute() with simulate:true internally uses preview()
   const result = await withStatePersistence(
     spell.id,
     {
@@ -456,9 +457,9 @@ async function executeSimulation(
   );
 
   if (result.success) {
-    spinner.succeed(chalk.green("Simulation successful"));
+    spinner.succeed(chalk.green("Preview successful"));
   } else {
-    spinner.fail(chalk.red(`Simulation failed: ${result.error}`));
+    spinner.fail(chalk.red(`Preview failed: ${result.error}`));
   }
 
   const report = buildRunReportEnvelope({

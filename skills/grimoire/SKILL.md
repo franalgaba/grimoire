@@ -12,12 +12,12 @@ The Grimoire CLI compiles, validates, simulates, and executes `.spell` strategy 
 - You want deterministic execution with adapters (`simulate`, `cast`).
 - You need CLI-only workflows (compile, validate, history, logs, wallet).
 
-## VM vs deterministic
+## Embedded runtime vs CLI
 
-- **VM mode** runs inside an agent session and is best-effort. Use the `grimoire-vm` skill for in-agent execution.
-- **Deterministic runtime** runs via the CLI. This skill covers that runtime.
+- **Embedded runtime** runs in-process (imported from `@grimoirelabs/core`). Use the `grimoire-vm` skill for in-agent execution.
+- **CLI runtime** runs via the CLI with bundled adapters. This skill covers CLI workflows.
 
-For VM prototyping with snapshots, use the venue skills (`grimoire-aave`, `grimoire-uniswap`, `grimoire-morpho-blue`, `grimoire-hyperliquid`) with `--format spell`. For adapter-execution venue guidance, also use `grimoire-yellow` and `grimoire-lifi`.
+For prototyping with snapshots, use the venue skills (`grimoire-aave`, `grimoire-uniswap`, `grimoire-morpho-blue`, `grimoire-hyperliquid`) with `--format spell`.
 
 ## Commands
 

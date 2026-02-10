@@ -1,12 +1,24 @@
 /**
  * Spell Interpreter
- * Executes compiled SpellIR
+ * Executes compiled SpellIR via preview/commit model (SPEC-004)
  */
 
 import type { ExecutionContext, ExecutionResult, StepResult } from "../types/execution.js";
 import type { AdvisorDef, Guard, GuardDef, SpellIR } from "../types/ir.js";
 import type { PolicySet } from "../types/policy.js";
 import type { Address, ChainId } from "../types/primitives.js";
+import type {
+  AdvisoryResult,
+  CommitResult,
+  DriftCheckResult,
+  DriftPolicy,
+  GuardResult,
+  PlannedAction,
+  PreviewResult,
+  Receipt,
+  ReceiptStatus,
+  ValueDelta,
+} from "../types/receipt.js";
 import type { Step } from "../types/steps.js";
 import type { VenueAdapter } from "../venues/types.js";
 import { type ExecutionMode, createExecutor } from "../wallet/executor.js";
@@ -24,7 +36,12 @@ import { type EvalContext, createEvalContext, evaluateAsync } from "./expression
 import { resolveAdvisorSkill } from "./skills/registry.js";
 
 // Step executors
-import { type ActionExecutionOptions, executeActionStep } from "./steps/action.js";
+import {
+  type ActionExecutionOptions,
+  commitActionStep,
+  executeActionStep,
+  previewActionStep,
+} from "./steps/action.js";
 import { type AdvisoryHandler, executeAdvisoryStep } from "./steps/advisory.js";
 import { executeComputeStep } from "./steps/compute.js";
 import { executeConditionalStep } from "./steps/conditional.js";
@@ -35,6 +52,10 @@ import { executeParallelStep } from "./steps/parallel.js";
 import { executePipelineStep } from "./steps/pipeline.js";
 import { executeTryStep } from "./steps/try.js";
 import { executeWaitStep } from "./steps/wait.js";
+
+// =============================================================================
+// EXECUTE OPTIONS (backward-compat)
+// =============================================================================
 
 /**
  * Options for executing a spell
@@ -78,36 +99,54 @@ export interface ExecuteOptions {
   onAdvisory?: AdvisoryHandler;
 }
 
+// =============================================================================
+// PREVIEW OPTIONS & FUNCTION
+// =============================================================================
+
 /**
- * Execute a compiled spell
+ * Options for previewing a spell (simulation / receipt generation)
  */
-export async function execute(options: ExecuteOptions): Promise<ExecutionResult> {
-  const { spell, vault, chain, params = {}, persistentState = {}, simulate = false } = options;
+export interface PreviewOptions {
+  spell: SpellIR;
+  vault: Address;
+  chain: ChainId;
+  params?: Record<string, unknown>;
+  persistentState?: Record<string, unknown>;
+  adapters?: VenueAdapter[];
+  policy?: PolicySet;
+  advisorSkillsDirs?: string[];
+  onAdvisory?: AdvisoryHandler;
+  progressCallback?: (message: string) => void;
+}
 
-  const actionMode = resolveExecutionMode(options, simulate);
-  const actionExecution = createActionExecutionOptions(options, actionMode, chain);
+/**
+ * Preview a spell — runs the full step loop in simulation mode,
+ * collects PlannedActions and ValueDeltas, and assembles a Receipt.
+ */
+export async function preview(options: PreviewOptions): Promise<PreviewResult> {
+  const { spell, vault, chain, params = {}, persistentState = {} } = options;
 
-  // Initialize circuit breaker manager if policy has breakers
+  // Always simulate during preview
+  const actionExecution: ActionExecutionOptions = { mode: "simulate" };
+
   if (options.policy?.circuitBreakers?.length) {
     actionExecution.circuitBreakerManager = new CircuitBreakerManager(
       options.policy.circuitBreakers
     );
   }
 
-  // Create execution context
-  const ctx = createContext({
-    spell,
-    vault,
-    chain,
-    params,
-    persistentState,
-  });
+  const ctx = createContext({ spell, vault, chain, params, persistentState });
   ctx.advisorTooling = buildAdvisorTooling(spell.advisors, options.advisorSkillsDirs);
 
-  // Create ledger
   const ledger = new InMemoryLedger(ctx.runId, spell.id);
+  const guardResults: GuardResult[] = [];
+  const advisoryResults: AdvisoryResult[] = [];
+  const plannedActions: PlannedAction[] = [];
+  const valueDeltas: ValueDelta[] = [];
 
-  // Log run start
+  const receiptId = `rcpt_${ctx.runId}`;
+
+  ledger.emit({ type: "preview_started", runId: ctx.runId, spellId: spell.id });
   ledger.emit({
     type: "run_started",
     runId: ctx.runId,
@@ -116,110 +155,397 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
   });
 
   try {
-    // Check pre-execution guards
-    const guardResult = await checkGuards(spell.guards, ctx, ledger);
-    if (!guardResult.success) {
-      throw new Error(`Guard failed: ${guardResult.error}`);
+    // Check pre-execution guards and collect results
+    const guardCheck = await checkGuards(spell.guards, ctx, ledger);
+    collectGuardResults(guardResults, spell.guards, guardCheck);
+
+    if (!guardCheck.success) {
+      const receipt = buildReceipt({
+        id: receiptId,
+        spell,
+        ctx,
+        guardResults,
+        advisoryResults,
+        plannedActions,
+        valueDeltas,
+        status: "rejected",
+        error: `Guard failed: ${guardCheck.error}`,
+      });
+
+      ledger.emit({ type: "receipt_generated", receiptId });
+      ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "rejected" });
+
+      return {
+        success: false,
+        receipt,
+        error: `Guard failed: ${guardCheck.error}`,
+        ledgerEvents: ledger.getEntries(),
+      };
     }
 
-    // Build step map for quick lookup
+    // Run step loop in preview mode — action steps produce PlannedActions instead of executing
     const stepMap = new Map(spell.steps.map((s) => [s.id, s]));
+    const stepLoopResult = await executeStepLoop(
+      spell,
+      ctx,
+      ledger,
+      stepMap,
+      actionExecution,
+      options.onAdvisory,
+      { isPreview: true, plannedActions, valueDeltas, advisoryResults }
+    );
 
-    // Execute steps in order (topological sort would be ideal, but for now sequential)
-    for (const step of spell.steps) {
-      // Skip steps already executed by a parent (try/loop/conditional)
-      if (ctx.executedSteps.includes(step.id)) {
-        continue;
-      }
-
-      // Check dependencies
-      for (const depId of step.dependsOn) {
-        if (!ctx.executedSteps.includes(depId)) {
-          throw new Error(`Step '${step.id}' depends on '${depId}' which has not been executed`);
-        }
-      }
-
-      // Execute step
-      const result = await executeStep(
-        step,
+    if (!stepLoopResult.success) {
+      const receipt = buildReceipt({
+        id: receiptId,
+        spell,
         ctx,
-        ledger,
-        stepMap,
-        actionExecution,
-        options.onAdvisory
-      );
+        guardResults,
+        advisoryResults,
+        plannedActions,
+        valueDeltas,
+        status: "rejected",
+        error: stepLoopResult.error,
+      });
 
-      // Mark all child steps of container steps (try/loop/conditional) as executed
-      // so the main loop doesn't re-execute them standalone
-      for (const childId of getChildStepIds(step)) {
-        if (!ctx.executedSteps.includes(childId)) {
-          markStepExecuted(ctx, childId);
-        }
-      }
+      ledger.emit({ type: "receipt_generated", receiptId });
+      ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "rejected" });
 
-      // Enrich step_failed ledger events with source location
-      if (!result.success) {
-        const loc = spell.sourceMap?.[step.id];
-        if (loc) {
-          enrichStepFailedEvents(ledger, step.id, loc);
-        }
-      }
+      return {
+        success: false,
+        receipt,
+        error: stepLoopResult.error,
+        ledgerEvents: ledger.getEntries(),
+      };
+    }
 
-      // Handle halt
-      if (result.halted) {
-        ledger.emit({
-          type: "run_completed",
-          runId: ctx.runId,
+    // Post-execution guards
+    const postGuardCheck = await checkGuards(spell.guards, ctx, ledger);
+    if (!postGuardCheck.success && postGuardCheck.severity === "halt") {
+      const receipt = buildReceipt({
+        id: receiptId,
+        spell,
+        ctx,
+        guardResults,
+        advisoryResults,
+        plannedActions,
+        valueDeltas,
+        status: "rejected",
+        error: `Post-execution guard failed: ${postGuardCheck.error}`,
+      });
+
+      ledger.emit({ type: "receipt_generated", receiptId });
+      ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "rejected" });
+
+      return { success: false, receipt, error: receipt.error, ledgerEvents: ledger.getEntries() };
+    }
+
+    const requiresApproval = plannedActions.length > 0;
+    const receipt = buildReceipt({
+      id: receiptId,
+      spell,
+      ctx,
+      guardResults,
+      advisoryResults,
+      plannedActions,
+      valueDeltas,
+      status: "ready",
+    });
+
+    if (requiresApproval) {
+      ledger.emit({
+        type: "approval_required",
+        receiptId,
+        reason: "Planned actions require approval",
+      });
+    }
+
+    ledger.emit({ type: "receipt_generated", receiptId });
+    ledger.emit({
+      type: "run_completed",
+      runId: ctx.runId,
+      success: true,
+      metrics: ctx.metrics,
+    });
+    ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "ready" });
+
+    return { success: true, receipt, ledgerEvents: ledger.getEntries() };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    ledger.emit({ type: "run_failed", runId: ctx.runId, error: message });
+    ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "rejected" });
+
+    return { success: false, error: message, ledgerEvents: ledger.getEntries() };
+  }
+}
+
+// =============================================================================
+// COMMIT OPTIONS & FUNCTION
+// =============================================================================
+
+/**
+ * Options for committing a previewed receipt
+ */
+export interface CommitOptions {
+  receipt: Receipt;
+  wallet: Wallet;
+  provider?: Provider;
+  rpcUrl?: string;
+  gasMultiplier?: number;
+  adapters?: VenueAdapter[];
+  confirmCallback?: (message: string) => Promise<boolean>;
+  progressCallback?: (message: string) => void;
+  skipTestnetConfirmation?: boolean;
+  driftPolicy?: DriftPolicy;
+}
+
+/**
+ * Commit a receipt — executes planned actions from the preview.
+ */
+export async function commit(options: CommitOptions): Promise<CommitResult> {
+  const { receipt, wallet } = options;
+  const runId = receipt.id.replace("rcpt_", "");
+  const ledger = new InMemoryLedger(runId, receipt.spellId);
+
+  ledger.emit({ type: "commit_started", runId, receiptId: receipt.id });
+
+  // Validate receipt status
+  if (receipt.status !== "ready") {
+    ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+    return {
+      success: false,
+      receiptId: receipt.id,
+      transactions: [],
+      driftChecks: [],
+      finalState: receipt.finalState,
+      ledgerEvents: ledger.getEntries(),
+      error: `Receipt status is '${receipt.status}', expected 'ready'`,
+    };
+  }
+
+  // Check receipt age
+  if (options.driftPolicy?.maxAge) {
+    const ageSec = (Date.now() - receipt.timestamp) / 1000;
+    if (ageSec > options.driftPolicy.maxAge) {
+      ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+      return {
+        success: false,
+        receiptId: receipt.id,
+        transactions: [],
+        driftChecks: [],
+        finalState: receipt.finalState,
+        ledgerEvents: ledger.getEntries(),
+        error: `Receipt expired: age ${Math.round(ageSec)}s exceeds maxAge ${options.driftPolicy.maxAge}s`,
+      };
+    }
+  }
+
+  // Run drift checks (placeholder — real drift checking in Phase 2)
+  const driftChecks: DriftCheckResult[] = receipt.driftKeys.map((dk) => {
+    const result: DriftCheckResult = {
+      field: dk.field,
+      passed: true,
+      previewValue: dk.previewValue,
+      commitValue: dk.previewValue, // Same for now — real fetch in Phase 2
+    };
+    ledger.emit({
+      type: "drift_check",
+      field: dk.field,
+      passed: true,
+      previewValue: dk.previewValue,
+      commitValue: dk.previewValue,
+    });
+    return result;
+  });
+
+  // Execute planned actions
+  const { chainId } = receipt.chainContext;
+  const provider = options.provider ?? createProvider(chainId, options.rpcUrl);
+  const executor = createExecutor({
+    wallet,
+    provider,
+    mode: "execute",
+    gasMultiplier: options.gasMultiplier,
+    confirmCallback: options.confirmCallback,
+    progressCallback: options.progressCallback,
+    skipTestnetConfirmation: options.skipTestnetConfirmation,
+    adapters: options.adapters,
+  });
+
+  const transactions: CommitResult["transactions"] = [];
+
+  for (const planned of receipt.plannedActions) {
+    try {
+      const txResult = await commitActionStep(planned, executor);
+
+      if (txResult.success) {
+        transactions.push({
+          stepId: planned.stepId,
+          hash: txResult.hash,
+          gasUsed: txResult.gasUsed,
           success: true,
-          metrics: ctx.metrics,
         });
 
+        if (txResult.hash) {
+          ledger.emit({
+            type: "action_submitted",
+            action: planned.action,
+            txHash: txResult.hash,
+          });
+        }
+        if (txResult.gasUsed !== undefined) {
+          ledger.emit({
+            type: "action_confirmed",
+            txHash: txResult.hash ?? "",
+            gasUsed: txResult.gasUsed.toString(),
+          });
+        }
+      } else {
+        transactions.push({
+          stepId: planned.stepId,
+          hash: txResult.hash,
+          success: false,
+          error: txResult.error,
+        });
+
+        ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
         return {
-          success: true,
-          runId: ctx.runId,
-          startTime: ctx.startTime,
-          endTime: Date.now(),
-          duration: Date.now() - ctx.startTime,
-          metrics: ctx.metrics,
-          finalState: getPersistentStateObject(ctx),
+          success: false,
+          receiptId: receipt.id,
+          transactions,
+          driftChecks,
+          finalState: receipt.finalState,
           ledgerEvents: ledger.getEntries(),
+          error: `Action step '${planned.stepId}' failed: ${txResult.error}`,
         };
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      transactions.push({ stepId: planned.stepId, success: false, error: message });
 
-      // Handle failure
-      if (!result.success) {
-        const onFailure = "onFailure" in step ? step.onFailure : "revert";
-        const loc = spell.sourceMap?.[step.id];
-        const locSuffix = loc ? ` at line ${loc.line}, column ${loc.column}` : "";
+      ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+      return {
+        success: false,
+        receiptId: receipt.id,
+        transactions,
+        driftChecks,
+        finalState: receipt.finalState,
+        ledgerEvents: ledger.getEntries(),
+        error: message,
+      };
+    }
+  }
 
-        switch (onFailure) {
-          case "halt":
-            throw new Error(`Step '${step.id}' failed${locSuffix}: ${result.error}`);
-          case "revert":
-            throw new Error(`Step '${step.id}' failed${locSuffix}: ${result.error}`);
-          case "skip":
-            ledger.emit({
-              type: "step_skipped",
-              stepId: step.id,
-              reason: result.error ?? "Unknown error",
-            });
-            continue;
-          case "catch":
-            // Would be handled by try/catch step
-            continue;
-        }
-      }
+  ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: true });
 
-      markStepExecuted(ctx, step.id);
+  return {
+    success: true,
+    receiptId: receipt.id,
+    transactions,
+    driftChecks,
+    finalState: receipt.finalState,
+    ledgerEvents: ledger.getEntries(),
+  };
+}
+
+// =============================================================================
+// EXECUTE (backward-compatible wrapper)
+// =============================================================================
+
+/**
+ * Execute a compiled spell (backward-compatible wrapper).
+ * Internally uses preview() and, if needed, commit().
+ */
+export async function execute(options: ExecuteOptions): Promise<ExecutionResult> {
+  const { spell, vault, chain, params = {}, persistentState = {}, simulate = false } = options;
+
+  const actionMode = resolveExecutionMode(options, simulate);
+
+  // If we're simulating or have no wallet, use preview-only path
+  if (actionMode === "simulate" || !options.wallet) {
+    const previewResult = await preview({
+      spell,
+      vault,
+      chain,
+      params,
+      persistentState,
+      adapters: options.adapters,
+      policy: options.policy,
+      advisorSkillsDirs: options.advisorSkillsDirs,
+      onAdvisory: options.onAdvisory,
+      progressCallback: options.progressCallback,
+    });
+
+    return convertPreviewToExecutionResult(previewResult, spell);
+  }
+
+  // Full execute path: run the original step loop with real action execution
+  const actionExecution = createActionExecutionOptions(options, actionMode, chain);
+
+  if (options.policy?.circuitBreakers?.length) {
+    actionExecution.circuitBreakerManager = new CircuitBreakerManager(
+      options.policy.circuitBreakers
+    );
+  }
+
+  const ctx = createContext({ spell, vault, chain, params, persistentState });
+  ctx.advisorTooling = buildAdvisorTooling(spell.advisors, options.advisorSkillsDirs);
+
+  const ledger = new InMemoryLedger(ctx.runId, spell.id);
+
+  ledger.emit({
+    type: "run_started",
+    runId: ctx.runId,
+    spellId: spell.id,
+    trigger: ctx.trigger,
+  });
+
+  try {
+    const guardCheck = await checkGuards(spell.guards, ctx, ledger);
+    if (!guardCheck.success) {
+      throw new Error(`Guard failed: ${guardCheck.error}`);
     }
 
-    // Check post-execution guards
-    const postGuardResult = await checkGuards(spell.guards, ctx, ledger);
-    if (!postGuardResult.success && postGuardResult.severity === "halt") {
-      throw new Error(`Post-execution guard failed: ${postGuardResult.error}`);
+    const stepMap = new Map(spell.steps.map((s) => [s.id, s]));
+    const stepLoopResult = await executeStepLoop(
+      spell,
+      ctx,
+      ledger,
+      stepMap,
+      actionExecution,
+      options.onAdvisory
+    );
+
+    if (!stepLoopResult.success) {
+      throw new Error(stepLoopResult.error);
     }
 
-    // Log run completion
+    if (stepLoopResult.halted) {
+      ledger.emit({
+        type: "run_completed",
+        runId: ctx.runId,
+        success: true,
+        metrics: ctx.metrics,
+      });
+
+      return {
+        success: true,
+        runId: ctx.runId,
+        startTime: ctx.startTime,
+        endTime: Date.now(),
+        duration: Date.now() - ctx.startTime,
+        metrics: ctx.metrics,
+        finalState: getPersistentStateObject(ctx),
+        ledgerEvents: ledger.getEntries(),
+      };
+    }
+
+    const postGuardCheck = await checkGuards(spell.guards, ctx, ledger);
+    if (!postGuardCheck.success && postGuardCheck.severity === "halt") {
+      throw new Error(`Post-execution guard failed: ${postGuardCheck.error}`);
+    }
+
     ledger.emit({
       type: "run_completed",
       runId: ctx.runId,
@@ -240,11 +566,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
-    ledger.emit({
-      type: "run_failed",
-      runId: ctx.runId,
-      error: message,
-    });
+    ledger.emit({ type: "run_failed", runId: ctx.runId, error: message });
 
     return {
       success: false,
@@ -257,6 +579,203 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
       finalState: getPersistentStateObject(ctx),
       ledgerEvents: ledger.getEntries(),
     };
+  }
+}
+
+// =============================================================================
+// SHARED STEP LOOP
+// =============================================================================
+
+interface StepLoopCollectors {
+  isPreview: boolean;
+  plannedActions?: PlannedAction[];
+  valueDeltas?: ValueDelta[];
+  advisoryResults?: AdvisoryResult[];
+}
+
+interface StepLoopResult {
+  success: boolean;
+  halted?: boolean;
+  error?: string;
+}
+
+/**
+ * Shared step execution loop used by both preview() and execute().
+ */
+async function executeStepLoop(
+  spell: SpellIR,
+  ctx: ExecutionContext,
+  ledger: InMemoryLedger,
+  stepMap: Map<string, Step>,
+  actionExecution: ActionExecutionOptions,
+  advisoryHandler?: AdvisoryHandler,
+  collectors?: StepLoopCollectors
+): Promise<StepLoopResult> {
+  for (const step of spell.steps) {
+    if (ctx.executedSteps.includes(step.id)) {
+      continue;
+    }
+
+    for (const depId of step.dependsOn) {
+      if (!ctx.executedSteps.includes(depId)) {
+        return {
+          success: false,
+          error: `Step '${step.id}' depends on '${depId}' which has not been executed`,
+        };
+      }
+    }
+
+    // In preview mode, action steps go through previewActionStep
+    let result: StepResult;
+    if (collectors?.isPreview && step.kind === "action") {
+      const previewResult = await previewActionStep(step, ctx, ledger, actionExecution);
+      result = previewResult.stepResult;
+      if (previewResult.plannedAction) {
+        collectors.plannedActions?.push(previewResult.plannedAction);
+      }
+      if (previewResult.valueDeltas?.length) {
+        collectors.valueDeltas?.push(...previewResult.valueDeltas);
+        for (const delta of previewResult.valueDeltas) {
+          ledger.emit({ type: "value_delta", delta });
+        }
+      }
+    } else if (collectors?.isPreview && step.kind === "advisory") {
+      result = await executeAdvisoryStep(step, ctx, ledger, advisoryHandler);
+      if (result.success) {
+        collectors.advisoryResults?.push({
+          stepId: step.id,
+          advisor: step.advisor,
+          output: result.output,
+          fallback: result.fallback ?? false,
+        });
+      }
+    } else {
+      result = await executeStep(step, ctx, ledger, stepMap, actionExecution, advisoryHandler);
+    }
+
+    for (const childId of getChildStepIds(step)) {
+      if (!ctx.executedSteps.includes(childId)) {
+        markStepExecuted(ctx, childId);
+      }
+    }
+
+    if (!result.success) {
+      const loc = spell.sourceMap?.[step.id];
+      if (loc) {
+        enrichStepFailedEvents(ledger, step.id, loc);
+      }
+    }
+
+    if (result.halted) {
+      return { success: true, halted: true };
+    }
+
+    if (!result.success) {
+      const onFailure = "onFailure" in step ? step.onFailure : "revert";
+      const loc = spell.sourceMap?.[step.id];
+      const locSuffix = loc ? ` at line ${loc.line}, column ${loc.column}` : "";
+
+      switch (onFailure) {
+        case "halt":
+          return { success: false, error: `Step '${step.id}' failed${locSuffix}: ${result.error}` };
+        case "revert":
+          return { success: false, error: `Step '${step.id}' failed${locSuffix}: ${result.error}` };
+        case "skip":
+          ledger.emit({
+            type: "step_skipped",
+            stepId: step.id,
+            reason: result.error ?? "Unknown error",
+          });
+          continue;
+        case "catch":
+          continue;
+      }
+    }
+
+    markStepExecuted(ctx, step.id);
+  }
+
+  return { success: true };
+}
+
+// =============================================================================
+// HELPERS
+// =============================================================================
+
+function convertPreviewToExecutionResult(
+  previewResult: PreviewResult,
+  _spell: SpellIR
+): ExecutionResult {
+  const receipt = previewResult.receipt;
+  const now = Date.now();
+  const startTime = receipt?.timestamp ?? now;
+
+  return {
+    success: previewResult.success,
+    runId: receipt?.id.replace("rcpt_", "") ?? `preview_${now}`,
+    startTime,
+    endTime: now,
+    duration: now - startTime,
+    error: previewResult.error,
+    metrics: receipt?.metrics ?? {
+      stepsExecuted: 0,
+      actionsExecuted: 0,
+      gasUsed: 0n,
+      advisoryCalls: 0,
+      errors: 0,
+      retries: 0,
+    },
+    finalState: receipt?.finalState ?? {},
+    ledgerEvents: previewResult.ledgerEvents,
+  };
+}
+
+function buildReceipt(opts: {
+  id: string;
+  spell: SpellIR;
+  ctx: ExecutionContext;
+  guardResults: GuardResult[];
+  advisoryResults: AdvisoryResult[];
+  plannedActions: PlannedAction[];
+  valueDeltas: ValueDelta[];
+  status: ReceiptStatus;
+  error?: string;
+}): Receipt {
+  return {
+    id: opts.id,
+    spellId: opts.spell.id,
+    phase: "preview",
+    timestamp: Date.now(),
+    chainContext: {
+      chainId: opts.ctx.chain,
+      vault: opts.ctx.vault,
+    },
+    guardResults: opts.guardResults,
+    advisoryResults: opts.advisoryResults,
+    plannedActions: opts.plannedActions,
+    valueDeltas: opts.valueDeltas,
+    constraintResults: [],
+    driftKeys: [],
+    requiresApproval: opts.plannedActions.length > 0,
+    status: opts.status,
+    metrics: { ...opts.ctx.metrics },
+    finalState: getPersistentStateObject(opts.ctx),
+    error: opts.error,
+  };
+}
+
+function collectGuardResults(
+  guardResults: GuardResult[],
+  guards: GuardDef[],
+  check: { success: boolean; error?: string; severity?: string }
+): void {
+  for (const guard of guards) {
+    guardResults.push({
+      guardId: guard.id,
+      passed: check.success,
+      severity: check.severity ?? ("severity" in guard ? String(guard.severity) : "warn"),
+      message: check.success ? undefined : check.error,
+    });
   }
 }
 
@@ -556,8 +1075,6 @@ async function checkGuards(
 
 /**
  * Enrich step_failed ledger events with source location info.
- * Scans recent events to find step_failed events for the given stepId
- * and adds line/column from the source map.
  */
 function enrichStepFailedEvents(
   ledger: InMemoryLedger,

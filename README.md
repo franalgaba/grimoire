@@ -6,19 +6,19 @@
 
 Grimoire is a language for agents to express financial intent with readable syntax and deterministic execution. Spells compile to an intermediate representation (IR) and run through protocol adapters, so you can swap venues by changing aliases and configuration instead of rewriting strategy logic.
 
-[Docs](./docs/README.md) | [Examples](./spells) | [Skills](./skills)
+[Examples](./spells) | [Skills](./skills)
 
 ---
 
 ## Start here
 
-Grimoire runs in two execution environments. The spell syntax is the same; the guarantees are different.
+Grimoire runs in two delivery modes. Same engine, same spell syntax.
 
-### VM mode (in-agent, best-effort)
+### Embedded runtime (in-process library)
 
-Use this when you want to run inside an agent session for prototyping and reviews. VM mode does not bundle adapters, but it can use real venue data when the agent is allowed to run tools (for example, `grimoire venue ...`).
+Use this when you want to import the Grimoire engine into your application or agent. Adapters are optional — you can pass them in or use venue data for prototyping.
 
-Install the VM skill:
+Install the runtime skill:
 
 ```bash
 npx skills add https://github.com/franalgaba/grimoire
@@ -35,14 +35,14 @@ cp -R skills/grimoire-vm "$SKILLS_DIR/grimoire-vm"
 Copy/paste demo (agent prompts):
 
 ```
-Create a Grimoire VM spell named MorphoYieldOptimizer and save it to spells/morpho-yield-optimizer-vm.spell.
+Create a Grimoire spell named MorphoYieldOptimizer and save it to spells/morpho-yield-optimizer.spell.
 Use a snapshot params block, ignore markets with TVL < 5,000,000, and recommend switching when the spread over the current market is > 0.5%. Include a demo snapshot with 3 Morpho USDC markets and emit candidate + recommendation/hold events. No side effects.
 ```
 
-Run it in VM mode:
+Run it:
 
 ```
-Run spells/morpho-yield-optimizer-vm.spell in the Grimoire VM with trigger manual. Use defaults and no side effects.
+Run spells/morpho-yield-optimizer.spell in the Grimoire Runtime with trigger manual. Use defaults and no side effects.
 ```
 
 Want real data? Replace the `params:` block with live snapshots:
@@ -51,15 +51,15 @@ Want real data? Replace the `params:` block with live snapshots:
 grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
 ```
 
-For quick protocol prototyping, use the venue CLI to fetch metadata or snapshot `params:` blocks for VM runs. Execution still happens inside the agent session.
+For quick protocol prototyping, use the venue CLI to fetch metadata or snapshot `params:` blocks. Execution uses the same engine whether in-agent or via CLI.
 
-Next steps: [run-grimoire-vm.md](./docs/how-to/run-grimoire-vm.md), [vm-quickstart.md](./docs/how-to/vm-quickstart.md)
+See `@grimoirelabs/core` for the embedded runtime API.
 
 ### Deterministic runtime (CLI)
 
 Use this for reproducible simulation and onchain execution with adapters and state persistence.
 
-Suggested flow: explore in VM → record advisory in CLI simulate → replay deterministically in cast.
+Suggested flow: explore in embedded runtime → record advisory in CLI simulate → replay deterministically in cast.
 
 ```bash
 npm i -g @grimoirelabs/cli
@@ -80,7 +80,7 @@ grimoire cast spells/uniswap-swap-execute.spell --key-env PRIVATE_KEY --rpc-url 
 
 Advisory steps (`**...**` and `advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell’s fallback. Record advisory outputs with `simulate` (or `cast --dry-run`), then replay deterministically with `--advisory-replay` for live execution.
 
-Next steps: [cli-cast.md](./docs/how-to/cli-cast.md), [transition-to-deterministic.md](./docs/how-to/transition-to-deterministic.md)
+See `grimoire --help` for all CLI commands.
 
 ---
 
@@ -119,44 +119,20 @@ spell YieldOptimizer {
 - **Judgment boundary** with `**...**` and `advise`
 - **Structured control flow** (loops, conditionals, try/catch, atomic)
 - **State persistence** and run history for deterministic execution
-- **Two execution environments**: in-agent VM and deterministic runtime
-
-## DefiHack Multi-Track
-
-The `spells/defihack/` folder provides one coherent flow that maps to multiple tracks:
-
-| Track | Integration | Spell path |
-|---|---|---|
-| Yellow Network | `yellow` offchain app-session lifecycle | `spells/defihack/yellow-session-track.spell` |
-| Uniswap Foundation (v4) + LI.FI | unified liquidity flow with shared skill | `spells/defihack/liquidity-mesh-track.spell` |
-| Prompt-first E2E | VM creation prompts + deterministic CLI validation | `spells/defihack/README.md` |
-
-Primary end-to-end runbook:
-
-```bash
-cd packages/cli
-bun run --filter @grimoirelabs/cli dev compile-all ../../spells/defihack --json
-bun run --filter @grimoirelabs/cli dev simulate ../../spells/defihack/yellow-session-track.spell --no-state --json
-bun run --filter @grimoirelabs/cli dev simulate ../../spells/defihack/liquidity-mesh-track.spell --no-state --json
-bun run --filter @grimoirelabs/cli dev cast ../../spells/defihack/yellow-session-track.spell --dry-run --no-state --json
-bun run --filter @grimoirelabs/cli dev cast ../../spells/defihack/liquidity-mesh-track.spell --dry-run --no-state --json
-```
+- **Two delivery modes**: embedded runtime (in-process library) and CLI
 
 ENS profile hydration is available on CLI runs via `--ens-name` and `--ens-rpc-url`.
 
 ## Documentation
 
-- Start here: [docs/README.md](./docs/README.md)
-- Spell syntax: [docs/reference/spell-syntax.md](./docs/reference/spell-syntax.md)
-- CLI: [docs/reference/cli.md](./docs/reference/cli.md)
-- VM spec: [docs/reference/grimoire-vm.md](./docs/reference/grimoire-vm.md)
+Documentation is being rewritten. Check the `docs/` directory when available.
 
 ## Updating
 
 - Update the CLI: `npm i -g @grimoirelabs/cli@latest`
 - Use `npx` for latest without install: `npx -y @grimoirelabs/cli@latest <command>`
 - Update packages in your project: `npm i @grimoirelabs/core@latest @grimoirelabs/venues@latest`
-- Update the VM skill: re-install with `npx skills add https://github.com/franalgaba/grimoire` (or copy `skills/grimoire-vm` into your agent skills directory again)
+- Update the runtime skill: re-install with `npx skills add https://github.com/franalgaba/grimoire` (or copy `skills/grimoire-vm` into your agent skills directory again)
 
 ## Development
 
@@ -165,7 +141,7 @@ bun install
 bun run validate
 ```
 
-For onchain tests and advanced workflows, see [docs/how-to/run-tests.md](./docs/how-to/run-tests.md).
+For onchain tests and advanced workflows, see the docs when available.
 
 ## License
 
