@@ -65,8 +65,11 @@ See `docs/reference/compiler-runtime.md` for `compile`, `preview`, `commit`, `ex
 
 Use skills in `skills/` so agents can work immediately with Grimoire:
 
+- install: `npx skills add https://github.com/franalgaba/grimoire`
 - `skills/grimoire/` for install, CLI usage, syntax starter, and runbook
 - venue skills for snapshot params (`skills/grimoire-aave/`, `skills/grimoire-uniswap/`, `skills/grimoire-morpho-blue/`, `skills/grimoire-hyperliquid/`)
+
+For Claude Code, run the same install command in the Claude Code terminal and start a new session to load the skills.
 
 ---
 

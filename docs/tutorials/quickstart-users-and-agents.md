@@ -69,7 +69,15 @@ grimoire simulate spells/hello.spell
 
 ## 4. Agent-Assisted Workflow
 
-If you are using an agent, load the Grimoire skills from `skills/`:
+Install Grimoire skills:
+
+```bash
+npx skills add https://github.com/franalgaba/grimoire
+```
+
+If you are using Claude Code, run the same command in the Claude Code terminal and then start a new session so installed skills are loaded.
+
+Installed skill set includes:
 
 - `skills/grimoire/` for core CLI workflow
 - `skills/grimoire-aave/` for Aave snapshots
@@ -99,6 +107,7 @@ grimoire cast <spell> --chain <id> --key-env PRIVATE_KEY --rpc-url <rpc>
 
 - `docs/tutorials/first-spell.md`
 - `docs/tutorials/preview-to-commit.md`
+- `docs/how-to/install-grimoire-skills.md`
 - `docs/how-to/use-advisory-decisions.md`
 - `docs/reference/spell-syntax.md`
 - `docs/reference/cli.md`

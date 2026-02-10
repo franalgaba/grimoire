@@ -29,6 +29,7 @@ docs/
 
 ### How-to Guides
 
+- `docs/how-to/install-grimoire-skills.md`
 - `docs/how-to/run-tests.md`
 - `docs/how-to/bridge-with-across.md`
 - `docs/how-to/use-advisory-decisions.md`
