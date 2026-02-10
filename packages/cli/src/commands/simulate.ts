@@ -70,7 +70,13 @@ export async function simulateCommand(
     throw new SimulateCommandExit(code);
   };
 
-  const spinner = ora(`Simulating ${spellPath}...`).start();
+  const interactive =
+    ioOverrides === undefined && process.stdin.isTTY === true && process.stdout.isTTY === true;
+  const spinner = ora({
+    text: `Simulating ${spellPath}...`,
+    isEnabled: interactive,
+    discardStdin: false,
+  }).start();
 
   try {
     let params: Record<string, unknown> = {};
