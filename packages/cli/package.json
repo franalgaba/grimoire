@@ -1,6 +1,6 @@
 {
   "name": "@grimoirelabs/cli",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "CLI for Grimoire spell execution",
   "type": "module",
   "main": "./dist/index.js",
