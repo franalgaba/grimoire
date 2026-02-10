@@ -17,3 +17,5 @@ pre-push:
   commands:
     test:
       run: bun test
+      use_stdin: false
+      interactive: true
