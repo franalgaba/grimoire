@@ -8,7 +8,7 @@ spell TestAIJudgment {
 
   advisors: {
     market_analyst: {
-      model: "anthropic:haiku"
+      model: "openai-codex:gpt-5.2-codex"
     }
   }
   params: {

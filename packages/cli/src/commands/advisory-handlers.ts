@@ -24,6 +24,8 @@ export interface PiAdvisoryConfig {
   modelId?: string;
   thinkingLevel?: "off" | "low" | "medium" | "high";
   mode?: "auto" | "force";
+  traceVerbose?: boolean;
+  traceLogger?: (message: string) => void;
 }
 
 export interface AdvisoryRuntimeOptions {
@@ -38,6 +40,8 @@ export interface AdvisoryRuntimeOptions {
   noState?: boolean;
   agentDir?: string;
   cwd?: string;
+  advisoryTraceVerbose?: boolean;
+  advisoryTraceLogger?: (message: string) => void;
 }
 
 export async function resolveAdvisoryHandler(
@@ -64,6 +68,8 @@ export async function resolveAdvisoryHandler(
       modelId: options.advisoryModel,
       thinkingLevel: options.advisoryThinking,
       mode: options.advisoryPi ? "force" : "auto",
+      traceVerbose: options.advisoryTraceVerbose,
+      traceLogger: options.advisoryTraceLogger,
     });
   }
 
@@ -80,8 +86,16 @@ export function createPiAdvisoryHandler(config: PiAdvisoryConfig): AdvisoryHandl
   const modelRegistry = new ModelRegistry(authStorage, modelsPath);
   const settingsManager = SettingsManager.create(cwd, agentDir);
   const mode = config.mode ?? "force";
+  const traceVerbose = config.traceVerbose === true;
+  const traceLogger = config.traceLogger;
+  const verboseEnabled = traceVerbose && typeof traceLogger === "function";
 
   return async (input: AdvisoryHandlerInput): Promise<unknown> => {
+    if (verboseEnabled) {
+      const contextSummary = summarizeContextSnapshot(input.context);
+      traceLogger(`${tracePrefix(input.stepId)} context=${contextSummary}`);
+    }
+
     const tools = resolveTools(config.tools, cwd, input.allowedTools);
     const resourceLoader = new DefaultResourceLoader({
       cwd,
@@ -138,8 +152,13 @@ export function createPiAdvisoryHandler(config: PiAdvisoryConfig): AdvisoryHandl
       settingsManager,
     });
 
+    const verboseTrace = verboseEnabled
+      ? createVerboseSessionTracer(input.stepId, traceLogger)
+      : undefined;
+
     const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
       emitToolTrace(event, input);
+      verboseTrace?.handle(event);
     });
 
     try {
@@ -149,6 +168,7 @@ export function createPiAdvisoryHandler(config: PiAdvisoryConfig): AdvisoryHandl
       return parseJsonResponse(responseText);
     } finally {
       unsubscribe();
+      verboseTrace?.flushAll();
       session.dispose();
     }
   };
@@ -285,9 +305,14 @@ function buildAdvisoryPrompt(input: AdvisoryHandlerInput): string {
     null,
     2
   );
+  const outputGuide = describeOutputShape(input.outputSchema);
+  const outputExample = JSON.stringify(buildOutputExample(input.outputSchema), null, 2);
   return [
     "You are executing an advisory decision for Grimoire.",
     "Return ONLY valid JSON that matches the output schema.",
+    "Return the final JSON value itself, not a schema object or wrapper.",
+    `Output shape: ${outputGuide}`,
+    `Valid example output:\n${outputExample}`,
     "",
     "Advisory prompt:",
     input.prompt,
@@ -301,6 +326,53 @@ function buildAdvisoryPrompt(input: AdvisoryHandlerInput): string {
     "Advisor tooling metadata:",
     tooling,
   ].join("\n");
+}
+
+function describeOutputShape(schema: AdvisoryHandlerInput["outputSchema"]): string {
+  switch (schema.type) {
+    case "boolean":
+      return 'JSON boolean literal (`true` or `false`). Do not return an object like {"type": false}.';
+    case "number":
+      return "JSON number literal (for example `42`), not a string.";
+    case "string":
+      return 'JSON string literal (for example "hold").';
+    case "enum": {
+      const values = schema.values?.map((v) => JSON.stringify(v)).join(", ") ?? "";
+      return `One of the allowed enum string values: ${values}.`;
+    }
+    case "array":
+      return "JSON array.";
+    case "object":
+      return "JSON object matching the declared fields.";
+    default:
+      return "Valid JSON.";
+  }
+}
+
+function buildOutputExample(schema: AdvisoryHandlerInput["outputSchema"]): unknown {
+  switch (schema.type) {
+    case "boolean":
+      return false;
+    case "number":
+      return typeof schema.min === "number" ? schema.min : 0;
+    case "string":
+      return "example";
+    case "enum":
+      return schema.values?.[0] ?? "";
+    case "array":
+      if (!schema.items) return [];
+      return [buildOutputExample(schema.items)];
+    case "object": {
+      const fields = schema.fields ?? {};
+      const example: Record<string, unknown> = {};
+      for (const [key, fieldSchema] of Object.entries(fields)) {
+        example[key] = buildOutputExample(fieldSchema);
+      }
+      return example;
+    }
+    default:
+      return null;
+  }
 }
 
 function extractAssistantText(
@@ -402,4 +474,162 @@ function emitToolTrace(event: AgentSessionEvent, input: AdvisoryHandlerInput): v
       });
     }
   }
+}
+
+type VerboseDeltaChannel = "thinking" | "text" | "toolcall";
+
+interface VerboseSessionTracer {
+  handle: (event: AgentSessionEvent) => void;
+  flushAll: () => void;
+}
+
+interface VerboseChannelState {
+  value: string;
+  startedAt: number | null;
+  deltaCount: number;
+  totalChars: number;
+}
+
+function createVerboseSessionTracer(
+  stepId: string,
+  log: (message: string) => void
+): VerboseSessionTracer {
+  const createState = (): VerboseChannelState => ({
+    value: "",
+    startedAt: null,
+    deltaCount: 0,
+    totalChars: 0,
+  });
+
+  const buffers: Record<VerboseDeltaChannel, VerboseChannelState> = {
+    thinking: createState(),
+    text: createState(),
+    toolcall: createState(),
+  };
+
+  const beginChannel = (channel: VerboseDeltaChannel): void => {
+    const buffer = buffers[channel];
+    buffer.value = "";
+    buffer.startedAt = Date.now();
+    buffer.deltaCount = 0;
+    buffer.totalChars = 0;
+  };
+
+  const emitJoinedDelta = (channel: VerboseDeltaChannel): void => {
+    const buffer = buffers[channel];
+    if (!buffer.value) return;
+    const normalized = normalizeInline(buffer.value, Number.MAX_SAFE_INTEGER);
+    if (normalized.length > 0) {
+      log(`${tracePrefix(stepId)} ${channel}:delta ${normalized}`);
+    }
+    buffer.value = "";
+  };
+
+  const endChannel = (
+    channel: VerboseDeltaChannel,
+    completed: boolean,
+    emitIfInactive = true
+  ): void => {
+    const buffer = buffers[channel];
+    emitJoinedDelta(channel);
+    const startedAt = buffer.startedAt;
+    if (startedAt !== null) {
+      const durationMs = Date.now() - startedAt;
+      log(
+        `${tracePrefix(stepId)} ${channel}:end deltas=${buffer.deltaCount} chars=${buffer.totalChars} duration_ms=${durationMs} completed=${completed ? "yes" : "no"}`
+      );
+      buffer.startedAt = null;
+    } else if (emitIfInactive) {
+      log(`${tracePrefix(stepId)} ${channel}:end`);
+    }
+  };
+
+  const appendDelta = (channel: VerboseDeltaChannel, delta: unknown): void => {
+    if (typeof delta !== "string" || delta.length === 0) return;
+    const buffer = buffers[channel];
+    if (buffer.startedAt === null) {
+      buffer.startedAt = Date.now();
+    }
+    buffer.deltaCount += 1;
+    buffer.totalChars += delta.length;
+    buffer.value += delta;
+  };
+
+  return {
+    handle: (event: AgentSessionEvent): void => {
+      if (event.type !== "message_update") return;
+      const detail = event.assistantMessageEvent;
+
+      switch (detail.type) {
+        case "thinking_start":
+          endChannel("thinking", false, false);
+          beginChannel("thinking");
+          log(`${tracePrefix(stepId)} thinking:start`);
+          return;
+        case "thinking_delta":
+          appendDelta("thinking", detail.delta);
+          return;
+        case "thinking_end":
+          endChannel("thinking", true);
+          return;
+        case "text_start":
+          endChannel("text", false, false);
+          beginChannel("text");
+          log(`${tracePrefix(stepId)} text:start`);
+          return;
+        case "text_delta":
+          appendDelta("text", detail.delta);
+          return;
+        case "text_end":
+          endChannel("text", true);
+          return;
+        case "toolcall_start":
+          endChannel("toolcall", false, false);
+          beginChannel("toolcall");
+          log(`${tracePrefix(stepId)} toolcall:start`);
+          return;
+        case "toolcall_delta":
+          appendDelta("toolcall", detail.delta);
+          return;
+        case "toolcall_end":
+          endChannel("toolcall", true);
+          log(`${tracePrefix(stepId)} toolcall:end name=${detail.toolCall.name}`);
+          return;
+        default:
+          return;
+      }
+    },
+    flushAll: (): void => {
+      endChannel("thinking", false, false);
+      endChannel("text", false, false);
+      endChannel("toolcall", false, false);
+    },
+  };
+}
+
+function summarizeContextSnapshot(context: AdvisoryHandlerInput["context"]): string {
+  const params = summarizeKeyList(Object.keys(context.params));
+  const bindings = summarizeKeyList(Object.keys(context.bindings));
+  const persistent = summarizeKeyList(Object.keys(context.state.persistent));
+  const ephemeral = summarizeKeyList(Object.keys(context.state.ephemeral));
+  const inputs = summarizeKeyList(Object.keys(context.inputs ?? {}));
+  return `params=${params} bindings=${bindings} persistent=${persistent} ephemeral=${ephemeral} inputs=${inputs}`;
+}
+
+function summarizeKeyList(keys: string[], max = 8): string {
+  if (keys.length === 0) return "[]";
+  const head = keys.slice(0, max).join(",");
+  if (keys.length <= max) return `[${head}]`;
+  return `[${head},+${keys.length - max} more]`;
+}
+
+function normalizeInline(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 3)}...`;
+}
+
+function tracePrefix(stepId: string): string {
+  const time = new Date().toISOString().split("T")[1]?.replace("Z", "");
+  return `${time ?? "unknown-time"} [advisory:verbose] step=${stepId}`;
 }

@@ -131,6 +131,7 @@ Advisory options:
 - `--advisory-model <id>`
 - `--advisory-thinking <off|low|medium|high>`
 - `--advisory-tools <none|read|coding>`
+- `--advisory-trace-verbose` (adds prompt/schema, tool payloads, and model text/thinking deltas to live trace)
 - `--pi-agent-dir <dir>`
 
 Data replay/freshness options:
@@ -154,6 +155,8 @@ Behavior notes:
 - Uses `execute({ simulate: true })`, which internally runs `preview()`.
 - Loads and saves persistent state by default via `SqliteStateStore`.
 - If `--advisory-replay` is set, advisory outputs are loaded from a prior run ledger.
+- Advisory lifecycle logs are shown live in non-JSON mode; use `--advisory-trace-verbose` for detailed traces.
+- `--json` suppresses live advisory trace lines to keep output valid JSON.
 
 ## `cast`
 
