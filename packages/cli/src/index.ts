@@ -72,6 +72,10 @@ program
   .option("--advisory-model <id>", "Pi model ID for advisory (e.g., claude-sonnet-4-20250514)")
   .option("--advisory-thinking <level>", "Pi thinking level (off|low|medium|high)")
   .option("--advisory-tools <mode>", "Advisory tools: none|read|coding (default: read)")
+  .option(
+    "--advisory-trace-verbose",
+    "Show verbose advisory trace (prompt/schema, tool args/results, model text/thinking deltas)"
+  )
   .option("--pi-agent-dir <dir>", "Pi agent directory (defaults to ~/.pi/agent)")
   .option(
     "--data-replay <mode>",
@@ -109,6 +113,10 @@ program
   .option("--advisory-model <id>", "Pi model ID for advisory (e.g., claude-sonnet-4-20250514)")
   .option("--advisory-thinking <level>", "Pi thinking level (off|low|medium|high)")
   .option("--advisory-tools <mode>", "Advisory tools: none|read|coding (default: read)")
+  .option(
+    "--advisory-trace-verbose",
+    "Show verbose advisory trace (prompt/schema, tool args/results, model text/thinking deltas)"
+  )
   .option("--pi-agent-dir <dir>", "Pi agent directory (defaults to ~/.pi/agent)")
   .option(
     "--data-replay <mode>",

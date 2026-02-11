@@ -30,6 +30,7 @@ import ora from "ora";
 import { hydrateParamsFromEnsProfile, resolveEnsProfile } from "../lib/ens-profile.js";
 import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";
 import { resolveAdvisoryHandler } from "./advisory-handlers.js";
+import { createAdvisoryLiveTraceLogger } from "./advisory-live-trace.js";
 import {
   type ReplayResolution,
   type RuntimeDataPolicy,
@@ -56,6 +57,7 @@ interface CastOptions {
   advisoryModel?: string;
   advisoryThinking?: "off" | "low" | "medium" | "high";
   advisoryTools?: "none" | "read" | "coding";
+  advisoryTraceVerbose?: boolean;
   piAgentDir?: string;
   // Key options
   privateKey?: string;
@@ -304,12 +306,19 @@ async function executeWithWallet(
     advisoryModel: options.advisoryModel,
     advisoryThinking: options.advisoryThinking,
     advisoryTools: options.advisoryTools,
+    advisoryTraceVerbose: options.advisoryTraceVerbose,
+    advisoryTraceLogger: options.json ? undefined : console.log,
     advisorSkillsDirs,
     stateDir: options.stateDir,
     noState,
     agentDir: options.piAgentDir,
     cwd: process.cwd(),
   });
+  const eventCallback = options.json
+    ? undefined
+    : createAdvisoryLiveTraceLogger(console.log, {
+        verbose: options.advisoryTraceVerbose,
+      });
 
   const provenance = buildRuntimeProvenanceManifest({
     runtimeMode,
@@ -371,6 +380,7 @@ async function executeWithWallet(
         adapters: configuredAdapters,
         advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
         onAdvisory,
+        eventCallback,
       });
     }
   );
@@ -445,12 +455,19 @@ async function executeSimulation(
     advisoryModel: options.advisoryModel,
     advisoryThinking: options.advisoryThinking,
     advisoryTools: options.advisoryTools,
+    advisoryTraceVerbose: options.advisoryTraceVerbose,
+    advisoryTraceLogger: options.json ? undefined : console.log,
     advisorSkillsDirs,
     stateDir: options.stateDir,
     noState,
     agentDir: options.piAgentDir,
     cwd: process.cwd(),
   });
+  const eventCallback = options.json
+    ? undefined
+    : createAdvisoryLiveTraceLogger(console.log, {
+        verbose: options.advisoryTraceVerbose,
+      });
 
   // execute() with simulate:true internally uses preview()
   const result = await withStatePersistence(
@@ -478,6 +495,7 @@ async function executeSimulation(
         adapters,
         advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
         onAdvisory,
+        eventCallback,
       });
     }
   );

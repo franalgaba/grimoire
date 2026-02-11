@@ -3,7 +3,12 @@
  * Executes compiled SpellIR via the preview/commit model.
  */
 
-import type { ExecutionContext, ExecutionResult, StepResult } from "../types/execution.js";
+import type {
+  ExecutionContext,
+  ExecutionResult,
+  LedgerEntry,
+  StepResult,
+} from "../types/execution.js";
 import type { AdvisorDef, Guard, GuardDef, SpellIR } from "../types/ir.js";
 import type { PolicySet } from "../types/policy.js";
 import type { Address, ChainId } from "../types/primitives.js";
@@ -114,6 +119,8 @@ export interface ExecuteOptions {
   advisorSkillsDirs?: string[];
   /** Optional advisory handler for agent execution */
   onAdvisory?: AdvisoryHandler;
+  /** Optional callback for streaming emitted ledger entries */
+  eventCallback?: (entry: LedgerEntry) => void;
 }
 
 // =============================================================================
@@ -135,6 +142,7 @@ export interface PreviewOptions {
   advisorSkillsDirs?: string[];
   onAdvisory?: AdvisoryHandler;
   progressCallback?: (message: string) => void;
+  eventCallback?: (entry: LedgerEntry) => void;
 }
 
 /**
@@ -163,7 +171,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
   });
   ctx.advisorTooling = buildAdvisorTooling(spell.advisors, options.advisorSkillsDirs);
 
-  const ledger = new InMemoryLedger(ctx.runId, spell.id);
+  const ledger = new InMemoryLedger(ctx.runId, spell.id, options.eventCallback);
   const guardResults: GuardResult[] = [];
   const advisoryResults: AdvisoryResult[] = [];
   const plannedActions: PlannedAction[] = [];
@@ -385,6 +393,7 @@ export interface CommitOptions {
   driftPolicy?: DriftPolicy;
   driftValues?: Record<string, unknown>;
   resolveDriftValue?: (key: DriftKey) => Promise<unknown>;
+  eventCallback?: (entry: LedgerEntry) => void;
 }
 
 /**
@@ -393,7 +402,7 @@ export interface CommitOptions {
 export async function commit(options: CommitOptions): Promise<CommitResult> {
   const { receipt, wallet } = options;
   const runId = receipt.id.replace("rcpt_", "");
-  const ledger = new InMemoryLedger(runId, receipt.spellId);
+  const ledger = new InMemoryLedger(runId, receipt.spellId, options.eventCallback);
 
   ledger.emit({ type: "commit_started", runId, receiptId: receipt.id });
 
@@ -705,6 +714,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     advisorSkillsDirs: options.advisorSkillsDirs,
     onAdvisory: options.onAdvisory,
     progressCallback: options.progressCallback,
+    eventCallback: options.eventCallback,
   });
 
   if (!previewResult.success || !previewResult.receipt) {
@@ -733,6 +743,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     confirmCallback: options.confirmCallback,
     progressCallback: options.progressCallback,
     skipTestnetConfirmation: options.skipTestnetConfirmation,
+    eventCallback: options.eventCallback,
   });
 
   return convertPreviewCommitToExecutionResult(previewResult, commitResult);

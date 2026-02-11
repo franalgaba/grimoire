@@ -104,6 +104,7 @@ Use `references/cli-quick-reference.md` for concise command signatures and safet
 - Require `timeout` and `fallback` in every advisory block.
 - Prefer `validate --strict` when advisory logic gates value-moving actions.
 - Use replay for determinism when moving from preview/dry-run to live execution.
+- For runtime debugging, use `--advisory-trace-verbose` (non-JSON mode) to stream detailed advisory traces.
 
 ## Venue Metadata and Snapshots
 

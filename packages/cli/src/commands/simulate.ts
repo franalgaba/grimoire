@@ -10,6 +10,7 @@ import ora from "ora";
 import { hydrateParamsFromEnsProfile, resolveEnsProfile } from "../lib/ens-profile.js";
 import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";
 import { resolveAdvisoryHandler } from "./advisory-handlers.js";
+import { createAdvisoryLiveTraceLogger } from "./advisory-live-trace.js";
 import {
   buildRuntimeProvenanceManifest,
   enforceFreshnessPolicy,
@@ -30,6 +31,7 @@ interface SimulateOptions {
   advisoryModel?: string;
   advisoryThinking?: "off" | "low" | "medium" | "high";
   advisoryTools?: "none" | "read" | "coding";
+  advisoryTraceVerbose?: boolean;
   piAgentDir?: string;
   stateDir?: string;
   noState?: boolean;
@@ -155,12 +157,17 @@ export async function simulateCommand(
       advisoryModel: options.advisoryModel,
       advisoryThinking: options.advisoryThinking,
       advisoryTools: options.advisoryTools,
+      advisoryTraceVerbose: options.advisoryTraceVerbose,
+      advisoryTraceLogger: options.json ? undefined : io.log,
       advisorSkillsDirs,
       stateDir: options.stateDir,
       noState,
       agentDir: options.piAgentDir,
       cwd: process.cwd(),
     });
+    const eventCallback = options.json
+      ? undefined
+      : createAdvisoryLiveTraceLogger(io.log, { verbose: options.advisoryTraceVerbose });
 
     // execute() with simulate:true internally uses preview()
     const result = await withStatePersistence(
@@ -188,6 +195,7 @@ export async function simulateCommand(
           adapters,
           advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
           onAdvisory,
+          eventCallback,
         });
       }
     );

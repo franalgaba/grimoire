@@ -255,20 +255,28 @@ export class InMemoryLedger {
   private entries: LedgerEntry[] = [];
   private runId: string;
   private spellId: string;
+  private onEntry?: (entry: LedgerEntry) => void;
 
-  constructor(runId: string, spellId: string) {
+  constructor(runId: string, spellId: string, onEntry?: (entry: LedgerEntry) => void) {
     this.runId = runId;
     this.spellId = spellId;
+    this.onEntry = onEntry;
   }
 
   emit(event: LedgerEvent): void {
-    this.entries.push({
+    const entry: LedgerEntry = {
       id: `evt_${this.entries.length.toString().padStart(3, "0")}`,
       timestamp: Date.now(),
       runId: this.runId,
       spellId: this.spellId,
       event,
-    });
+    };
+    this.entries.push(entry);
+    try {
+      this.onEntry?.(entry);
+    } catch {
+      // Never fail execution because an observer callback throws.
+    }
   }
 
   getEntries(): LedgerEntry[] {

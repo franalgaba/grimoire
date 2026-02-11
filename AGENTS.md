@@ -324,6 +324,7 @@ Database lives at `.grimoire/grimoire.db` (configurable via `--state-dir`). Thre
 
 - `--state-dir <dir>` - custom directory for `grimoire.db` (on `simulate`, `cast`, `history`, `log`)
 - `--no-state` - disable persistence entirely (on `simulate`, `cast`)
+- `--advisory-trace-verbose` - stream detailed advisory trace (prompt/schema, tool payloads, model text/thinking deltas) in non-JSON `simulate`/`cast` runs
 
 # Action Constraints (Slippage)
 

@@ -38,6 +38,7 @@ Common options:
 - `--advisory-model <id>`
 - `--advisory-thinking <off|low|medium|high>`
 - `--advisory-tools <none|read|coding>`
+- `--advisory-trace-verbose`
 - `--pi-agent-dir <dir>`
 - `--data-replay <off|auto|runId|snapshotId>`
 - `--data-max-age <sec>`
@@ -68,6 +69,7 @@ Common options:
 - `--advisory-model <id>`
 - `--advisory-thinking <off|low|medium|high>`
 - `--advisory-tools <none|read|coding>`
+- `--advisory-trace-verbose`
 - `--pi-agent-dir <dir>`
 
 Safety rule:
