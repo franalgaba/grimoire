@@ -6,9 +6,16 @@ This page documents adapters exposed by `@grimoirelabs/venues` from `packages/ve
 
 Each adapter implements `VenueAdapter`:
 
-- `meta`: name, supported chains, actions, execution type
+- `meta`: capability metadata for discovery and constraint support
 - `buildAction(action, ctx)`: build EVM tx plan (single or multi-tx)
 - `executeAction(action, ctx)`: offchain execution path (optional)
+
+`meta` includes:
+
+- `name`, `supportedChains`, `actions`, `executionType`
+- `supportedConstraints`
+- `supportsQuote`, `supportsSimulation`, `supportsPreviewCommit`
+- `requiredEnv`, `dataEndpoints`
 
 Execution types:
 
@@ -25,16 +32,44 @@ Default adapter bundle order:
 - `morpho_blue`
 - `hyperliquid`
 - `across`
-- `yellow`
-- `lifi`
+
+## Constraint Matrix
+
+`✓` means the adapter explicitly supports the runtime constraint.
+
+| Adapter | max_slippage | min_output | max_input | deadline | max_price_impact | min_liquidity | require_quote | require_simulation | max_gas |
+|---------|--------------|------------|-----------|----------|------------------|---------------|---------------|--------------------|---------|
+| `aave_v3` | - | - | - | - | - | - | - | - | - |
+| `uniswap_v3` | ✓ | ✓ | ✓ | ✓ | - | - | ✓ | ✓ | ✓ |
+| `uniswap_v4` | ✓ | ✓ | ✓ | ✓ | - | - | ✓ | ✓ | ✓ |
+| `morpho_blue` | - | - | - | - | - | - | - | - | - |
+| `across` | ✓ | ✓ | - | - | - | - | ✓ | ✓ | ✓ |
+| `hyperliquid` | - | - | - | - | - | - | - | - | - |
+
+Unsupported constraints fail fast with:
+
+`Adapter '<name>' does not support constraint '<constraint>' for action '<action>'`
+
+## Structured Build/Execution Data
+
+Adapters can return structured metadata on build outputs:
+
+- `metadata.quote`: expected in/out bounds, slippage, min/max limits
+- `metadata.route`: machine-readable route/preflight context
+- `metadata.fees`: fee breakdown payload
+- `metadata.warnings`: non-fatal warnings
+
+Offchain execution is normalized through:
+
+- `status` (required)
+- `reference` (optional: route/session/order id)
+- `raw` (optional provider payload)
 
 ## `aave_v3`
 
 - Type: `evm`
 - Actions: `lend`, `withdraw`, `borrow`, `repay`
-- Default markets:
-  - chain 1: `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`
-  - chain 8453: `0xA238Dd80C259a72e81d7e4664a9801593F98d1c5`
+- Data endpoints: `health`, `chains`, `markets`, `market`, `reserve`, `reserves`
 
 Implementation notes:
 
@@ -47,16 +82,12 @@ Implementation notes:
 
 - Type: `evm`
 - Actions: `swap`
-- Default router: `0xE592427A0AEce92De3Edee1F18E0157C05861564` on supported chains
+- Data endpoints: `info`, `routers`, `tokens`, `pools`
 
 Implementation notes:
 
-- Builds routes/pools via Uniswap V3 SDK.
-- Fetches on-chain pool state (`slot0`, `liquidity`) for quote-like pathing.
-- Resolves constraints:
-  - `maxSlippageBps`
-  - `minOutput`
-  - `maxInput`
+- Fetches on-chain pool state (`slot0`, `liquidity`) and returns structured quote metadata.
+- Supports `max_slippage`, `min_output`, `max_input`, `deadline`, `require_quote`, `require_simulation`, `max_gas`.
 - For native ETH input:
   - wraps ETH to WETH
   - adds approval tx
@@ -66,20 +97,20 @@ Implementation notes:
 
 - Type: `evm`
 - Actions: `swap`
-- Uses Universal Router v2 + quote pathing.
+- Data endpoints: `info`, `routers`, `tokens`, `pools`
 
 Implementation notes:
 
-- Supports exact-in/exact-out swap modes.
-- Uses quoter when available; otherwise fallback behavior applies.
-- Applies explicit `min_output` / `max_input` constraints when present.
+- Uses Universal Router v2 + Quoter when available.
+- Returns structured quote metadata and route details.
+- Supports `max_slippage`, `min_output`, `max_input`, `deadline`, `require_quote`, `require_simulation`, `max_gas`.
 - Supports native ETH in/out mapping to V4 currency conventions.
 
 ## `morpho_blue`
 
 - Type: `evm`
 - Actions: `lend`, `withdraw`, `borrow`, `repay`
-- Supported chains: `[1, 8453]`
+- Data endpoints: `info`, `addresses`, `vaults`
 
 Implementation notes:
 
@@ -96,65 +127,30 @@ Default embedded Base markets include:
 
 - Type: `evm`
 - Actions: `bridge`
+- Data endpoints: `quote`, `deposit_simulation`
 
 Implementation notes:
 
-- Requires numeric `toChain` at action resolution time.
-- Uses Across quote API and spoke pool `deposit` simulation.
+- Requires numeric `toChain`.
+- Uses Across quote API + spoke pool deposit simulation.
 - Builds approval tx for ERC20 bridge input when required.
-- Supports mapped assets (USDC/WETH defaults across multiple chains).
-
-Constraint behavior:
-
-- Honors `maxSlippageBps` and `minOutput` when computing output amount.
+- Enforces route minimum bridge amount before tx build.
+- Returns structured quote/route/fee metadata, including ETA.
+- Supports `max_slippage`, `min_output`, `require_quote`, `require_simulation`, `max_gas`.
 
 ## `hyperliquid`
 
 - Type: `offchain`
-- Actions: `swap`, `withdraw`
+- Actions: `custom`, `withdraw`
 - Supported chains in metadata: `[0, 999]`
+- Data endpoints: `mids`, `l2-book`, `open-orders`, `meta`, `spot-meta`
 
 Implementation notes:
 
+- Order placement is represented as `custom` action with `op: "order"`.
+- Order args are strictly validated at adapter boundary (`coin`, `price`, `size`, side/buy-sell).
 - `hyperliquidAdapter` requires key-configured factory for real execution.
-- `createHyperliquidAdapter` uses private key and asset map.
-- `executeAction` sends orders/withdraws via Hyperliquid client APIs.
-
-## `yellow`
-
-- Type: `offchain`
-- Actions: `custom`
-
-Supported custom ops:
-
-- `session_open`
-- `session_update`
-- `session_close_settle`
-- `session_transfer`
-
-Implementation notes:
-
-- Talks to NitroRPC endpoints via `YELLOW_RPC_URL`.
-- Tracks session version/signers/quorum state internally.
-- Enforces version increments and quorum checks before submit.
-
-## `lifi`
-
-- Type: `offchain`
-- Actions: `swap`, `bridge`, `custom`
-
-Supported custom op:
-
-- `compose_execute`
-
-Implementation notes:
-
-- Uses LI.FI API (default `https://li.quest/v1`).
-- Supports API key/integrator headers.
-- Enforces runtime constraints against quote payload where possible:
-  - `minOutput`
-  - `maxSlippageBps`
-  - `maxGas`
+- Foundry EVM tools (`anvil`, `cast`) are not applicable to Hyperliquid execution/diagnostics.
 
 ## Core vs Venues Boundary
 
@@ -171,7 +167,21 @@ Implementation notes:
 - Morpho Blue
 - Hyperliquid
 
-Across/Yellow/LI.FI currently expose adapters in runtime, not proxied top-level venue CLIs from `grimoire venue`.
+`grimoire venue doctor ...` runs cross-adapter diagnostics from the main CLI without calling a per-venue binary.
+
+## Venue CLI Output Formats
+
+Per-venue CLIs support `--format <auto|json|table>` (plus `spell` for snapshot-capable commands).
+
+`auto` behavior:
+
+- table only when output is TTY-friendly and data is flat (primitive values)
+- JSON for nested payloads or non-TTY runs (recommended for automation)
+
+`table` behavior for nested payloads:
+
+- nested arrays/objects are summarized to compact cells
+- use `--format json` when full nested payload detail is required
 
 ## Per-Venue CLI Commands
 

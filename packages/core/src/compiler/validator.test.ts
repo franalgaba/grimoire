@@ -195,6 +195,56 @@ describe("Validator", () => {
     expect(result.warnings.some((w) => w.code === "NO_STEPS")).toBe(true);
   });
 
+  test("warns on removed venue aliases", () => {
+    const ir = createValidIR();
+    ir.aliases.push({
+      alias: "yellow",
+      chain: 1,
+      address: "0x0000000000000000000000000000000000000008",
+    });
+    ir.aliases.push({
+      alias: "lifi",
+      chain: 1,
+      address: "0x0000000000000000000000000000000000000009",
+    });
+
+    const result = validateIR(ir);
+    expect(
+      result.warnings.filter((warning) => warning.code === "REMOVED_VENUE_ALIAS")
+    ).toHaveLength(2);
+  });
+
+  test("warns on legacy hyperliquid swap actions", () => {
+    const ir = createValidIR();
+    ir.aliases.push({
+      alias: "hyperliquid",
+      chain: 0,
+      address: "0x0000000000000000000000000000000000000007",
+    });
+    ir.steps = [
+      {
+        kind: "action",
+        id: "hyperliquid_swap",
+        action: {
+          type: "swap",
+          venue: "hyperliquid",
+          assetIn: "USDC",
+          assetOut: "USDC",
+          amount: { kind: "literal", value: 1, type: "int" },
+          mode: "exact_in",
+        },
+        constraints: {},
+        onFailure: "revert",
+        dependsOn: [],
+      },
+    ];
+
+    const result = validateIR(ir);
+    expect(result.warnings.some((warning) => warning.code === "HYPERLIQUID_SWAP_DEPRECATED")).toBe(
+      true
+    );
+  });
+
   test("validates complex steps", () => {
     const ir = createValidIR();
     ir.steps = [

@@ -152,7 +152,7 @@ describe("TransactionBuilder", () => {
     await expect(
       builder.buildAction({
         type: "custom",
-        venue: "yellow",
+        venue: "offchain_fixture",
         op: "session_open",
         args: { arg0: amount1 },
       })

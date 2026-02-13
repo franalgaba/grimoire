@@ -7,6 +7,8 @@ Use this procedure whenever creating or editing `.spell` files.
 1. Read `references/syntax-capabilities.md`.
 2. Identify the target spell path and trigger intent (`manual`, `hourly`, etc.).
 3. Identify whether the spell has value-moving actions.
+4. If using EVM custom RPC/fork or signing transactions, run Foundry Cast quickchecks from `references/cast-cheatsheet.md`.
+5. For offchain venues (for example `hyperliquid`), skip Cast/Anvil checks and validate via venue API commands.
 
 ## 2. Author With Minimal Safe Skeleton
 
@@ -57,6 +59,21 @@ Run:
 <grimoire-cmd> simulate <spell-path> --chain <id>
 ```
 
+Recommended RPC preflight:
+
+```bash
+cast chain-id --rpc-url <rpc>
+cast block-number --rpc-url <rpc>
+```
+
+Skip this preflight for offchain venues such as `hyperliquid`.
+
+For local forked preview (Anvil):
+
+```bash
+<grimoire-cmd> simulate <spell-path> --chain <id> --rpc-url http://127.0.0.1:8545
+```
+
 If simulate fails:
 
 1. identify phase (`compile`, `preview policy`, adapter/data, etc.)
@@ -73,14 +90,23 @@ For advisory flows, inspect whether failure is:
 
 For spells with irreversible actions:
 
-1. require dry-run first:
+1. verify signer state:
+
+```bash
+cast balance <address> --rpc-url <rpc>
+cast nonce <address> --rpc-url <rpc>
+```
+
+For offchain venues, replace signer-RPC checks with venue-specific health/meta checks.
+
+2. require dry-run first:
 
 ```bash
 <grimoire-cmd> cast <spell-path> --dry-run --chain <id> --key-env PRIVATE_KEY --rpc-url <rpc>
 ```
 
-2. summarize risks and expected behavior
-3. request explicit user confirmation before live cast
+3. summarize risks and expected behavior
+4. request explicit user confirmation before live cast
 
 If advisory gates execution policy, prefer deterministic path:
 

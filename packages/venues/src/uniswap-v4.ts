@@ -1,7 +1,8 @@
-import { createRequire } from "node:module";
 import type { Action, Address, BuiltTransaction, VenueAdapterContext } from "@grimoirelabs/core";
 import type { VenueAdapter } from "@grimoirelabs/core";
 import { type Abi, encodeAbiParameters, encodeFunctionData, parseAbi } from "viem";
+import { assertSupportedConstraints } from "./constraints.js";
+import { resolveTokenAddress as resolveVenueTokenAddress } from "./token-registry.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -60,11 +61,6 @@ const PERMIT2_ABI = parseAbi([
   "function approve(address token, address spender, uint160 amount, uint48 expiration)",
   "function allowance(address owner, address token, address spender) view returns (uint160 amount, uint48 expiration, uint48 nonce)",
 ]);
-
-const require = createRequire(import.meta.url);
-const tokenList = require("@uniswap/default-token-list") as {
-  tokens: Array<{ chainId: number; symbol: string; address: string; decimals: number }>;
-};
 
 /** JSON ABI for Quoter (nested struct requires explicit tuple definitions) */
 const QUOTER_ABI = [
@@ -190,16 +186,32 @@ interface PoolKey {
 export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): VenueAdapter {
   const routers = config.routers ?? DEFAULT_ROUTERS;
   const quoters = config.quoters ?? DEFAULT_QUOTERS;
+  const meta: VenueAdapter["meta"] = {
+    name: "uniswap_v4",
+    supportedChains: Object.keys(routers).map((id) => Number.parseInt(id, 10)),
+    actions: ["swap"],
+    supportedConstraints: [
+      "max_slippage",
+      "min_output",
+      "max_input",
+      "deadline",
+      "require_quote",
+      "require_simulation",
+      "max_gas",
+    ],
+    supportsQuote: true,
+    supportsSimulation: true,
+    supportsPreviewCommit: true,
+    dataEndpoints: ["info", "routers", "tokens", "pools"],
+    description: "Uniswap V4 swap adapter (Universal Router v2)",
+  };
 
   return {
-    meta: {
-      name: "uniswap_v4",
-      supportedChains: Object.keys(routers).map((id) => Number.parseInt(id, 10)),
-      actions: ["swap"],
-      description: "Uniswap V4 swap adapter (Universal Router v2)",
-    },
+    meta,
 
     async buildAction(action, ctx) {
+      assertSupportedConstraints(meta, action);
+
       if (action.type !== "swap") {
         throw new Error(`Uniswap V4 adapter only supports swap actions (got ${action.type})`);
       }
@@ -241,6 +253,8 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
       // Quote expected output/input via on-chain Quoter
       const quoter = quoters[ctx.chainId];
       let expectedAmount = amount; // fallback if no quoter
+      let quoteGasEstimate: bigint | undefined;
+      let quoteTimestampMs: number | undefined;
 
       let hasQuote = false;
       if (quoter) {
@@ -260,6 +274,7 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
               args: [quoteParams],
             });
             expectedAmount = result[0]; // amountIn needed
+            quoteGasEstimate = result[1];
           } else {
             const result = await ctx.provider.readContract<readonly [bigint, bigint]>({
               address: quoter,
@@ -268,7 +283,9 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
               args: [quoteParams],
             });
             expectedAmount = result[0]; // amountOut expected
+            quoteGasEstimate = result[1];
           }
+          quoteTimestampMs = Date.now();
           hasQuote = true;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -277,6 +294,9 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
               `(fee=${fee}, tickSpacing=${tickSpacing}): ${msg}`
           );
         }
+      }
+      if (action.constraints?.requireQuote === true && !hasQuote) {
+        throw new Error("Uniswap V4 could not resolve quote while require_quote is enabled");
       }
 
       const explicitMinOut = action.constraints?.minOutput;
@@ -328,7 +348,9 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
       });
 
       // Build Universal Router commands + inputs
-      const deadline = Math.floor(Date.now() / 1000) + (config.deadlineSeconds ?? 1200);
+      const deadline =
+        Math.floor(Date.now() / 1000) +
+        (action.constraints?.deadline ?? config.deadlineSeconds ?? 1200);
       let commands: `0x${string}`;
       let inputs: `0x${string}`[];
       let txValue: bigint;
@@ -386,19 +408,62 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
         `  tickSpacing: ${tickSpacing}`,
         `  router:      ${shortAddr(router)}`,
       ].join("\n");
-
-      return [
-        ...preTxs,
-        {
-          tx: {
-            to: router,
-            data: calldata as `0x${string}`,
-            value: txValue,
-          },
-          description: descLines,
-          action,
+      const gasEstimate = await estimateGasIfSupported(ctx, {
+        to: router,
+        data: calldata as `0x${string}`,
+        value: txValue,
+      });
+      const effectiveGas = gasEstimate?.gasLimit ?? quoteGasEstimate;
+      if (action.constraints?.requireSimulation === true && effectiveGas === undefined) {
+        throw new Error(
+          "Uniswap V4 requires gas simulation support while require_simulation is enabled"
+        );
+      }
+      if (action.constraints?.maxGas !== undefined) {
+        if (effectiveGas === undefined) {
+          throw new Error("Uniswap V4 could not estimate gas while max_gas is enabled");
+        }
+        if (effectiveGas > action.constraints.maxGas) {
+          throw new Error(
+            `Uniswap V4 gas estimate ${effectiveGas.toString()} exceeds max_gas ${action.constraints.maxGas.toString()}`
+          );
+        }
+      }
+      const swapTx = {
+        tx: {
+          to: router,
+          data: calldata as `0x${string}`,
+          value: txValue,
         },
-      ];
+        description: descLines,
+        gasEstimate,
+        action,
+        metadata: {
+          quote: {
+            expectedIn: isExactOut ? expectedAmount : amount,
+            expectedOut: isExactOut ? amount : expectedAmount,
+            minOut: amountOutMinimum,
+            maxIn: settleAmount,
+            slippageBps,
+          },
+          route: {
+            poolKey,
+            zeroForOne,
+            router,
+            quoter,
+            deadline,
+            quoteTimestampMs,
+            quoteAvailable: hasQuote,
+            gasEstimate: quoteGasEstimate,
+          },
+          fees: {
+            feeTierBps: fee,
+          },
+          warnings: hasQuote ? [] : ["quoter_unavailable"],
+        },
+      };
+
+      return [...preTxs, swapTx];
     },
   };
 }
@@ -578,44 +643,11 @@ async function buildPermit2Approvals(params: {
   return txs;
 }
 
-// ─── Token Resolution ─────────────────────────────────────────────────────────
-
-/** WETH addresses per chain */
-const WETH_BY_CHAIN: Record<number, Address> = {
-  1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
-  10: "0x4200000000000000000000000000000000000006" as Address,
-  137: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619" as Address,
-  8453: "0x4200000000000000000000000000000000000006" as Address,
-  42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" as Address,
-};
-
-/** Build a symbol+chain index from the Uniswap default token list */
-const tokenIndex = new Map<string, { address: string; decimals: number }>();
-for (const t of tokenList.tokens) {
-  tokenIndex.set(`${t.symbol.toUpperCase()}:${t.chainId}`, {
-    address: t.address,
-    decimals: t.decimals,
-  });
-}
-
 function resolveTokenAddress(asset: string, chainId: number): Address {
-  if (asset.startsWith("0x") && asset.length === 42) {
-    return asset as Address;
-  }
-
-  const symbol = asset.toUpperCase();
-
-  // WETH → ERC20 wrapped ether (not native ETH)
-  if (symbol === "WETH") {
-    const weth = WETH_BY_CHAIN[chainId];
-    if (!weth) throw new Error(`No WETH address for chain ${chainId}`);
-    return weth;
-  }
-
-  const entry = tokenIndex.get(`${symbol}:${chainId}`);
-  if (entry) return entry.address as Address;
-
-  throw new Error(`Unknown asset: ${asset} on chain ${chainId}. Provide address directly.`);
+  return resolveVenueTokenAddress(asset, chainId, {
+    treatEthAsWrapped: true,
+    defaultDecimals: 18,
+  });
 }
 
 function sortCurrencies(a: Address, b: Address): [Address, Address] {
@@ -642,4 +674,29 @@ function isLiteralAmount(
     (value as { kind?: unknown }).kind === "literal" &&
     "value" in value
   );
+}
+
+async function estimateGasIfSupported(
+  ctx: VenueAdapterContext,
+  tx: { to: Address; data?: string; value?: bigint }
+): Promise<
+  | {
+      gasLimit: bigint;
+      maxFeePerGas: bigint;
+      maxPriorityFeePerGas: bigint;
+      estimatedCost: bigint;
+    }
+  | undefined
+> {
+  if (typeof ctx.provider.getGasEstimate !== "function") {
+    return undefined;
+  }
+  try {
+    return await ctx.provider.getGasEstimate({
+      ...tx,
+      from: ctx.walletAddress,
+    });
+  } catch {
+    return undefined;
+  }
 }

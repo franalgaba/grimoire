@@ -14,6 +14,10 @@ Preferred invocations:
 - `bun run packages/cli/src/index.ts venue morpho-blue ...` (repo-local)
 - `grimoire-morpho-blue ...` (direct binary from `@grimoirelabs/venues`)
 
+Recommended preflight:
+
+- `grimoire venue doctor --adapter morpho-blue --chain 8453 --rpc-url <rpc> --json`
+
 Use `--format spell` to emit a `params:` snapshot block.
 
 The snapshot includes provenance fields (`snapshot_at`, `snapshot_source`) and APY data.
@@ -60,3 +64,4 @@ When no collateral is specified in a spell, the first matching market by loan to
 
 - Outputs JSON/table; `vaults` also supports `--format spell`.
 - Uses the SDK's chain address registry.
+- Prefer `--format json` in automation and `--format table` for quick triage.

@@ -91,6 +91,81 @@ describe("Across adapter", () => {
     expect(built).toHaveLength(2);
     expect(built[0]?.description).toContain("Approve USDC");
     expect(built[1]?.description).toContain("Across bridge");
+    expect(built[1]?.metadata?.quote?.expectedOut).toBe(5n);
+    expect(built[1]?.metadata?.route?.estimatedFillTimeSec).toBe(0);
+  });
+
+  test("fails fast on unsupported constraints", async () => {
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action: Action = {
+      type: "bridge",
+      venue: "across",
+      asset: "USDC",
+      amount: 5n as unknown as Expression,
+      toChain: 10,
+      constraints: {
+        maxPriceImpactBps: 100,
+      },
+    } as Action;
+
+    await expect(adapter.buildAction(action, ctx)).rejects.toThrow(
+      "Adapter 'across' does not support constraint 'max_price_impact' for action 'bridge'"
+    );
+  });
+
+  test("fails when amount is below route minimum", async () => {
+    const strictQuote: Quote = {
+      ...quote,
+      limits: {
+        ...quote.limits,
+        minDeposit: 10n,
+      },
+    };
+
+    const strictAdapter = createAcrossAdapter({
+      integratorId: "0x0000",
+      assets: {
+        USDC: {
+          1: "0x000000000000000000000000000000000000000d" as Address,
+          10: "0x000000000000000000000000000000000000000e" as Address,
+        },
+      },
+      getQuote: async () => strictQuote,
+    });
+
+    if (!strictAdapter.buildAction) throw new Error("Missing buildAction");
+
+    const action: Action = {
+      type: "bridge",
+      venue: "across",
+      asset: "USDC",
+      amount: 5n as unknown as Expression,
+      toChain: 10,
+    } as Action;
+
+    await expect(strictAdapter.buildAction(action, ctx)).rejects.toThrow(
+      "is below minimum 10 for this route"
+    );
+  });
+
+  test("fails closed for max_gas when gas estimate is unavailable", async () => {
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action: Action = {
+      type: "bridge",
+      venue: "across",
+      asset: "USDC",
+      amount: 5n as unknown as Expression,
+      toChain: 10,
+      constraints: {
+        maxGas: 120_000n,
+      },
+    } as Action;
+
+    await expect(adapter.buildAction(action, ctx)).rejects.toThrow(
+      "Across adapter could not estimate gas while max_gas is enabled"
+    );
   });
 
   test("rejects non-bridge action types", async () => {

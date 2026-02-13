@@ -96,8 +96,6 @@ packages/
       morpho-blue.ts
       hyperliquid.ts
       across.ts
-      yellow.ts
-      lifi.ts
       cli/                   # per-venue CLIs
   cli/                       # Grimoire CLI
   sdk/                       # (WIP) SDK for external integrations
@@ -255,8 +253,6 @@ Supported adapters:
 - `morpho_blue` - isolated lending markets
 - `hyperliquid` (offchain) - spot + perps via API
 - `across` (bridge) - cross-chain bridging
-- `yellow` (offchain) - NitroRPC app-session lifecycle
-- `lifi` (offchain) - route-based swap and bridging
 
 Adapters can return multi-transaction plans to handle approvals. Offchain venues implement `executeAction`.
 
@@ -344,11 +340,12 @@ For swaps, **always set both `max_slippage` and `min_output`** to prevent unexpe
 - `grimoire compile <spell>` - compile a `.spell` file to IR
 - `grimoire compile-all [dir]` - compile all `.spell` files in a directory
 - `grimoire validate <spell> [--strict] [--json]` - validate a `.spell` file
-- `grimoire simulate <spell>` - simulate execution (dry run), with state persistence
+- `grimoire simulate <spell> [--rpc-url <url>]` - simulate execution (dry run), with state persistence
 - `grimoire cast <spell>` - execute a spell onchain, with state persistence
 - `grimoire history [spell]` - view execution history (all spells or runs for one spell)
 - `grimoire log <spell> <runId>` - view ledger events for a specific run
 - `grimoire venues` - list available venue adapters
+- `grimoire venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]` - venue env/chain/RPC diagnostics
 - `grimoire init` - initialize a new `.grimoire` directory
 - Per-venue CLIs in `@grimoirelabs/venues`:
   - `grimoire-aave`

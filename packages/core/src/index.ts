@@ -154,6 +154,9 @@ export type {
   VenueAdapterContext,
   VenueAdapterMeta,
   VenueRegistry,
+  VenueConstraint,
+  VenueBuildMetadata,
+  VenueQuoteMetadata,
   OffchainExecutionResult,
   VenueBuildResult,
 } from "./venues/types.js";

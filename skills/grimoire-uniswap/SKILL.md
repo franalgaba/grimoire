@@ -14,6 +14,10 @@ Preferred invocations:
 - `bun run packages/cli/src/index.ts venue uniswap ...` (repo-local)
 - `grimoire-uniswap ...` (direct binary from `@grimoirelabs/venues`)
 
+Recommended preflight:
+
+- `grimoire venue doctor --adapter uniswap --chain 1 --rpc-url <rpc> --json`
+
 ## Commands
 
 - `grimoire venue uniswap info [--format <json|table>]`
@@ -48,4 +52,5 @@ Use `--format spell` on `tokens` or `pools` to emit a `params:` snapshot block.
 
 - CLI currently exposes V3 metadata. V4 adapter is available programmatically via `createUniswapV4Adapter()`.
 - Outputs JSON/table; `tokens` and `pools` also support `--format spell`.
+- Prefer `--format json` for automation and reproducible snapshots.
 - Only metadata is exposed (no on-chain quote endpoints).

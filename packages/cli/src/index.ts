@@ -64,6 +64,7 @@ program
   .option("-p, --params <json>", "Parameters as JSON")
   .option("--vault <address>", "Vault address")
   .option("--chain <id>", "Chain ID", "1")
+  .option("--rpc-url <url>", "RPC URL override for preview adapter context")
   .option("--json", "Output results as JSON")
   .option("--advisor-skills-dir <dir...>", "Directory to load advisor skills (default: ./skills)")
   .option("--advisory-pi", "Force advisory steps via Pi SDK (auto when configured)")

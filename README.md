@@ -33,6 +33,9 @@ grimoire cast spells/uniswap-swap-execute.spell \
   --rpc-url <rpc>
 ```
 
+`simulate` also supports `--rpc-url <rpc>` with resolution order:
+`--rpc-url` -> `RPC_URL_<chainId>` -> `RPC_URL`.
+
 When you are ready to execute live:
 
 ```bash
@@ -43,6 +46,12 @@ Want live snapshot params for strategy inputs?
 
 ```bash
 grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
+```
+
+Before running venue actions in a new environment, validate adapter/env/RPC readiness:
+
+```bash
+grimoire venue doctor --chain 1 --adapter uniswap --rpc-url <rpc> --json
 ```
 
 Advisory steps (`advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell’s fallback. Record advisory outputs with `simulate` (or `cast --dry-run`), then replay deterministically with `--advisory-replay` for live execution.
@@ -118,7 +127,7 @@ spell YieldOptimizer {
 - **Human-readable DSL** with brace-delimited syntax
 - **Explicit constraints** and limits via `with` and `limits`
 - **Adapter-based venues** (SDKs live in `@grimoirelabs/venues`)
-- **Onchain + offchain** actions (EVM + Hyperliquid + Yellow + LI.FI)
+- **Onchain + offchain** actions (EVM + Hyperliquid)
 - **Judgment boundary** with explicit `advise` blocks
 - **Structured control flow** (loops, conditionals, try/catch, atomic)
 - **State persistence** and run history for deterministic execution

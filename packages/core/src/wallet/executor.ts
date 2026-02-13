@@ -1,6 +1,11 @@
 import type { Action } from "../types/actions.js";
 import { createVenueRegistry } from "../venues/index.js";
-import type { OffchainExecutionResult, VenueAdapter, VenueRegistry } from "../venues/types.js";
+import type {
+  OffchainExecutionResult,
+  VenueAdapter,
+  VenueBuildResult,
+  VenueRegistry,
+} from "../venues/types.js";
 import { type Provider, formatGasCostUsd, formatWei } from "./provider.js";
 import { type BuiltTransaction, TransactionBuilder } from "./tx-builder.js";
 import type { TransactionReceipt, TransactionRequest, Wallet } from "./types.js";
@@ -43,6 +48,10 @@ export interface TransactionResult {
   gasUsed?: bigint;
   /** Error message (if failed) */
   error?: string;
+  /** Offchain execution status (when action was executed offchain) */
+  offchainStatus?: string;
+  /** Offchain execution reference (route id, session id, order id) */
+  offchainReference?: string;
   /** The built transaction */
   builtTx: BuiltTransaction;
 }
@@ -156,11 +165,15 @@ export class Executor {
           ? {
               success: true,
               hash: offchainResult.id,
+              offchainStatus: offchainResult.status,
+              offchainReference: offchainResult.reference,
               builtTx,
             }
           : {
               success: false,
               error: offchainResult.error,
+              offchainStatus: offchainResult.status,
+              offchainReference: offchainResult.reference,
               builtTx,
             };
 
@@ -266,7 +279,9 @@ export class Executor {
     if (action.type === "custom") {
       const adapter = this.adapterRegistry.get(action.venue);
       if (!adapter) {
-        throw new Error(`No adapter registered for custom action '${action.venue}.${action.op}'.`);
+        throw new Error(
+          `Adapter '${action.venue}' is not registered for custom action '${action.op}'.`
+        );
       }
 
       if (!adapter.meta.supportedChains.includes(this.provider.chainId)) {
@@ -318,47 +333,54 @@ export class Executor {
 
     if ("venue" in action && action.venue) {
       const adapter = this.adapterRegistry.get(action.venue);
-      if (adapter?.meta.supportedChains.includes(this.provider.chainId)) {
-        if (adapter.meta.executionType === "offchain") {
-          if (adapter.buildAction) {
-            return this.normalizeBuildResult(
-              await adapter.buildAction(action, {
-                provider: this.provider,
-                walletAddress: this.wallet.address,
-                chainId: this.provider.chainId,
-                mode: this.options.mode,
-              })
-            );
-          }
-
-          return [
-            {
-              tx: {},
-              description: `Offchain action via ${adapter.meta.name}`,
-              action,
-            } as BuiltTransaction,
-          ];
-        }
-
-        if (!adapter.buildAction) {
-          throw new Error(`Adapter '${adapter.meta.name}' does not support EVM actions`);
-        }
-
-        return this.normalizeBuildResult(
-          await adapter.buildAction(action, {
-            provider: this.provider,
-            walletAddress: this.wallet.address,
-            chainId: this.provider.chainId,
-            mode: this.options.mode,
-          })
+      if (!adapter) {
+        throw new Error(`Adapter '${action.venue}' is not registered`);
+      }
+      if (!adapter.meta.supportedChains.includes(this.provider.chainId)) {
+        throw new Error(
+          `Adapter '${adapter.meta.name}' does not support chain ${this.provider.chainId}.`
         );
       }
+
+      if (adapter.meta.executionType === "offchain") {
+        if (adapter.buildAction) {
+          return this.normalizeBuildResult(
+            await adapter.buildAction(action, {
+              provider: this.provider,
+              walletAddress: this.wallet.address,
+              chainId: this.provider.chainId,
+              mode: this.options.mode,
+            })
+          );
+        }
+
+        return [
+          {
+            tx: {},
+            description: `Offchain action via ${adapter.meta.name}`,
+            action,
+          } as BuiltTransaction,
+        ];
+      }
+
+      if (!adapter.buildAction) {
+        throw new Error(`Adapter '${adapter.meta.name}' does not support EVM actions`);
+      }
+
+      return this.normalizeBuildResult(
+        await adapter.buildAction(action, {
+          provider: this.provider,
+          walletAddress: this.wallet.address,
+          chainId: this.provider.chainId,
+          mode: this.options.mode,
+        })
+      );
     }
 
     return [await this.txBuilder.buildAction(action)];
   }
 
-  private normalizeBuildResult(result: BuiltTransaction | BuiltTransaction[]): BuiltTransaction[] {
+  private normalizeBuildResult(result: VenueBuildResult): BuiltTransaction[] {
     return Array.isArray(result) ? result : [result];
   }
 
@@ -491,9 +513,17 @@ export class Executor {
     }
   }
 
-  private async tryExecuteOffchainAction(
-    action: Action
-  ): Promise<(OffchainExecutionResult & { success: boolean; error?: string }) | null> {
+  private async tryExecuteOffchainAction(action: Action): Promise<
+    | (OffchainExecutionResult & { success: true })
+    | {
+        success: false;
+        id: string;
+        error: string;
+        status?: string;
+        reference?: string;
+      }
+    | null
+  > {
     if (!("venue" in action) || !action.venue) {
       return null;
     }

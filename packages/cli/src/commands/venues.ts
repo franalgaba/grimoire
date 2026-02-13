@@ -20,12 +20,30 @@ export async function venuesCommand(options: VenuesOptions): Promise<void> {
     return;
   }
 
-  const headers = ["Name", "Exec", "Actions", "Chains", "Description"];
+  const headers = [
+    "Name",
+    "Exec",
+    "Actions",
+    "Chains",
+    "Constraints",
+    "Quote",
+    "Sim",
+    "Preview/Commit",
+    "Env",
+    "Endpoints",
+    "Description",
+  ];
   const rows = metas.map((meta) => [
     meta.name,
     meta.executionType ?? "evm",
     meta.actions.join(", "),
     meta.supportedChains.join(", "),
+    meta.supportedConstraints.join(", "),
+    formatBoolean(meta.supportsQuote),
+    formatBoolean(meta.supportsSimulation),
+    formatBoolean(meta.supportsPreviewCommit),
+    formatArray(meta.requiredEnv),
+    formatArray(meta.dataEndpoints),
     meta.description ?? "",
   ]);
 
@@ -41,4 +59,15 @@ export async function venuesCommand(options: VenuesOptions): Promise<void> {
   for (const row of rows) {
     console.log(formatRow(row));
   }
+}
+
+function formatArray(values: string[] | undefined): string {
+  if (!values || values.length === 0) return "-";
+  return values.join(", ");
+}
+
+function formatBoolean(value: boolean | undefined): string {
+  if (value === true) return "yes";
+  if (value === false) return "no";
+  return "-";
 }

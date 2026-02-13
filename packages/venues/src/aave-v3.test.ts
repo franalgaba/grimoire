@@ -81,6 +81,12 @@ describe("Aave V3 adapter", () => {
     expect(built).toHaveLength(2);
     expect(built[0]?.description).toContain("approve");
     expect(built[1]?.description).toContain("Aave V3 lend");
+    expect(built[0]?.metadata?.route?.approval).toBe(true);
+    expect(built[0]?.metadata?.quote).toBeUndefined();
+    expect(built[1]?.metadata?.route?.approval).toBe(false);
+    expect(built[1]?.metadata?.route?.asset).toBe("USDC");
+    expect(built[1]?.metadata?.route?.amountFormat).toBe("human_decimal");
+    expect(built[1]?.metadata?.quote?.expectedIn).toBe(1n);
   });
 
   test("builds single transaction when approval is not required", async () => {
@@ -193,6 +199,10 @@ describe("Aave V3 adapter", () => {
     expect(withdraw.description).toContain("Aave V3 withdraw");
     expect(borrow.description).toContain("Aave V3 borrow");
     expect(repay.description).toContain("Aave V3 repay");
+    expect(withdraw.metadata?.route?.amountFormat).toBe("exact_raw");
+    expect(withdraw.metadata?.quote?.expectedOut).toBe(5n);
+    expect(borrow.metadata?.quote?.expectedOut).toBe(2n);
+    expect(repay.metadata?.quote?.expectedIn).toBe(2n);
   });
 
   test("uses default markets and parses string amounts", async () => {

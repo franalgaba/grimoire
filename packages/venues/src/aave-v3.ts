@@ -1,6 +1,14 @@
 import { AaveClient, chainId, evmAddress } from "@aave/client";
 import { borrow, repay, supply, withdraw } from "@aave/client/actions";
-import type { Action, Address, BuiltTransaction, VenueAdapter } from "@grimoirelabs/core";
+import type {
+  Action,
+  Address,
+  BuiltTransaction,
+  VenueAdapter,
+  VenueBuildMetadata,
+} from "@grimoirelabs/core";
+import { assertSupportedConstraints } from "./constraints.js";
+import { resolveTokenAddress, resolveTokenDecimals } from "./token-registry.js";
 
 export interface AaveV3AdapterConfig {
   markets: Record<number, Address>;
@@ -18,21 +26,30 @@ const DEFAULT_MARKETS: Record<number, Address> = {
   8453: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5" as Address,
 };
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+type AaveBuiltTransaction = BuiltTransaction & { metadata?: VenueBuildMetadata };
 
 export function createAaveV3Adapter(
   config: AaveV3AdapterConfig = { markets: DEFAULT_MARKETS }
 ): VenueAdapter {
   const client = config.client ?? AaveClient.create();
   const actions = config.actions ?? { supply, withdraw, borrow, repay };
+  const meta: VenueAdapter["meta"] = {
+    name: "aave_v3",
+    supportedChains: Object.keys(config.markets).map((id) => Number.parseInt(id, 10)),
+    actions: ["lend", "withdraw", "borrow", "repay"],
+    supportedConstraints: [],
+    supportsQuote: false,
+    supportsSimulation: false,
+    supportsPreviewCommit: true,
+    dataEndpoints: ["health", "chains", "markets", "market", "reserve", "reserves"],
+    description: "Aave V3 adapter",
+  };
 
   return {
-    meta: {
-      name: "aave_v3",
-      supportedChains: Object.keys(config.markets).map((id) => Number.parseInt(id, 10)),
-      actions: ["lend", "withdraw", "borrow", "repay"],
-      description: "Aave V3 adapter",
-    },
+    meta,
     async buildAction(action, ctx) {
+      assertSupportedConstraints(meta, action);
+
       const market = config.markets[ctx.chainId];
       if (!market) {
         throw new Error(`No Aave V3 market configured for chain ${ctx.chainId}`);
@@ -41,9 +58,17 @@ export function createAaveV3Adapter(
       if (!isAaveAction(action)) {
         throw new Error(`Unsupported Aave action: ${action.type}`);
       }
+      if (!action.asset) {
+        throw new Error("Asset is required for Aave action");
+      }
 
-      const assetAddress = resolveAssetAddress(action.asset, ctx.chainId);
-      const decimals = resolveAssetDecimals(action.asset, ctx.chainId);
+      const assetAddress = resolveTokenAddress(action.asset, ctx.chainId, {
+        treatEthAsWrapped: true,
+      });
+      const decimals = resolveTokenDecimals(action.asset, ctx.chainId, {
+        treatEthAsWrapped: true,
+        defaultDecimals: 18,
+      });
       const humanAmount = toHumanAmount(action.amount, decimals);
       const rawAmount = toRawAmountString(action.amount);
       const address = evmAddress(ctx.walletAddress);
@@ -54,6 +79,14 @@ export function createAaveV3Adapter(
         market: marketAddress,
         chainId: chain,
       } as { market: ReturnType<typeof evmAddress>; chainId: ReturnType<typeof chainId> };
+      const metadataContext: AaveMetadataContext = {
+        chainId: ctx.chainId,
+        market,
+        assetAddress,
+        decimals,
+        rawAmount: BigInt(rawAmount),
+        humanAmount,
+      };
 
       let result: unknown;
 
@@ -115,10 +148,10 @@ export function createAaveV3Adapter(
         "__typename" in plan &&
         plan.__typename === "InsufficientBalanceError"
       ) {
-        return [buildInsufficientBalancePlaceholder(plan, action, ctx.mode)];
+        return [buildInsufficientBalancePlaceholder(plan, action, metadataContext, ctx.mode)];
       }
 
-      return buildAaveTransactions(plan, action);
+      return buildAaveTransactions(plan, action, metadataContext);
     },
   };
 }
@@ -146,6 +179,14 @@ type AaveApprovalRequired = {
 };
 
 type AaveExecutionPlan = AaveTransactionRequest | AaveApprovalRequired | { __typename: string };
+type AaveMetadataContext = {
+  chainId: number;
+  market: Address;
+  assetAddress: Address;
+  decimals: number;
+  rawAmount: bigint;
+  humanAmount: string;
+};
 
 function isAaveAction(action: Action): action is AaveAction {
   return ["lend", "withdraw", "borrow", "repay"].includes(action.type);
@@ -178,11 +219,20 @@ function extractExecutionPlan(planResult: unknown): AaveExecutionPlan {
   return planResult as AaveExecutionPlan;
 }
 
-function buildAaveTransactions(plan: AaveExecutionPlan, action: AaveAction): BuiltTransaction[] {
+function buildAaveTransactions(
+  plan: AaveExecutionPlan,
+  action: AaveAction,
+  metadataContext: AaveMetadataContext
+): AaveBuiltTransaction[] {
   if (isApprovalRequired(plan)) {
     return [
-      toBuiltTx(plan.approval, action, `Aave V3 approve ${action.asset}`),
-      toBuiltTx(plan.originalTransaction, action, `Aave V3 ${action.type} ${action.asset}`),
+      toBuiltTx(plan.approval, action, metadataContext, {
+        description: `Aave V3 approve ${action.asset}`,
+        isApproval: true,
+      }),
+      toBuiltTx(plan.originalTransaction, action, metadataContext, {
+        description: `Aave V3 ${action.type} ${action.asset}`,
+      }),
     ];
   }
 
@@ -202,14 +252,19 @@ function buildAaveTransactions(plan: AaveExecutionPlan, action: AaveAction): Bui
     throw new Error(`Unsupported Aave execution plan: ${plan.__typename}`);
   }
 
-  return [toBuiltTx(plan, action, `Aave V3 ${action.type} ${action.asset}`)];
+  return [
+    toBuiltTx(plan, action, metadataContext, {
+      description: `Aave V3 ${action.type} ${action.asset}`,
+    }),
+  ];
 }
 
 function buildInsufficientBalancePlaceholder(
   plan: AaveExecutionPlan,
   action: AaveAction,
+  metadataContext: AaveMetadataContext,
   mode?: "simulate" | "dry-run" | "execute"
-): BuiltTransaction {
+): AaveBuiltTransaction {
   const err = plan as unknown as {
     required?: { raw?: string; value?: string };
     available?: { raw?: string; value?: string };
@@ -228,22 +283,34 @@ function buildInsufficientBalancePlaceholder(
     },
     description: `Aave V3 ${action.type} ${action.asset}${modeLabel} placeholder${balanceInfo}`,
     action,
+    metadata: {
+      ...buildAaveMetadata(action, metadataContext),
+      warnings: [
+        `insufficient_balance${balanceInfo.length > 0 ? balanceInfo : ""}`,
+        "placeholder_transaction_generated",
+      ],
+    },
   };
 }
 
 function toBuiltTx(
   request: AaveTransactionRequest,
   action: AaveAction,
-  description: string
-): BuiltTransaction {
+  metadataContext: AaveMetadataContext,
+  options: {
+    description: string;
+    isApproval?: boolean;
+  }
+): AaveBuiltTransaction {
   return {
     tx: {
       to: request.to as Address,
       data: request.data as string,
       value: toBigIntValue(request.value),
     },
-    description,
+    description: options.description,
     action,
+    metadata: buildAaveMetadata(action, metadataContext, { isApproval: options.isApproval }),
   };
 }
 
@@ -253,36 +320,6 @@ function toBigIntValue(value?: string | number | bigint): bigint {
   if (typeof value === "number") return BigInt(value);
   if (typeof value === "string") return BigInt(value);
   return 0n;
-}
-
-function resolveAssetAddress(asset?: string, chainId?: number): Address {
-  if (!asset) {
-    throw new Error("Asset is required for Aave action");
-  }
-  if (asset.startsWith("0x") && asset.length === 42) {
-    return asset as Address;
-  }
-
-  const KNOWN_TOKENS: Record<number, Record<string, Address>> = {
-    1: {
-      USDC: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
-      USDT: "0xdAC17F958D2ee523a2206206994597C13D831ec7" as Address,
-      DAI: "0x6B175474E89094C44Da98b954EedeAC495271d0F" as Address,
-      WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
-    },
-    8453: {
-      USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address,
-      WETH: "0x4200000000000000000000000000000000000006" as Address,
-    },
-  };
-
-  const chainTokens = KNOWN_TOKENS[chainId ?? 1] ?? KNOWN_TOKENS[1];
-  const address = chainTokens?.[asset.toUpperCase()];
-  if (!address) {
-    throw new Error(`Unknown asset: ${asset} on chain ${chainId ?? 1}. Provide address directly.`);
-  }
-
-  return address;
 }
 
 function toRawAmountString(amount: AaveAction["amount"]): string {
@@ -296,21 +333,6 @@ function toRawAmountString(amount: AaveAction["amount"]): string {
     return String(amount.value);
   }
   throw new Error("Unsupported amount type for Aave action");
-}
-
-function resolveAssetDecimals(asset?: string, _chainId?: number): number {
-  const KNOWN_DECIMALS: Record<string, number> = {
-    USDC: 6,
-    USDT: 6,
-    DAI: 18,
-    WETH: 18,
-    ETH: 18,
-  };
-  if (asset && !asset.startsWith("0x")) {
-    const d = KNOWN_DECIMALS[asset.toUpperCase()];
-    if (d !== undefined) return d;
-  }
-  return 18; // default to 18 decimals
 }
 
 /**
@@ -342,4 +364,32 @@ function toHumanAmount(amount: AaveAction["amount"], decimals: number): string {
 
   const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
   return `${whole}.${fracStr}`;
+}
+
+function buildAaveMetadata(
+  action: AaveAction,
+  metadataContext: AaveMetadataContext,
+  options: { isApproval?: boolean } = {}
+): VenueBuildMetadata {
+  const quote =
+    action.type === "borrow" || action.type === "withdraw"
+      ? { expectedOut: metadataContext.rawAmount }
+      : { expectedIn: metadataContext.rawAmount };
+
+  return {
+    quote: options.isApproval ? undefined : quote,
+    route: {
+      chainId: metadataContext.chainId,
+      market: metadataContext.market,
+      action: action.type,
+      asset: action.asset,
+      assetAddress: metadataContext.assetAddress,
+      assetDecimals: metadataContext.decimals,
+      amountRaw: metadataContext.rawAmount,
+      amountHuman: metadataContext.humanAmount,
+      amountFormat:
+        action.type === "lend" || action.type === "borrow" ? "human_decimal" : "exact_raw",
+      approval: options.isApproval === true,
+    },
+  };
 }

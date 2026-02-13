@@ -14,6 +14,10 @@ Preferred invocations:
 - `bun run packages/cli/src/index.ts venue aave ...` (repo-local)
 - `grimoire-aave ...` (direct binary from `@grimoirelabs/venues`)
 
+Recommended preflight:
+
+- `grimoire venue doctor --adapter aave --chain 1 --rpc-url <rpc> --json`
+
 ## Commands
 
 - `grimoire venue aave health [--format <json|table>]`
@@ -62,3 +66,4 @@ The adapter handles this conversion automatically.
 
 - Read-only metadata endpoints only.
 - Outputs JSON/table; `reserves` also supports `--format spell`.
+- Prefer `--format json` in automation; use table for quick interactive checks.

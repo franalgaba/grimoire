@@ -156,6 +156,7 @@ describe("Executor", () => {
         name: "aave_v3",
         supportedChains: [1],
         actions: ["lend"],
+        supportedConstraints: [],
       },
       buildAction: async (action: Action) => [
         {
@@ -192,6 +193,7 @@ describe("Executor", () => {
         name: "aave_v3",
         supportedChains: [1],
         actions: ["lend"],
+        supportedConstraints: [],
       },
       buildAction: async (action: Action) => [
         {
@@ -240,22 +242,23 @@ describe("Executor", () => {
     const result = await executor.executeActions([
       {
         type: "custom",
-        venue: "yellow",
+        venue: "offchain_fixture",
         op: "session_open",
         args: { arg0: 1 },
       },
     ]);
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("No adapter registered for custom action");
+    expect(result.error).toContain("Adapter 'offchain_fixture' is not registered");
   });
 
   test("routes custom actions through venue adapters", async () => {
     const adapter: VenueAdapter = {
       meta: {
-        name: "yellow",
+        name: "offchain_fixture",
         supportedChains: [1],
         actions: ["custom"],
+        supportedConstraints: [],
         executionType: "offchain",
       },
       buildAction: async (action: Action) => ({
@@ -264,22 +267,24 @@ describe("Executor", () => {
         action,
       }),
       executeAction: async () => ({
-        id: "yellow-1",
+        id: "offchain-1",
         status: "submitted",
+        reference: "session-1",
       }),
     };
 
     const executor = new Executor({
       wallet: walletStub,
       provider: providerStub,
-      mode: "simulate",
+      mode: "execute",
+      confirmCallback: async () => true,
       adapters: [adapter],
     });
 
     const result = await executor.executeActions([
       {
         type: "custom",
-        venue: "yellow",
+        venue: "offchain_fixture",
         op: "session_open",
         args: { arg0: 1 },
       },
@@ -287,5 +292,30 @@ describe("Executor", () => {
 
     expect(result.success).toBe(true);
     expect(result.transactions[0]?.builtTx.description).toContain("Custom session_open");
+    expect(result.transactions[0]?.offchainStatus).toBe("submitted");
+    expect(result.transactions[0]?.offchainReference).toBe("session-1");
+  });
+
+  test("fails with explicit adapter-not-registered error for venue actions", async () => {
+    const executor = new Executor({
+      wallet: walletStub,
+      provider: providerStub,
+      mode: "simulate",
+      adapters: [],
+    });
+
+    const result = await executor.executeActions([
+      {
+        type: "swap",
+        venue: "lifi",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: transferAmount,
+        mode: "exact_in",
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Adapter 'lifi' is not registered");
   });
 });

@@ -677,6 +677,21 @@ describe("Transformer", () => {
       expect(getAction(actionStep)?.type).toBe("lend");
     });
 
+    test("transforms lend method call", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    aave.lend(USDC, 100)
+  }
+}`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const actionStep = findStep(result.steps, "action");
+      expect(actionStep).toBeDefined();
+      expect(getAction(actionStep)?.type).toBe("lend");
+    });
+
     test("transforms withdraw method call", () => {
       const source = `spell Test {
   version: "1.0.0"
@@ -727,6 +742,31 @@ describe("Transformer", () => {
       expect(action?.args).toEqual({
         arg0: "arg1",
         arg1: "arg2",
+      });
+    });
+
+    test("transforms order custom call to typed args", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    hyperliquid.order(BTC, 100000, 1, "buy", false)
+  }
+}`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const actionStep = findStep(result.steps, "action");
+      const action = actionStep?.action as
+        | { type?: string; op?: string; args?: Record<string, unknown> }
+        | undefined;
+      expect(action?.type).toBe("custom");
+      expect(action?.op).toBe("order");
+      expect(action?.args).toEqual({
+        coin: "BTC",
+        price: 100000,
+        size: 1,
+        side: "buy",
+        reduce_only: false,
       });
     });
 

@@ -759,6 +759,7 @@ export class Transformer {
 
     // Map common method names to action types
     const methodMap: Record<string, string> = {
+      lend: "lend",
       deposit: "lend",
       supply: "lend",
       borrow: "borrow",
@@ -883,10 +884,7 @@ export class Transformer {
         },
       ];
     } else if (actionType === "custom") {
-      const args: Record<string, unknown> = {};
-      stmt.args.forEach((arg, i) => {
-        args[`arg${i}`] = this.exprToString(arg);
-      });
+      const args = this.buildCustomArgs(stmt);
       action.args = args;
     }
 
@@ -920,6 +918,38 @@ export class Transformer {
     }
 
     return [step];
+  }
+
+  private buildCustomArgs(stmt: MethodCallNode): Record<string, unknown> {
+    if (stmt.method.toLowerCase() === "order") {
+      return this.buildOrderCustomArgs(stmt);
+    }
+
+    const args: Record<string, unknown> = {};
+    stmt.args.forEach((arg, i) => {
+      args[`arg${i}`] = this.exprToString(arg);
+    });
+    return args;
+  }
+
+  private buildOrderCustomArgs(stmt: MethodCallNode): Record<string, unknown> {
+    const args: Record<string, unknown> = {};
+
+    const coinArg = stmt.args[0];
+    const priceArg = stmt.args[1];
+    const sizeArg = stmt.args[2];
+    const sideArg = stmt.args[3];
+    const reduceOnlyArg = stmt.args[4];
+    const orderTypeArg = stmt.args[5];
+
+    if (coinArg) args.coin = this.exprToValue(coinArg);
+    if (priceArg) args.price = this.exprToValue(priceArg);
+    if (sizeArg) args.size = this.exprToValue(sizeArg);
+    if (sideArg) args.side = this.exprToValue(sideArg);
+    if (reduceOnlyArg) args.reduce_only = this.exprToValue(reduceOnlyArg);
+    if (orderTypeArg) args.order_type = this.exprToValue(orderTypeArg);
+
+    return args;
   }
 
   /** Transform emit to emit step */

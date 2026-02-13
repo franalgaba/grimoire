@@ -3,7 +3,13 @@
  * Simulates spell execution (dry run)
  */
 
-import { type Address, compileFile, execute } from "@grimoirelabs/core";
+import {
+  type Address,
+  type SpellIR,
+  compileFile,
+  createProvider,
+  execute,
+} from "@grimoirelabs/core";
 import { adapters } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
@@ -24,6 +30,7 @@ interface SimulateOptions {
   params?: string;
   vault?: string;
   chain?: string;
+  rpcUrl?: string;
   advisorSkillsDir?: string | string[];
   advisoryPi?: boolean;
   advisoryReplay?: string;
@@ -118,6 +125,9 @@ export async function simulateCommand(
     const chain = Number.parseInt(options.chain ?? "1", 10);
     const spell = compileResult.ir;
     const noState = resolveNoState(options);
+    const provider = spellNeedsPreviewAdapterContext(spell)
+      ? createProvider(chain, resolveRpcUrl(chain, options.rpcUrl))
+      : undefined;
 
     const dataPolicy = resolveDataPolicy({
       defaultReplay: "auto",
@@ -189,6 +199,7 @@ export async function simulateCommand(
           spell,
           vault,
           chain,
+          provider,
           params,
           persistentState,
           simulate: true,
@@ -247,5 +258,38 @@ function stringifyJson(value: unknown): string {
 function resolveNoState(options: { noState?: boolean; state?: boolean }): boolean {
   if (typeof options.noState === "boolean") return options.noState;
   if (options.state === false) return true;
+  return false;
+}
+
+function resolveRpcUrl(chainId: number, explicitRpcUrl?: string): string | undefined {
+  if (typeof explicitRpcUrl === "string" && explicitRpcUrl.trim().length > 0) {
+    return explicitRpcUrl.trim();
+  }
+
+  const chainScoped = process.env[`RPC_URL_${chainId}`];
+  if (typeof chainScoped === "string" && chainScoped.trim().length > 0) {
+    return chainScoped.trim();
+  }
+
+  const generic = process.env.RPC_URL;
+  if (typeof generic === "string" && generic.trim().length > 0) {
+    return generic.trim();
+  }
+
+  return undefined;
+}
+
+function spellNeedsPreviewAdapterContext(spell: SpellIR): boolean {
+  for (const step of spell.steps) {
+    if (step.kind !== "action") continue;
+    const constraints = step.constraints;
+    if (
+      constraints.requireQuote !== undefined ||
+      constraints.requireSimulation !== undefined ||
+      constraints.maxGas !== undefined
+    ) {
+      return true;
+    }
+  }
   return false;
 }

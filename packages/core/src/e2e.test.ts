@@ -366,11 +366,21 @@ describe("E2E: Compile and Execute", () => {
       expect(compileResult.success).toBe(true);
       assertIR(compileResult);
 
+      const adapter: VenueAdapter = {
+        meta: {
+          name: "aave",
+          supportedChains: [1],
+          actions: ["lend"],
+          supportedConstraints: [],
+        },
+      };
+
       const execResult = await execute({
         spell: compileResult.ir,
         vault: "0x0000000000000000000000000000000000000000" as Address,
         chain: 1,
         simulate: true,
+        adapters: [adapter],
       });
 
       expect(execResult.success).toBe(true);
@@ -552,6 +562,7 @@ describe("E2E: Expression Evaluation", () => {
           name: "aave_v3",
           supportedChains: [1],
           actions: ["lend"],
+          supportedConstraints: [],
         },
         buildAction: async (action: Action) => [
           {

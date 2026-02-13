@@ -34,6 +34,7 @@ export interface AdvisorySummary {
 export function validateIR(ir: SpellIR): ValidationResult {
   const errors: CompilationError[] = [];
   const warnings: CompilationWarning[] = [];
+  const removedVenueAliases = new Set(["lifi", "yellow"]);
 
   // Collect all known identifiers
   const venueAliases = new Set(ir.aliases.map((a) => a.alias));
@@ -43,6 +44,14 @@ export function validateIR(ir: SpellIR): ValidationResult {
   const advisorNames = new Set(ir.advisors.map((a) => a.name));
   const skillNames = new Set(ir.skills.map((s) => s.name));
   const skillsByName = new Map<string, SkillDef>(ir.skills.map((s) => [s.name, s]));
+
+  for (const alias of ir.aliases) {
+    if (!removedVenueAliases.has(alias.alias.toLowerCase())) continue;
+    warnings.push({
+      code: "REMOVED_VENUE_ALIAS",
+      message: `Venue alias '${alias.alias}' is removed from bundled adapters. Use a supported venue or register a project-local custom adapter.`,
+    });
+  }
 
   // Validate steps
   for (const step of ir.steps) {
@@ -277,6 +286,13 @@ function validateStep(
           warnings.push({
             code: "SKILL_VENUE_AMBIGUOUS",
             message: `Step '${step.id}' uses '${venue}' which matches both a venue alias and a skill; skill routing will take precedence`,
+          });
+        }
+
+        if (venue.toLowerCase() === "hyperliquid" && step.action.type === "swap") {
+          warnings.push({
+            code: "HYPERLIQUID_SWAP_DEPRECATED",
+            message: `Step '${step.id}' uses legacy hyperliquid.swap semantics. Use custom order actions (\`type: custom\`, \`op: order\`) instead.`,
           });
         }
       }

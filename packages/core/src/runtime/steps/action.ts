@@ -16,6 +16,14 @@ import type { Expression } from "../../types/expressions.js";
 import type { Address, VenueAlias } from "../../types/primitives.js";
 import type { PlannedAction, ValueDelta } from "../../types/receipt.js";
 import type { ActionStep } from "../../types/steps.js";
+import type {
+  VenueAdapterContext,
+  VenueBuildMetadata,
+  VenueBuildResult,
+  VenueConstraint,
+  VenueQuoteMetadata,
+  VenueRegistry,
+} from "../../venues/types.js";
 import type { Executor } from "../../wallet/executor.js";
 import type { ExecutionMode } from "../../wallet/executor.js";
 import type { CircuitBreakerManager } from "../circuit-breaker.js";
@@ -29,6 +37,8 @@ export interface ActionExecutionOptions {
   mode: ExecutionMode;
   executor?: Executor;
   circuitBreakerManager?: CircuitBreakerManager;
+  adapterRegistry?: VenueRegistry;
+  previewAdapterContext?: Omit<VenueAdapterContext, "mode" | "vault">;
 }
 
 const EXPRESSION_KINDS = new Set([
@@ -45,6 +55,18 @@ const EXPRESSION_KINDS = new Set([
   "array_access",
   "property_access",
 ]);
+
+const CONSTRAINT_FIELD_TO_META: Array<[keyof ActionConstraintsResolved, VenueConstraint]> = [
+  ["maxSlippageBps", "max_slippage"],
+  ["minOutput", "min_output"],
+  ["maxInput", "max_input"],
+  ["deadline", "deadline"],
+  ["maxPriceImpactBps", "max_price_impact"],
+  ["minLiquidity", "min_liquidity"],
+  ["requireQuote", "require_quote"],
+  ["requireSimulation", "require_simulation"],
+  ["maxGas", "max_gas"],
+];
 
 export async function executeActionStep(
   step: ActionStep,
@@ -114,6 +136,7 @@ export async function executeActionStep(
     const mergedConstraints = applySkillDefaults(step.constraints, skill);
     const resolvedConstraints = await resolveConstraints(mergedConstraints, evalCtx);
     const actionWithConstraints = { ...resolvedAction, constraints: resolvedConstraints } as Action;
+    assertConstraintSupport(actionWithConstraints, options.adapterRegistry);
 
     ledger.emit({
       type: "constraint_evaluated",
@@ -720,6 +743,256 @@ function parseAmount(value: string): bigint {
   }
 }
 
+type ActionSimulationResult = {
+  success: boolean;
+  gasEstimate: string;
+  input: { asset: string; amount: string };
+  output: { asset: string; amount: string };
+};
+
+function assertConstraintSupport(action: Action, adapterRegistry: VenueRegistry | undefined): void {
+  if (!adapterRegistry) {
+    return;
+  }
+  if (!("venue" in action) || !action.venue) {
+    return;
+  }
+
+  const adapter = adapterRegistry.get(action.venue);
+  if (!adapter) {
+    return;
+  }
+
+  const constraints = action.constraints;
+  if (!constraints) {
+    return;
+  }
+
+  const supported = new Set(adapter.meta.supportedConstraints);
+  for (const [field, constraint] of CONSTRAINT_FIELD_TO_META) {
+    if (constraints[field] === undefined || supported.has(constraint)) {
+      continue;
+    }
+    throw new Error(
+      `Adapter '${adapter.meta.name}' does not support constraint '${constraint}' for action '${action.type}'`
+    );
+  }
+}
+
+function assertPreviewAdapterAvailability(
+  action: Action,
+  ctx: ExecutionContext,
+  options: ActionExecutionOptions
+): void {
+  if (!("venue" in action) || !action.venue) {
+    return;
+  }
+
+  if (!options.adapterRegistry) {
+    throw new Error(
+      `Preview requires a venue adapter registry for venue action '${action.venue}'.`
+    );
+  }
+
+  const adapter = options.adapterRegistry.get(action.venue);
+  if (!adapter) {
+    throw new Error(`Adapter '${action.venue}' is not registered`);
+  }
+
+  if (!adapter.meta.supportedChains.includes(ctx.chain)) {
+    throw new Error(`Adapter '${adapter.meta.name}' does not support chain ${ctx.chain}.`);
+  }
+}
+
+async function deriveAdapterSimulationResult(
+  action: Action,
+  ctx: ExecutionContext,
+  options: ActionExecutionOptions,
+  amountText: string
+): Promise<ActionSimulationResult | null> {
+  if (!("venue" in action) || !action.venue) {
+    return null;
+  }
+
+  const adapterRegistry = options.adapterRegistry;
+  const previewAdapterContext = options.previewAdapterContext;
+  const requiresQuote = action.constraints?.requireQuote === true;
+  const requiresSimulation =
+    action.constraints?.requireSimulation === true || action.constraints?.maxGas !== undefined;
+
+  if (!adapterRegistry) {
+    if (requiresQuote || requiresSimulation) {
+      throw new Error(
+        `Cannot enforce quote/simulation constraints for venue '${action.venue}' without an adapter registry`
+      );
+    }
+    return null;
+  }
+  if (!previewAdapterContext) {
+    if (requiresQuote || requiresSimulation) {
+      throw new Error(
+        `Cannot enforce quote/simulation constraints for venue '${action.venue}' without preview adapter context`
+      );
+    }
+    return null;
+  }
+
+  const adapter = adapterRegistry.get(action.venue);
+  if (!adapter) {
+    if (requiresQuote || requiresSimulation) {
+      throw new Error(
+        `Adapter '${action.venue}' is required to enforce quote/simulation constraints but is not registered`
+      );
+    }
+    return null;
+  }
+  if (!adapter.meta.supportedChains.includes(ctx.chain)) {
+    if (requiresQuote || requiresSimulation) {
+      throw new Error(
+        `Adapter '${adapter.meta.name}' does not support chain ${ctx.chain} required for quote/simulation constraints`
+      );
+    }
+    return null;
+  }
+
+  if (!adapter.buildAction) {
+    if (requiresQuote || requiresSimulation) {
+      throw new Error(
+        `Adapter '${adapter.meta.name}' cannot build preview simulation while quote/simulation constraints are enabled`
+      );
+    }
+    return null;
+  }
+  if (!adapter.meta.supportsQuote && !adapter.meta.supportsSimulation) {
+    if (requiresQuote || requiresSimulation) {
+      throw new Error(
+        `Adapter '${adapter.meta.name}' does not provide preview quote/simulation support required by constraints`
+      );
+    }
+    return null;
+  }
+
+  try {
+    const buildResult = await adapter.buildAction(action, {
+      ...previewAdapterContext,
+      chainId: ctx.chain,
+      vault: ctx.vault,
+      mode: "simulate",
+    });
+    const built = normalizeVenueBuildResult(buildResult);
+    const primary = built[built.length - 1];
+    if (!primary) {
+      return null;
+    }
+    return buildSimulationFromBuildResult(action, primary, amountText);
+  } catch (error) {
+    if (requiresQuote || requiresSimulation) {
+      throw error;
+    }
+    return null;
+  }
+}
+
+function normalizeVenueBuildResult(result: VenueBuildResult): Array<{
+  gasEstimate?: { gasLimit: bigint };
+  metadata?: VenueBuildMetadata;
+}> {
+  const normalized = Array.isArray(result) ? result : [result];
+  return normalized.map((tx) => ({
+    gasEstimate: tx.gasEstimate ? { gasLimit: tx.gasEstimate.gasLimit } : undefined,
+    metadata: tx.metadata,
+  }));
+}
+
+function buildSimulationFromBuildResult(
+  action: Action,
+  built: {
+    gasEstimate?: { gasLimit: bigint };
+    metadata?: VenueBuildMetadata;
+  },
+  amountText: string
+): ActionSimulationResult {
+  const fallbackInput = deriveSimulationInput(action, amountText);
+  const fallbackOutput = deriveSimulationOutput(action, amountText);
+  const quotedIO = applyQuoteToSimulation(
+    action,
+    built.metadata?.quote,
+    fallbackInput,
+    fallbackOutput
+  );
+  const routeGas = readGasFromRouteMetadata(built.metadata?.route);
+  const resolvedGasEstimate = built.gasEstimate?.gasLimit ?? routeGas;
+  if (action.constraints?.maxGas !== undefined && resolvedGasEstimate === undefined) {
+    const venue = "venue" in action && action.venue ? action.venue : "unknown";
+    throw new Error(
+      `Adapter '${venue}' could not provide gas estimate while max_gas is enabled for action '${action.type}'`
+    );
+  }
+  const gasEstimate = resolvedGasEstimate ?? 0n;
+
+  return {
+    success: true,
+    gasEstimate: gasEstimate.toString(),
+    input: quotedIO.input,
+    output: quotedIO.output,
+  };
+}
+
+function applyQuoteToSimulation(
+  action: Action,
+  quote: VenueQuoteMetadata | undefined,
+  fallbackInput: { asset: string; amount: string },
+  fallbackOutput: { asset: string; amount: string }
+): { input: { asset: string; amount: string }; output: { asset: string; amount: string } } {
+  if (!quote) {
+    return { input: fallbackInput, output: fallbackOutput };
+  }
+
+  const input = { ...fallbackInput };
+  const output = { ...fallbackOutput };
+
+  if (action.type === "swap") {
+    if (action.mode === "exact_out") {
+      if (quote.maxIn !== undefined) input.amount = quote.maxIn.toString();
+      else if (quote.expectedIn !== undefined) input.amount = quote.expectedIn.toString();
+      if (quote.expectedOut !== undefined) output.amount = quote.expectedOut.toString();
+    } else {
+      if (quote.expectedIn !== undefined) input.amount = quote.expectedIn.toString();
+      if (quote.minOut !== undefined) output.amount = quote.minOut.toString();
+      else if (quote.expectedOut !== undefined) output.amount = quote.expectedOut.toString();
+    }
+    return { input, output };
+  }
+
+  if (quote.expectedIn !== undefined) input.amount = quote.expectedIn.toString();
+  if (quote.minOut !== undefined) output.amount = quote.minOut.toString();
+  else if (quote.expectedOut !== undefined) output.amount = quote.expectedOut.toString();
+
+  return { input, output };
+}
+
+function readGasFromRouteMetadata(route: Record<string, unknown> | undefined): bigint | undefined {
+  if (!route) {
+    return undefined;
+  }
+  const candidate = route.gasEstimate;
+  if (typeof candidate === "bigint") {
+    return candidate;
+  }
+  if (typeof candidate === "number") {
+    if (!Number.isFinite(candidate) || candidate <= 0) return undefined;
+    return BigInt(Math.floor(candidate));
+  }
+  if (typeof candidate === "string") {
+    try {
+      return BigInt(candidate);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 function serializeValue(value: unknown): unknown {
   if (typeof value === "bigint") {
     return value.toString();
@@ -755,7 +1028,7 @@ export async function previewActionStep(
   step: ActionStep,
   ctx: ExecutionContext,
   ledger: InMemoryLedger,
-  _options: ActionExecutionOptions
+  options: ActionExecutionOptions
 ): Promise<PreviewActionResult> {
   ledger.emit({ type: "step_started", stepId: step.id, kind: "action" });
   incrementActions(ctx);
@@ -779,6 +1052,8 @@ export async function previewActionStep(
     const mergedConstraints = applySkillDefaults(step.constraints, skill);
     const resolvedConstraints = await resolveConstraints(mergedConstraints, evalCtx);
     const actionWithConstraints = { ...resolvedAction, constraints: resolvedConstraints } as Action;
+    assertConstraintSupport(actionWithConstraints, options.adapterRegistry);
+    assertPreviewAdapterAvailability(actionWithConstraints, ctx, options);
 
     ledger.emit({
       type: "constraint_evaluated",
@@ -792,13 +1067,28 @@ export async function previewActionStep(
         ? (actionWithConstraints as { amount?: unknown }).amount
         : undefined;
     const amountText = amountValue !== undefined ? String(amountValue) : "";
-
-    const simulationResult = {
+    const fallbackSimulationResult = {
       success: true,
       gasEstimate: "0",
       input: deriveSimulationInput(actionWithConstraints, amountText),
       output: deriveSimulationOutput(actionWithConstraints, amountText),
     };
+    const adapterSimulationResult = await deriveAdapterSimulationResult(
+      actionWithConstraints,
+      ctx,
+      options,
+      amountText
+    );
+    if (
+      adapterSimulationResult === null &&
+      actionWithConstraints.constraints?.maxGas !== undefined
+    ) {
+      const venue = "venue" in actionWithConstraints ? actionWithConstraints.venue : "unknown";
+      throw new Error(
+        `Cannot enforce max_gas for action '${actionWithConstraints.type}' on venue '${venue}' without adapter simulation`
+      );
+    }
+    const simulationResult = adapterSimulationResult ?? fallbackSimulationResult;
 
     ledger.emit({
       type: "action_simulated",
