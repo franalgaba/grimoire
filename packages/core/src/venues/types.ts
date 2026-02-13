@@ -7,10 +7,42 @@ import type { Address } from "../types/primitives.js";
 import type { Provider } from "../wallet/provider.js";
 import type { BuiltTransaction } from "../wallet/tx-builder.js";
 
+export type VenueConstraint =
+  | "max_slippage"
+  | "min_output"
+  | "max_input"
+  | "deadline"
+  | "max_price_impact"
+  | "min_liquidity"
+  | "require_quote"
+  | "require_simulation"
+  | "max_gas";
+
+export interface VenueQuoteMetadata {
+  expectedIn?: bigint;
+  expectedOut?: bigint;
+  minOut?: bigint;
+  maxIn?: bigint;
+  slippageBps?: number;
+}
+
+export interface VenueBuildMetadata {
+  quote?: VenueQuoteMetadata;
+  route?: Record<string, unknown>;
+  fees?: Record<string, unknown>;
+  warnings?: string[];
+}
+
 export interface VenueAdapterMeta {
   name: string;
   supportedChains: number[];
   actions: string[];
+  supportedConstraints: VenueConstraint[];
+  supportsQuote?: boolean;
+  supportsSimulation?: boolean;
+  requiredEnv?: string[];
+  supportsPreviewCommit?: boolean;
+  dataEndpoints?: string[];
   description?: string;
   executionType?: "evm" | "offchain";
 }
@@ -26,11 +58,14 @@ export interface VenueAdapterContext {
 
 export interface OffchainExecutionResult {
   id: string;
-  status?: string;
+  status: string;
+  reference?: string;
   raw?: unknown;
 }
 
-export type VenueBuildResult = BuiltTransaction | BuiltTransaction[];
+export type VenueBuildResult =
+  | (BuiltTransaction & { metadata?: VenueBuildMetadata })
+  | Array<BuiltTransaction & { metadata?: VenueBuildMetadata }>;
 
 export interface VenueAdapter {
   meta: VenueAdapterMeta;

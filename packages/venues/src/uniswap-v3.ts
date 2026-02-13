@@ -1,4 +1,3 @@
-import { createRequire } from "node:module";
 import type { Address } from "@grimoirelabs/core";
 import type { VenueAdapter } from "@grimoirelabs/core";
 import { CurrencyAmount, Percent, Token, TradeType } from "@uniswap/sdk-core";
@@ -11,7 +10,9 @@ import {
   computePoolAddress,
 } from "@uniswap/v3-sdk";
 import { type Abi, encodeFunctionData, parseAbi } from "viem";
+import { assertSupportedConstraints } from "./constraints.js";
 import { buildApprovalIfNeeded } from "./erc20.js";
+import { resolveToken as resolveVenueToken } from "./token-registry.js";
 
 export interface UniswapV3AdapterConfig {
   routers: Record<number, Address>;
@@ -53,24 +54,35 @@ const POOL_ABI = parseAbi([
 
 const WETH_ABI = parseAbi(["function deposit() payable"]);
 
-const require = createRequire(import.meta.url);
-const tokenList = require("@uniswap/default-token-list") as {
-  tokens: Array<{ chainId: number; symbol: string; address: string; decimals: number }>;
-};
-
 export function createUniswapV3Adapter(
   config: UniswapV3AdapterConfig = { routers: DEFAULT_ROUTERS }
 ): VenueAdapter {
   const factories = config.factories ?? DEFAULT_FACTORIES;
+  const meta: VenueAdapter["meta"] = {
+    name: "uniswap_v3",
+    supportedChains: Object.keys(config.routers).map((id) => Number.parseInt(id, 10)),
+    actions: ["swap"],
+    supportedConstraints: [
+      "max_slippage",
+      "min_output",
+      "max_input",
+      "deadline",
+      "require_quote",
+      "require_simulation",
+      "max_gas",
+    ],
+    supportsQuote: true,
+    supportsSimulation: true,
+    supportsPreviewCommit: true,
+    dataEndpoints: ["info", "routers", "tokens", "pools"],
+    description: "Uniswap V3 swap adapter",
+  };
 
   return {
-    meta: {
-      name: "uniswap_v3",
-      supportedChains: Object.keys(config.routers).map((id) => Number.parseInt(id, 10)),
-      actions: ["swap"],
-      description: "Uniswap V3 swap adapter",
-    },
+    meta,
     async buildAction(action, ctx) {
+      assertSupportedConstraints(meta, action);
+
       if (action.type !== "swap") {
         throw new Error(`Uniswap adapter only supports swap actions (got ${action.type})`);
       }
@@ -138,6 +150,7 @@ export function createUniswapV3Adapter(
       // Build trade using SDK (same pattern as docs.uniswap.org/sdk/v3/guides/swaps/trading)
       const isExactOut = action.mode === "exact_out";
       const swapRoute = new Route([pool], tokenIn, tokenOut);
+      const quoteTimestampMs = Date.now();
 
       let trade: Trade<Token, Token, TradeType>;
       if (isExactOut) {
@@ -177,7 +190,9 @@ export function createUniswapV3Adapter(
       }
 
       const slippageTolerance = new Percent(slippageBps, 10_000);
-      const deadline = Math.floor(Date.now() / 1000) + (config.deadlineSeconds ?? 1200);
+      const deadline =
+        Math.floor(Date.now() / 1000) +
+        (action.constraints?.deadline ?? config.deadlineSeconds ?? 1200);
 
       const { calldata, value: txValue } = SwapRouter.swapCallParameters([trade], {
         slippageTolerance,
@@ -248,66 +263,82 @@ export function createUniswapV3Adapter(
         `  router:     ${shortAddr(router)}`,
         `  recipient:  ${shortAddr(recipient)}`,
       ].join("\n");
+      const gasEstimate = await estimateGasIfSupported(ctx, {
+        to: router,
+        data: calldata as `0x${string}`,
+        value: BigInt(txValue),
+      });
+      const hasQuote = true;
+      if (action.constraints?.requireQuote === true && !hasQuote) {
+        throw new Error("Uniswap V3 could not resolve quote while require_quote is enabled");
+      }
+      if (action.constraints?.requireSimulation === true && gasEstimate?.gasLimit === undefined) {
+        throw new Error(
+          "Uniswap V3 requires gas simulation support while require_simulation is enabled"
+        );
+      }
+      if (action.constraints?.maxGas !== undefined) {
+        if (gasEstimate?.gasLimit === undefined) {
+          throw new Error("Uniswap V3 could not estimate gas while max_gas is enabled");
+        }
+        if (gasEstimate.gasLimit > action.constraints.maxGas) {
+          throw new Error(
+            `Uniswap V3 gas estimate ${gasEstimate.gasLimit.toString()} exceeds max_gas ${action.constraints.maxGas.toString()}`
+          );
+        }
+      }
+      const priceImpactPct = Number.parseFloat(trade.priceImpact.toFixed(6));
+      const priceImpactBps = Number.isFinite(priceImpactPct)
+        ? Math.max(0, Math.round(priceImpactPct * 100))
+        : undefined;
 
-      return [
-        ...preTxs,
-        {
-          tx: {
-            to: router,
-            data: calldata as `0x${string}`,
-            value: BigInt(txValue),
-          },
-          description: descLines,
-          action,
+      const swapTx = {
+        tx: {
+          to: router,
+          data: calldata as `0x${string}`,
+          value: BigInt(txValue),
         },
-      ];
+        description: descLines,
+        gasEstimate,
+        action,
+        metadata: {
+          quote: {
+            expectedIn,
+            expectedOut,
+            minOut: BigInt(minOutAmount.quotient.toString()),
+            maxIn: maxInputAmount ?? explicitMaxIn,
+            slippageBps,
+          },
+          route: {
+            factory,
+            poolAddress,
+            fee,
+            tokenIn: tokenIn.address,
+            tokenOut: tokenOut.address,
+            recipient,
+            deadline,
+            quoteTimestampMs,
+            priceImpactBpsEstimate: priceImpactBps,
+          },
+          fees: {
+            feeTierBps: fee,
+          },
+        },
+      };
+
+      return [...preTxs, swapTx];
     },
   };
 }
 
 export const uniswapV3Adapter = createUniswapV3Adapter();
 
-/** WETH addresses per chain (native ETH wrapping — not in the Uniswap token list) */
-const WETH_BY_CHAIN: Record<number, Address> = {
-  1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
-  10: "0x4200000000000000000000000000000000000006" as Address,
-  137: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619" as Address,
-  8453: "0x4200000000000000000000000000000000000006" as Address,
-  42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" as Address,
-};
-
-/** Build a symbol+chain index from the Uniswap default token list */
-const tokenIndex = new Map<string, { address: string; decimals: number }>();
-for (const t of tokenList.tokens) {
-  tokenIndex.set(`${t.symbol.toUpperCase()}:${t.chainId}`, {
-    address: t.address,
-    decimals: t.decimals,
-  });
-}
-
 function resolveToken(asset: string, chainId: number): Token {
-  if (asset.startsWith("0x") && asset.length === 42) {
-    return new Token(chainId, asset, 18);
-  }
-
-  const symbol = asset.toUpperCase();
-
-  // ETH / WETH → use the chain-specific wrapped address
-  if (symbol === "ETH" || symbol === "WETH") {
-    const weth = WETH_BY_CHAIN[chainId];
-    if (!weth) {
-      throw new Error(`No WETH address for chain ${chainId}`);
-    }
-    return new Token(chainId, weth, 18, "WETH", "Wrapped Ether");
-  }
-
-  // Look up from Uniswap default token list
-  const entry = tokenIndex.get(`${symbol}:${chainId}`);
-  if (entry) {
-    return new Token(chainId, entry.address, entry.decimals, symbol);
-  }
-
-  throw new Error(`Unknown asset: ${asset} on chain ${chainId}. Provide address directly.`);
+  const token = resolveVenueToken(asset, chainId, {
+    treatEthAsWrapped: true,
+    defaultDecimals: 18,
+  });
+  return new Token(chainId, token.address, token.decimals, token.symbol);
 }
 
 function toBigInt(amount: unknown): bigint {
@@ -354,4 +385,24 @@ function isLiteralAmount(
     (value as { kind?: unknown }).kind === "literal" &&
     "value" in value
   );
+}
+
+async function estimateGasIfSupported(
+  ctx: Parameters<NonNullable<VenueAdapter["buildAction"]>>[1],
+  tx: { to: Address; data?: string; value?: bigint }
+): Promise<
+  | { gasLimit: bigint; maxFeePerGas: bigint; maxPriorityFeePerGas: bigint; estimatedCost: bigint }
+  | undefined
+> {
+  if (typeof ctx.provider.getGasEstimate !== "function") {
+    return undefined;
+  }
+  try {
+    return await ctx.provider.getGasEstimate({
+      ...tx,
+      from: ctx.walletAddress,
+    });
+  } catch {
+    return undefined;
+  }
 }

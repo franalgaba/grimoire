@@ -5,6 +5,10 @@ export const compoundV3Adapter: VenueAdapter = {
     name: "compound_v3",
     supportedChains: [1, 10, 42161, 8453],
     actions: ["lend", "withdraw", "borrow", "repay"],
+    supportedConstraints: [],
+    supportsQuote: false,
+    supportsSimulation: false,
+    supportsPreviewCommit: true,
     description: "Compound V3 lending adapter",
   },
   async buildAction() {

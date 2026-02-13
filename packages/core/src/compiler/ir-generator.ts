@@ -803,6 +803,14 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
       const args: Record<string, CustomActionValue> = {};
       if (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)) {
         for (const [key, value] of Object.entries(rawArgs)) {
+          if (
+            op === "order" &&
+            (key === "side" || key === "order_type") &&
+            typeof value === "string"
+          ) {
+            args[key] = { kind: "literal", value, type: "string" };
+            continue;
+          }
           args[key] = parseCustomActionValue(value, errors);
         }
       }

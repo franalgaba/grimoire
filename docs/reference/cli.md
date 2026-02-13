@@ -12,6 +12,7 @@ This page documents the `grimoire` CLI surface from `packages/cli/src/index.ts` 
 - `grimoire cast <spell>`
 - `grimoire venues`
 - `grimoire venue [adapter] [args...]`
+- `grimoire venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]`
 - `grimoire history [spell]`
 - `grimoire log <spell> <runId>`
 - `grimoire wallet <subcommand>`
@@ -86,6 +87,7 @@ grimoire validate <spell> [--strict] [--json]
 Options:
 
 - `--strict`: treat warnings as failures.
+- `--strict` also fails on venue constraint capability warnings inferred from bundled adapters (for example applying `min_liquidity` to `uniswap_v3`).
 - `--json`: emit validation payload.
 
 JSON includes:
@@ -115,12 +117,14 @@ Core options:
 - `-p, --params <json>`: parameter override JSON
 - `--vault <address>`: vault address (default `0x000...000`)
 - `--chain <id>`: EVM chain id (default `1`)
+- `--rpc-url <url>`: explicit RPC URL override for preview adapter context
 - `--json`: JSON output
 
-Custom RPC note:
+RPC resolution order:
 
-- `simulate` does not expose `--rpc-url`.
-- To run preview against custom or forked RPC, use `cast --dry-run` with wallet or key options and `--rpc-url`.
+1. `--rpc-url <url>`
+2. `RPC_URL_<chainId>` (for example `RPC_URL_1`)
+3. `RPC_URL`
 
 Advisory options:
 
@@ -216,6 +220,12 @@ Table columns:
 - `Exec` (`evm` or `offchain`)
 - `Actions`
 - `Chains`
+- `Constraints`
+- `Quote`
+- `Sim`
+- `Preview/Commit`
+- `Env`
+- `Endpoints`
 - `Description`
 
 ## `venue`
@@ -234,6 +244,38 @@ Primary adapters supported by proxy mapping:
 - `hyperliquid`
 
 This command forwards args to `grimoire-aave`, `grimoire-uniswap`, etc.
+
+## `venue doctor`
+
+Run venue environment and connectivity diagnostics.
+
+```bash
+grimoire venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]
+```
+
+Checks:
+
+- adapter registration
+- required environment variables
+- adapter chain support (when `--chain` is provided)
+- RPC reachability via block-number fetch (when `--chain` is provided)
+
+Offchain adapter note:
+
+- For offchain adapters such as `hyperliquid`, prefer `grimoire venue doctor --adapter hyperliquid --json` (omit `--chain`) to skip EVM RPC reachability checks.
+
+Adapter filter aliases:
+
+- `aave`, `aave-v3`
+- `uniswap`, `uniswap-v3`, `uniswap-v4`
+- `morpho`, `morpho-blue`
+- `hyperliquid`
+- `across`
+
+Exit code:
+
+- `0` when all checks pass (or are skipped)
+- `1` when any check fails or arguments are invalid
 
 ## `history`
 

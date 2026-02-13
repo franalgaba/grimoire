@@ -14,6 +14,11 @@ Preferred invocations:
 - `bun run packages/cli/src/index.ts venue hyperliquid ...` (repo-local)
 - `grimoire-hyperliquid ...` (direct binary from `@grimoirelabs/venues`)
 
+Recommended preflight:
+
+- `grimoire venue doctor --adapter hyperliquid --json`
+- Ensure `HYPERLIQUID_PRIVATE_KEY` is set before stateful actions (`withdraw`).
+
 Use `--format spell` for snapshot `params:` blocks.
 
 ## Commands
@@ -41,3 +46,5 @@ grimoire venue hyperliquid meta
 - `withdraw` is stateful and requires explicit user confirmation plus keystore credentials.
 - `mids`, `l2-book`, `open-orders`, `meta`, `spot-meta` are read-only info calls.
 - Use `--format spell` for snapshot-based spell inputs.
+- Use `--format json` for `meta`/`spot-meta` in automation; `--format table` shows compact summaries for nested payloads.
+- `anvil`/`cast` are EVM tools and are not applicable for Hyperliquid execution/diagnostics.

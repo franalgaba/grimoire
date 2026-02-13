@@ -7,10 +7,13 @@ import type { SpellIR } from "../../types/ir.js";
 import type { CircuitBreaker } from "../../types/policy.js";
 import type { Address } from "../../types/primitives.js";
 import type { ActionStep } from "../../types/steps.js";
+import { createVenueRegistry } from "../../venues/index.js";
+import type { VenueAdapter } from "../../venues/types.js";
 import type { Executor } from "../../wallet/executor.js";
+import type { Provider } from "../../wallet/provider.js";
 import { CircuitBreakerManager } from "../circuit-breaker.js";
 import { InMemoryLedger, createContext } from "../context.js";
-import { executeActionStep } from "./action.js";
+import { executeActionStep, previewActionStep } from "./action.js";
 
 function createSpell(): SpellIR {
   return {
@@ -115,13 +118,309 @@ describe("Action Step", () => {
     }
   });
 
+  test("preview uses adapter quote and gas metadata when available", async () => {
+    const step: ActionStep = {
+      kind: "action",
+      id: "action_quote_preview",
+      action: {
+        type: "swap",
+        venue: "uniswap",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: { kind: "literal", value: 1000, type: "int" },
+        mode: "exact_in",
+      },
+      constraints: {},
+      dependsOn: [],
+      onFailure: "revert",
+    };
+
+    const spell = {
+      ...createSpell(),
+      aliases: [
+        ...createSpell().aliases,
+        {
+          alias: "uniswap",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000004" as Address,
+        },
+      ],
+      assets: [
+        ...createSpell().assets,
+        {
+          symbol: "WETH",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000005" as Address,
+          decimals: 18,
+        },
+      ],
+    };
+
+    const ctx = createContext({
+      spell,
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+    const adapter: VenueAdapter = {
+      meta: {
+        name: "uniswap",
+        supportedChains: [1],
+        actions: ["swap"],
+        supportedConstraints: ["max_slippage", "min_output"],
+        supportsQuote: true,
+        supportsSimulation: true,
+      },
+      buildAction: async (action) => ({
+        tx: { to: "0x0000000000000000000000000000000000000006", data: "0x", value: 0n },
+        description: "quoted swap",
+        gasEstimate: {
+          gasLimit: 123456n,
+          maxFeePerGas: 1n,
+          maxPriorityFeePerGas: 1n,
+          estimatedCost: 123456n,
+        },
+        action,
+        metadata: {
+          quote: {
+            expectedIn: 1000n,
+            expectedOut: 950n,
+            minOut: 900n,
+            slippageBps: 500,
+          },
+        },
+      }),
+    };
+
+    const result = await previewActionStep(step, ctx, ledger, {
+      mode: "simulate",
+      adapterRegistry: createVenueRegistry([adapter]),
+      previewAdapterContext: {
+        provider: { chainId: 1 } as unknown as Provider,
+        walletAddress: "0x0000000000000000000000000000000000000001" as Address,
+        chainId: 1,
+      },
+    });
+
+    expect(result.stepResult.success).toBe(true);
+    expect(result.plannedAction?.simulationResult?.gasEstimate).toBe("123456");
+    expect(result.plannedAction?.simulationResult?.input.amount).toBe("1000");
+    expect(result.plannedAction?.simulationResult?.output.amount).toBe("900");
+  });
+
+  test("preview fails when venue adapter is not registered", async () => {
+    const step: ActionStep = {
+      kind: "action",
+      id: "action_missing_adapter",
+      action: {
+        type: "swap",
+        venue: "uniswap",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: { kind: "literal", value: 1000, type: "int" },
+        mode: "exact_in",
+      },
+      constraints: {},
+      dependsOn: [],
+      onFailure: "revert",
+    };
+
+    const spell = {
+      ...createSpell(),
+      aliases: [
+        ...createSpell().aliases,
+        {
+          alias: "uniswap",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000004" as Address,
+        },
+      ],
+      assets: [
+        ...createSpell().assets,
+        {
+          symbol: "WETH",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000005" as Address,
+          decimals: 18,
+        },
+      ],
+    };
+
+    const ctx = createContext({
+      spell,
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+
+    const result = await previewActionStep(step, ctx, ledger, {
+      mode: "simulate",
+      adapterRegistry: createVenueRegistry([]),
+      previewAdapterContext: {
+        provider: { chainId: 1 } as unknown as Provider,
+        walletAddress: "0x0000000000000000000000000000000000000001" as Address,
+        chainId: 1,
+      },
+    });
+
+    expect(result.stepResult.success).toBe(false);
+    expect(result.stepResult.error).toContain("Adapter 'uniswap' is not registered");
+  });
+
+  test("preview fails closed for max_gas when adapter provides no gas estimate", async () => {
+    const step: ActionStep = {
+      kind: "action",
+      id: "action_max_gas_fail_closed",
+      action: {
+        type: "swap",
+        venue: "uniswap",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: { kind: "literal", value: 1000, type: "int" },
+        mode: "exact_in",
+      },
+      constraints: {
+        maxGas: { kind: "literal", value: 100000, type: "int" },
+      },
+      dependsOn: [],
+      onFailure: "revert",
+    };
+
+    const spell = {
+      ...createSpell(),
+      aliases: [
+        ...createSpell().aliases,
+        {
+          alias: "uniswap",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000004" as Address,
+        },
+      ],
+      assets: [
+        ...createSpell().assets,
+        {
+          symbol: "WETH",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000005" as Address,
+          decimals: 18,
+        },
+      ],
+    };
+
+    const ctx = createContext({
+      spell,
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+    const adapter: VenueAdapter = {
+      meta: {
+        name: "uniswap",
+        supportedChains: [1],
+        actions: ["swap"],
+        supportedConstraints: ["max_gas"],
+        supportsQuote: true,
+        supportsSimulation: true,
+      },
+      buildAction: async (action) => ({
+        tx: { to: "0x0000000000000000000000000000000000000006", data: "0x", value: 0n },
+        description: "swap without gas estimate",
+        action,
+      }),
+    };
+
+    const result = await previewActionStep(step, ctx, ledger, {
+      mode: "simulate",
+      adapterRegistry: createVenueRegistry([adapter]),
+      previewAdapterContext: {
+        provider: { chainId: 1 } as unknown as Provider,
+        walletAddress: "0x0000000000000000000000000000000000000001" as Address,
+        chainId: 1,
+      },
+    });
+
+    expect(result.stepResult.success).toBe(false);
+    expect(result.stepResult.error).toContain("could not provide gas estimate");
+  });
+
+  test("preview fails closed for require_quote without adapter preview context", async () => {
+    const step: ActionStep = {
+      kind: "action",
+      id: "action_require_quote_missing_context",
+      action: {
+        type: "swap",
+        venue: "uniswap",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: { kind: "literal", value: 1000, type: "int" },
+        mode: "exact_in",
+      },
+      constraints: {
+        requireQuote: { kind: "literal", value: true, type: "bool" },
+      },
+      dependsOn: [],
+      onFailure: "revert",
+    };
+
+    const spell = {
+      ...createSpell(),
+      aliases: [
+        ...createSpell().aliases,
+        {
+          alias: "uniswap",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000004" as Address,
+        },
+      ],
+      assets: [
+        ...createSpell().assets,
+        {
+          symbol: "WETH",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000005" as Address,
+          decimals: 18,
+        },
+      ],
+    };
+
+    const ctx = createContext({
+      spell,
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+    const adapter: VenueAdapter = {
+      meta: {
+        name: "uniswap",
+        supportedChains: [1],
+        actions: ["swap"],
+        supportedConstraints: ["require_quote"],
+        supportsQuote: true,
+        supportsSimulation: true,
+      },
+      buildAction: async (action) => ({
+        tx: { to: "0x0000000000000000000000000000000000000006", data: "0x", value: 0n },
+        description: "quoted swap",
+        action,
+      }),
+    };
+
+    const result = await previewActionStep(step, ctx, ledger, {
+      mode: "simulate",
+      adapterRegistry: createVenueRegistry([adapter]),
+    });
+
+    expect(result.stepResult.success).toBe(false);
+    expect(result.stepResult.error).toContain("without preview adapter context");
+  });
+
   test("resolves custom action args recursively", async () => {
     const step: ActionStep = {
       kind: "action",
       id: "action_custom",
       action: {
         type: "custom",
-        venue: "yellow",
+        venue: "offchain_fixture",
         op: "session_update",
         args: {
           version: {

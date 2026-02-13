@@ -64,6 +64,101 @@ describe("Uniswap V4 adapter", () => {
     expect(built[0]?.description).toContain("Uniswap V4 swap");
     expect(built[0]?.tx.value).toBe(1_000_000_000_000_000n);
     expect(built[0]?.tx.data).toBeDefined();
+    expect(built[0]?.metadata?.quote?.expectedOut).toBe(MOCK_QUOTE_OUT);
+  });
+
+  test("fails fast on unsupported constraints", async () => {
+    const adapter = createUniswapV4Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const amount: Expression = { kind: "literal", value: 10n, type: "int" };
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "uniswap_v4",
+          assetIn: "ETH",
+          assetOut: "USDC",
+          amount,
+          mode: "exact_in",
+          constraints: {
+            minLiquidity: 100n,
+          },
+        } as unknown as Parameters<NonNullable<typeof adapter.buildAction>>[0],
+        ctx
+      )
+    ).rejects.toThrow(
+      "Adapter 'uniswap_v4' does not support constraint 'min_liquidity' for action 'swap'"
+    );
+  });
+
+  test("enforces require_quote when no quoter is configured", async () => {
+    const adapter = createUniswapV4Adapter({ quoters: {} });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "uniswap_v4",
+          assetIn: "ETH",
+          assetOut: "USDC",
+          amount: 1_000_000_000_000_000n as unknown as Expression,
+          mode: "exact_in",
+          constraints: {
+            requireQuote: true,
+          },
+        },
+        ctx
+      )
+    ).rejects.toThrow("Uniswap V4 could not resolve quote while require_quote is enabled");
+  });
+
+  test("fails closed for max_gas when no gas estimate is available", async () => {
+    const adapter = createUniswapV4Adapter({ quoters: {} });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "uniswap_v4",
+          assetIn: "ETH",
+          assetOut: "USDC",
+          amount: 1_000_000_000_000_000n as unknown as Expression,
+          mode: "exact_in",
+          constraints: {
+            maxGas: 100_000n,
+          },
+        },
+        ctx
+      )
+    ).rejects.toThrow("Uniswap V4 could not estimate gas while max_gas is enabled");
+  });
+
+  test("enforces require_simulation when no gas estimate is available", async () => {
+    const adapter = createUniswapV4Adapter({ quoters: {} });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "uniswap_v4",
+          assetIn: "ETH",
+          assetOut: "USDC",
+          amount: 1_000_000_000_000_000n as unknown as Expression,
+          mode: "exact_in",
+          constraints: {
+            requireSimulation: true,
+          },
+        },
+        ctx
+      )
+    ).rejects.toThrow(
+      "Uniswap V4 requires gas simulation support while require_simulation is enabled"
+    );
   });
 
   test("adds Permit2 approvals for ERC20 input", async () => {

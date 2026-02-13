@@ -3,22 +3,16 @@ import type { Action, Address, Provider, VenueAdapterContext } from "@grimoirela
 import type { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
 import { createHyperliquidAdapter, hyperliquidAdapter } from "./hyperliquid.js";
 
-type HyperliquidOrderAction = {
-  type: "swap";
-  venue: "hyperliquid";
-  coin: string;
-  price: string;
-  size: string;
-  isBuy: boolean;
-};
-
-const orderAction: HyperliquidOrderAction = {
-  type: "swap",
+const orderAction: Action = {
+  type: "custom",
   venue: "hyperliquid",
-  coin: "BTC",
-  price: "30000",
-  size: "0.1",
-  isBuy: true,
+  op: "order",
+  args: {
+    coin: "BTC",
+    price: "30000",
+    size: "0.1",
+    side: "buy",
+  },
 };
 
 const adapterContext: VenueAdapterContext = {
@@ -38,10 +32,10 @@ describe("Hyperliquid adapter", () => {
       throw new Error("Missing buildAction");
     }
 
-    const result = await adapter.buildAction(orderAction as unknown as Action, adapterContext);
+    const result = await adapter.buildAction(orderAction, adapterContext);
     const built = Array.isArray(result) ? result[0] : result;
 
-    expect(built.description).toContain("Hyperliquid");
+    expect(built.description).toContain("Hyperliquid order");
   });
 
   test("executes order via exchange client", async () => {
@@ -52,7 +46,7 @@ describe("Hyperliquid adapter", () => {
       exchange: {
         order: async () => {
           called = true;
-          return { status: "ok" };
+          return { data: { orderId: "ord-1" } };
         },
       } as unknown as ExchangeClient,
       transport: {} as HttpTransport,
@@ -62,10 +56,11 @@ describe("Hyperliquid adapter", () => {
       throw new Error("Missing executeAction");
     }
 
-    const result = await adapter.executeAction(orderAction as unknown as Action, adapterContext);
+    const result = await adapter.executeAction(orderAction, adapterContext);
 
     expect(called).toBe(true);
     expect(result.status).toBe("submitted");
+    expect(result.reference).toBe("ord-1");
   });
 
   test("rejects unknown asset mapping in executeAction", async () => {
@@ -80,25 +75,25 @@ describe("Hyperliquid adapter", () => {
 
     if (!adapter.executeAction) throw new Error("Missing executeAction");
 
-    await expect(
-      adapter.executeAction(orderAction as unknown as Action, adapterContext)
-    ).rejects.toThrow("Unknown Hyperliquid asset mapping");
+    await expect(adapter.executeAction(orderAction, adapterContext)).rejects.toThrow(
+      "Unknown Hyperliquid asset mapping"
+    );
   });
 
   test("default adapter throws on buildAction and executeAction", async () => {
     if (!hyperliquidAdapter.buildAction) throw new Error("Missing buildAction");
     if (!hyperliquidAdapter.executeAction) throw new Error("Missing executeAction");
 
-    await expect(
-      hyperliquidAdapter.buildAction(orderAction as unknown as Action, adapterContext)
-    ).rejects.toThrow("requires a private key");
+    await expect(hyperliquidAdapter.buildAction(orderAction, adapterContext)).rejects.toThrow(
+      "requires a private key"
+    );
 
-    await expect(
-      hyperliquidAdapter.executeAction(orderAction as unknown as Action, adapterContext)
-    ).rejects.toThrow("requires a private key");
+    await expect(hyperliquidAdapter.executeAction(orderAction, adapterContext)).rejects.toThrow(
+      "requires a private key"
+    );
   });
 
-  test("rejects non-object action", async () => {
+  test("rejects missing coin, price, size, or side", async () => {
     const adapter = createHyperliquidAdapter({
       privateKey: "0x0000000000000000000000000000000000000000000000000000000000000001",
       assetMap: { BTC: 1 },
@@ -106,16 +101,44 @@ describe("Hyperliquid adapter", () => {
 
     if (!adapter.buildAction) throw new Error("Missing buildAction");
 
-    await expect(adapter.buildAction(null as unknown as Action, adapterContext)).rejects.toThrow(
-      "requires action object"
+    const noCoin: Action = {
+      type: "custom",
+      venue: "hyperliquid",
+      op: "order",
+      args: { price: "100", size: "1", side: "buy" },
+    };
+    await expect(adapter.buildAction(noCoin, adapterContext)).rejects.toThrow("requires args.coin");
+
+    const noPrice: Action = {
+      type: "custom",
+      venue: "hyperliquid",
+      op: "order",
+      args: { coin: "BTC", size: "1", side: "buy" },
+    };
+    await expect(adapter.buildAction(noPrice, adapterContext)).rejects.toThrow(
+      "requires args.price"
     );
 
-    await expect(
-      adapter.buildAction(undefined as unknown as Action, adapterContext)
-    ).rejects.toThrow("requires action object");
+    const noSize: Action = {
+      type: "custom",
+      venue: "hyperliquid",
+      op: "order",
+      args: { coin: "BTC", price: "100", side: "buy" },
+    };
+    await expect(adapter.buildAction(noSize, adapterContext)).rejects.toThrow("requires args.size");
+
+    const noSide: Action = {
+      type: "custom",
+      venue: "hyperliquid",
+      op: "order",
+      args: { coin: "BTC", price: "100", size: "1" },
+    };
+    await expect(adapter.buildAction(noSide, adapterContext)).rejects.toThrow(
+      "requires args.side or args.isBuy"
+    );
   });
 
-  test("rejects missing coin, price, or size", async () => {
+  test("rejects legacy swap action shape", async () => {
     const adapter = createHyperliquidAdapter({
       privateKey: "0x0000000000000000000000000000000000000000000000000000000000000001",
       assetMap: { BTC: 1 },
@@ -123,19 +146,17 @@ describe("Hyperliquid adapter", () => {
 
     if (!adapter.buildAction) throw new Error("Missing buildAction");
 
-    const noCoin = { type: "swap", venue: "hyperliquid", price: "100", size: "1" };
-    await expect(adapter.buildAction(noCoin as unknown as Action, adapterContext)).rejects.toThrow(
-      "requires action.coin"
-    );
+    const legacySwap = {
+      type: "swap",
+      venue: "hyperliquid",
+      coin: "BTC",
+      price: "100",
+      size: "1",
+      isBuy: true,
+    } as unknown as Action;
 
-    const noPrice = { type: "swap", venue: "hyperliquid", coin: "BTC", size: "1" };
-    await expect(adapter.buildAction(noPrice as unknown as Action, adapterContext)).rejects.toThrow(
-      "requires action.price"
-    );
-
-    const noSize = { type: "swap", venue: "hyperliquid", coin: "BTC", price: "100" };
-    await expect(adapter.buildAction(noSize as unknown as Action, adapterContext)).rejects.toThrow(
-      "requires action.size"
+    await expect(adapter.buildAction(legacySwap, adapterContext)).rejects.toThrow(
+      "must use custom op 'order'"
     );
   });
 });

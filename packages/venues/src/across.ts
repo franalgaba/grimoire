@@ -2,7 +2,9 @@ import { addressToBytes32, getIntegratorDataSuffix, getQuote } from "@across-pro
 import { spokePoolAbiV3_5 } from "@across-protocol/app-sdk/dist/abis/SpokePool/v3_5.js";
 import type { Address, BuiltTransaction, VenueAdapter } from "@grimoirelabs/core";
 import { zeroAddress } from "viem";
+import { assertSupportedConstraints } from "./constraints.js";
 import { buildApprovalIfNeeded } from "./erc20.js";
+import { resolveTokenAddress } from "./token-registry.js";
 
 export interface AcrossAdapterConfig {
   integratorId?: `0x${string}`;
@@ -23,15 +25,29 @@ export function createAcrossAdapter(
   const supportedChains = Array.from(
     new Set(Object.values(config.assets).flatMap((chains) => Object.keys(chains).map(Number)))
   );
+  const meta: VenueAdapter["meta"] = {
+    name: "across",
+    supportedChains,
+    actions: ["bridge"],
+    supportedConstraints: [
+      "max_slippage",
+      "min_output",
+      "require_quote",
+      "require_simulation",
+      "max_gas",
+    ],
+    supportsQuote: true,
+    supportsSimulation: true,
+    supportsPreviewCommit: true,
+    dataEndpoints: ["quote", "deposit_simulation"],
+    description: "Across Protocol bridge adapter",
+  };
 
   return {
-    meta: {
-      name: "across",
-      supportedChains,
-      actions: ["bridge"],
-      description: "Across Protocol bridge adapter",
-    },
+    meta,
     async buildAction(action, ctx) {
+      assertSupportedConstraints(meta, action);
+
       if (action.type !== "bridge") {
         throw new Error(`Across adapter only supports bridge actions (got ${action.type})`);
       }
@@ -61,10 +77,24 @@ export function createAcrossAdapter(
         apiUrl: config.apiUrl,
         recipient: ctx.walletAddress,
       });
+      const minDeposit = quote.limits.minDeposit;
+      if (amount < minDeposit) {
+        throw new Error(
+          `Across bridge amount ${amount.toString()} is below minimum ${minDeposit.toString()} for this route`
+        );
+      }
 
       const client = ctx.provider.getClient?.();
+      if (action.constraints?.requireQuote === true && !quote) {
+        throw new Error("Across adapter could not resolve quote while require_quote is enabled");
+      }
       if (!client?.simulateContract) {
         throw new Error("Across adapter requires a provider with simulateContract support");
+      }
+      if (action.constraints?.requireSimulation === true && !client.simulateContract) {
+        throw new Error(
+          "Across adapter requires simulation support while require_simulation is enabled"
+        );
       }
 
       const slippageBps = action.constraints?.maxSlippageBps ?? config.slippageBps;
@@ -114,15 +144,63 @@ export function createAcrossAdapter(
       const txRequest = simulation.request;
       const to = ("to" in txRequest ? txRequest.to : txRequest.address) as Address;
       const data = ("data" in txRequest ? txRequest.data : "0x") as string;
+      const value = txRequest.value ?? 0n;
+      const gasEstimate = await estimateGasIfSupported(ctx, { to, data, value });
+      const estimatedGas = gasEstimate?.gasLimit;
 
-      const bridgeTx: BuiltTransaction = {
+      if (action.constraints?.maxGas !== undefined) {
+        if (estimatedGas === undefined) {
+          throw new Error("Across adapter could not estimate gas while max_gas is enabled");
+        }
+        if (estimatedGas > action.constraints.maxGas) {
+          throw new Error(
+            `Across bridge gas estimate ${estimatedGas.toString()} exceeds max_gas ${action.constraints.maxGas.toString()}`
+          );
+        }
+      }
+
+      const warnings: string[] = [];
+      if (quote.isAmountTooLow) {
+        warnings.push("Bridge amount is below recommended minimum for this route");
+      }
+
+      const bridgeTx = {
         tx: {
           to,
           data,
-          value: txRequest.value ?? 0n,
+          value,
         },
         description: `Across bridge ${action.asset} ${originChainId} → ${destinationChainId}`,
+        gasEstimate,
         action,
+        metadata: {
+          quote: {
+            expectedIn: quote.deposit.inputAmount,
+            expectedOut: quote.deposit.outputAmount,
+            minOut: deposit.outputAmount,
+            slippageBps,
+          },
+          route: {
+            originChainId,
+            destinationChainId,
+            inputToken,
+            outputToken,
+            spokePoolAddress: deposit.spokePoolAddress,
+            quoteTimestamp: deposit.quoteTimestamp,
+            fillDeadline: deposit.fillDeadline,
+            estimatedFillTimeSec: quote.estimatedFillTimeSec,
+            minDeposit: quote.limits.minDeposit,
+            maxDeposit: quote.limits.maxDeposit,
+            maxDepositInstant: quote.limits.maxDepositInstant,
+          },
+          fees: {
+            lpFee: quote.fees.lpFee,
+            relayerGasFee: quote.fees.relayerGasFee,
+            relayerCapitalFee: quote.fees.relayerCapitalFee,
+            totalRelayFee: quote.fees.totalRelayFee,
+          },
+          warnings,
+        },
       };
 
       return [...approvalTxs, bridgeTx];
@@ -132,17 +210,17 @@ export function createAcrossAdapter(
 
 const DEFAULT_ASSETS: Record<string, Record<number, Address>> = {
   USDC: {
-    1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
-    8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address,
-    10: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85" as Address,
-    42161: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as Address,
+    1: resolveTokenAddress("USDC", 1),
+    8453: resolveTokenAddress("USDC", 8453),
+    10: resolveTokenAddress("USDC", 10),
+    42161: resolveTokenAddress("USDC", 42161),
     1337: "0x6d1e7cde53a9467b783991afd8af56d4a99b3a56" as Address,
   },
   WETH: {
-    1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
-    8453: "0x4200000000000000000000000000000000000006" as Address,
-    10: "0x4200000000000000000000000000000000000006" as Address,
-    42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" as Address,
+    1: resolveTokenAddress("WETH", 1),
+    8453: resolveTokenAddress("WETH", 8453),
+    10: resolveTokenAddress("WETH", 10),
+    42161: resolveTokenAddress("WETH", 42161),
   },
 };
 
@@ -202,4 +280,21 @@ function isLiteralAmount(value: unknown): value is {
 
 function applyBps(amount: bigint, bps: number): bigint {
   return (amount * BigInt(bps)) / 10_000n;
+}
+
+async function estimateGasIfSupported(
+  ctx: Parameters<NonNullable<VenueAdapter["buildAction"]>>[1],
+  tx: { to: Address; data?: string; value?: bigint }
+): Promise<BuiltTransaction["gasEstimate"] | undefined> {
+  if (typeof ctx.provider.getGasEstimate !== "function") {
+    return undefined;
+  }
+  try {
+    return await ctx.provider.getGasEstimate({
+      ...tx,
+      from: ctx.walletAddress,
+    });
+  } catch {
+    return undefined;
+  }
 }

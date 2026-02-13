@@ -3,8 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compile, preview } from "@grimoirelabs/core";
-import type { SpellIR } from "@grimoirelabs/core";
-import type { Address } from "@grimoirelabs/core";
+import type { Address, SpellIR, VenueAdapter } from "@grimoirelabs/core";
 import { simulateCommand } from "./simulate.js";
 
 function assertIR(
@@ -46,6 +45,22 @@ function createTestIO(logs: string[]): {
 }
 
 const VAULT: Address = "0x0000000000000000000000000000000000000000";
+const MOCK_UNISWAP_V3_ADAPTER: VenueAdapter = {
+  meta: {
+    name: "uniswap_v3",
+    supportedChains: [1],
+    actions: ["swap"],
+    supportedConstraints: [
+      "max_slippage",
+      "min_output",
+      "max_input",
+      "deadline",
+      "require_quote",
+      "require_simulation",
+      "max_gas",
+    ],
+  },
+};
 const tempDirs: string[] = [];
 
 afterEach(async () => {
@@ -64,7 +79,7 @@ describe("Runtime parity: CLI simulate vs embedded preview", () => {
   assets: [ETH, USDC]
 
   venues: {
-    uniswap: @uniswap
+    uniswap: @uniswap_v3
   }
 
   params: {
@@ -72,7 +87,7 @@ describe("Runtime parity: CLI simulate vs embedded preview", () => {
   }
 
   on manual: {
-    uniswap.swap(ETH, USDC, params.amount)
+    uniswap_v3.swap(ETH, USDC, params.amount)
   }
 }`;
 
@@ -83,6 +98,7 @@ describe("Runtime parity: CLI simulate vs embedded preview", () => {
       spell: compileResult.ir,
       vault: VAULT,
       chain: 1,
+      adapters: [MOCK_UNISWAP_V3_ADAPTER],
     });
     expect(embedded.success).toBe(true);
     expect(embedded.receipt).toBeDefined();

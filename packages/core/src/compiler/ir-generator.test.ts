@@ -127,6 +127,38 @@ describe("IR Generator", () => {
     expect(result.ir?.steps.length).toBe(9);
   });
 
+  test("preserves hyperliquid order side as string literal", () => {
+    const source: SpellSource = {
+      ...baseSource,
+      steps: [
+        {
+          id: "order",
+          action: {
+            type: "custom",
+            venue: "hyperliquid",
+            op: "order",
+            args: {
+              coin: "BTC",
+              price: "100000",
+              size: "1",
+              side: "buy",
+              reduce_only: false,
+            },
+          },
+        },
+      ],
+    };
+
+    const result = generateIR(source);
+    expect(result.success).toBe(true);
+    const step = result.ir?.steps[0];
+    expect(step?.kind).toBe("action");
+    if (step?.kind === "action" && step.action.type === "custom") {
+      const side = step.action.args.side;
+      expect(side).toEqual({ kind: "literal", value: "buy", type: "string" });
+    }
+  });
+
   test("parses bridge to_chain expressions", () => {
     const source: SpellSource = {
       ...baseSource,

@@ -61,6 +61,34 @@ describe("Uniswap V3 adapter", () => {
     expect(built).toHaveLength(2);
     expect(built[0]?.description).toContain("Approve USDC");
     expect(built[1]?.description).toContain("Uniswap V3 swap");
+    expect(built[1]?.metadata?.quote?.expectedOut).toBeDefined();
+    expect(built[1]?.metadata?.route?.poolAddress).toBeDefined();
+  });
+
+  test("fails fast on unsupported constraints", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const amount: Expression = { kind: "literal", value: 10n, type: "int" };
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "uniswap_v3",
+          assetIn: "USDC",
+          assetOut: "WETH",
+          amount,
+          mode: "exact_in",
+          constraints: {
+            maxPriceImpactBps: 10,
+          },
+        } as unknown as Parameters<NonNullable<typeof adapter.buildAction>>[0],
+        ctx
+      )
+    ).rejects.toThrow(
+      "Adapter 'uniswap_v3' does not support constraint 'max_price_impact' for action 'swap'"
+    );
   });
 
   test("skips approval when allowance is sufficient", async () => {

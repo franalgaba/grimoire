@@ -28,6 +28,7 @@ import type {
   ValueDelta,
 } from "../types/receipt.js";
 import type { Step } from "../types/steps.js";
+import { createVenueRegistry } from "../venues/index.js";
 import type { VenueAdapter } from "../venues/types.js";
 import { type ExecutionMode, createExecutor } from "../wallet/executor.js";
 import { type Provider, createProvider } from "../wallet/provider.js";
@@ -138,6 +139,8 @@ export interface PreviewOptions {
   persistentState?: Record<string, unknown>;
   trigger?: ExecutionContext["trigger"];
   adapters?: VenueAdapter[];
+  provider?: Provider;
+  walletAddress?: Address;
   policy?: PolicySet;
   advisorSkillsDirs?: string[];
   onAdvisory?: AdvisoryHandler;
@@ -154,6 +157,16 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
 
   // Always simulate during preview
   const actionExecution: ActionExecutionOptions = { mode: "simulate" };
+  if (options.adapters && options.adapters.length > 0) {
+    actionExecution.adapterRegistry = createVenueRegistry(options.adapters);
+  }
+  if (options.provider) {
+    actionExecution.previewAdapterContext = {
+      provider: options.provider,
+      walletAddress: options.walletAddress ?? vault,
+      chainId: chain,
+    };
+  }
 
   if (options.policy?.circuitBreakers?.length) {
     actionExecution.circuitBreakerManager = new CircuitBreakerManager(
@@ -702,6 +715,8 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
   const { spell, vault, chain, params = {}, persistentState = {}, simulate = false } = options;
 
   const actionMode = resolveExecutionMode(options, simulate);
+  const previewProvider =
+    options.provider ?? (options.rpcUrl ? createProvider(chain, options.rpcUrl) : undefined);
   const previewResult = await preview({
     spell,
     vault,
@@ -710,6 +725,8 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     persistentState,
     trigger: options.trigger,
     adapters: options.adapters,
+    provider: previewProvider,
+    walletAddress: options.wallet?.address ?? vault,
     policy: options.policy,
     advisorSkillsDirs: options.advisorSkillsDirs,
     onAdvisory: options.onAdvisory,

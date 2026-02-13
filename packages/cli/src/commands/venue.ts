@@ -8,6 +8,7 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { venueDoctorCommand } from "./venue-doctor.js";
 
 const require = createRequire(import.meta.url);
 
@@ -99,6 +100,19 @@ export async function venueCommand(adapter: string, args: string[] = []): Promis
   }
 
   const normalized = normalizeAdapter(adapter);
+  if (normalized === "doctor") {
+    try {
+      const report = await venueDoctorCommand(args);
+      if (!report.ok) {
+        process.exit(1);
+      }
+      return;
+    } catch (error) {
+      console.error((error as Error).message);
+      process.exit(1);
+    }
+  }
+
   const cliName = VENUE_CLI_MAP[normalized];
 
   if (!cliName) {
@@ -132,6 +146,6 @@ function printUsage(): void {
   }).join("\n");
 
   console.log(
-    `\nUsage:\n  grimoire venue <adapter> [args...]\n\nAdapters:\n${adapterLines}\n\nExamples:\n  grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell\n  grimoire venue uniswap tokens --chain 1 --symbol USDC\n  grimoire venue aave markets --chain 1\n`
+    `\nUsage:\n  grimoire venue <adapter> [args...]\n  grimoire venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]\n\nAdapters:\n${adapterLines}\n\nExamples:\n  grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell\n  grimoire venue uniswap tokens --chain 1 --symbol USDC\n  grimoire venue aave markets --chain 1\n  grimoire venue doctor --chain 1 --adapter uniswap\n`
   );
 }

@@ -19,13 +19,12 @@ After this guide, you can:
 
 ## Important Runtime Note
 
-`grimoire simulate` does not currently expose `--rpc-url`.
+`grimoire simulate` supports `--rpc-url`.
 
-For preview against a custom local RPC (Anvil), use:
+For preview against a custom local RPC (Anvil), use either:
 
-- `grimoire cast --dry-run ... --rpc-url <anvil-url>`
-
-`--dry-run` is still preview-only (no commit), but it accepts wallet and provider wiring.
+- `grimoire simulate ... --rpc-url <anvil-url>` (preview-only)
+- `grimoire cast --dry-run ... --rpc-url <anvil-url>` (preview-only with wallet wiring parity)
 
 ## 1. Set Shared Variables
 
@@ -162,7 +161,8 @@ cast rpc anvil_stopImpersonatingAccount 0x... --rpc-url "$ANVIL_RPC_URL"
 - `No key provided and no keystore found`
   - import/generate a keystore and pass `--keystore`
 - Preview appears to use public RPC instead of Anvil
-  - use `cast --dry-run` with both `--rpc-url` and wallet options
+  - pass `--rpc-url` explicitly on `simulate` or `cast --dry-run`
+  - verify resolved endpoint with `grimoire venue doctor --json` (`rpcUrl` field)
 - frequent RPC fetch failures while forking
   - tune Anvil with `--compute-units-per-second`, `--retries`, and provider headers
 

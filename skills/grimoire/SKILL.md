@@ -3,7 +3,7 @@ name: grimoire
 description: Install and operate Grimoire, author .spell files with full syntax coverage (including advisory decision logic), and run compile/validate/simulate/cast safely. Use when users ask to create, edit, debug, validate, simulate, execute, or explain Grimoire strategies.
 compatibility: "Requires one of: global grimoire CLI, npx access to @grimoirelabs/cli, or repo-local Bun execution."
 metadata:
-  version: "2.2"
+  version: "2.4"
   focus: "installation usage syntax advisory execution"
 ---
 
@@ -36,9 +36,12 @@ These rules are required and solve syntax coverage gaps.
    - read `docs/explanation/advisory-decision-flow.md`
 4. Do not rely on memory for DSL syntax when authoring; use the references above.
 5. For local fork preview workflows:
-   - read `docs/how-to/simulate-on-anvil-fork.md`
+   - read `references/anvil-cheatsheet.md`
+   - then read `docs/how-to/simulate-on-anvil-fork.md`
 6. For wallet setup and execution key flows:
    - read `docs/how-to/use-wallet-commands-end-to-end.md`
+7. For RPC/signer/transaction diagnostics:
+   - read `references/cast-cheatsheet.md`
 
 ## Installation Resolution
 
@@ -71,9 +74,13 @@ If all three pass, proceed to spell authoring.
 3. Run `validate` (use `--strict` for advisory-heavy spells).
 4. Fix errors/warnings and re-run until validation passes.
 5. Run `simulate`.
-6. For advisory steps intended for deterministic execution, record and then use `--advisory-replay <runId>` in dry-run/live cast.
-7. If spell includes irreversible actions, require `cast --dry-run` before any live cast.
-8. Ask for explicit user confirmation before live value-moving `cast`.
+6. Before venue metadata queries or value-moving runs, execute `venue doctor` for the target adapter/chain.
+   - Example: `<grimoire-cmd> venue doctor --adapter uniswap --chain 1 --rpc-url <rpc> --json`
+7. Before value-moving runs on EVM venues, verify endpoint and signer state with Foundry Cast quickchecks (`chain-id`, `block-number`, `balance`, `nonce`).
+   - Do not apply Anvil/Cast checks to offchain venues such as `hyperliquid`.
+8. For advisory steps intended for deterministic execution, record and then use `--advisory-replay <runId>` in dry-run/live cast.
+9. If spell includes irreversible actions, require `cast --dry-run` before any live cast.
+10. Ask for explicit user confirmation before live value-moving `cast`.
 
 ## Command Surface (Core)
 
@@ -85,6 +92,7 @@ If all three pass, proceed to spell authoring.
 - `cast`
 - `venues`
 - `venue`
+- `venue doctor`
 - `history`
 - `log`
 - `wallet` (`generate`, `address`, `balance`, `import`, `wrap`, `unwrap`)
@@ -96,6 +104,7 @@ Use `references/cli-quick-reference.md` for concise command signatures and safet
 - One runtime semantics: preview first, commit only for execute paths.
 - `simulate` and `cast --dry-run` are preview-only flows.
 - Live `cast` can commit irreversible actions when policy and runtime checks pass.
+- `simulate` supports explicit `--rpc-url`, with precedence: `--rpc-url` -> `RPC_URL_<chainId>` -> `RPC_URL`.
 
 ## Advisory Operating Rules
 
@@ -115,10 +124,17 @@ Use venue skills for snapshot parameters and market metadata:
 - `grimoire-morpho-blue`
 - `grimoire-hyperliquid`
 
+Formatting policy for venue CLI output:
+
+- prefer `--format json` for automation or nested payloads
+- use `--format table` for human-readable summaries
+
 ## References
 
 - `references/syntax-capabilities.md`
 - `references/authoring-workflow.md`
+- `references/anvil-cheatsheet.md`
+- `references/cast-cheatsheet.md`
 - `references/cli-quick-reference.md`
 - `docs/how-to/simulate-on-anvil-fork.md`
 - `docs/how-to/use-wallet-commands-end-to-end.md`

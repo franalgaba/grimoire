@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { compile, execute, preview } from "./index.js";
 import type { SpellIR } from "./types/ir.js";
 import type { Address } from "./types/primitives.js";
+import type { VenueAdapter } from "./venues/types.js";
 import type { Provider } from "./wallet/provider.js";
 import type { Wallet } from "./wallet/types.js";
 
@@ -20,6 +21,22 @@ function assertIR(
 }
 
 const VAULT: Address = "0x0000000000000000000000000000000000000000";
+const MOCK_UNISWAP_ADAPTER: VenueAdapter = {
+  meta: {
+    name: "uniswap",
+    supportedChains: [1],
+    actions: ["swap"],
+    supportedConstraints: [
+      "max_slippage",
+      "min_output",
+      "max_input",
+      "deadline",
+      "require_quote",
+      "require_simulation",
+      "max_gas",
+    ],
+  },
+};
 
 describe("Preview/Commit E2E", () => {
   describe("preview → commit round trip", () => {
@@ -42,6 +59,7 @@ describe("Preview/Commit E2E", () => {
         spell: compileResult.ir,
         vault: VAULT,
         chain: 1,
+        adapters: [MOCK_UNISWAP_ADAPTER],
       });
 
       expect(previewResult.success).toBe(true);
@@ -204,6 +222,7 @@ describe("Preview/Commit E2E", () => {
         spell: compileResult.ir,
         vault: VAULT,
         chain: 1,
+        adapters: [MOCK_UNISWAP_ADAPTER],
       });
 
       expect(previewResult.success).toBe(true);

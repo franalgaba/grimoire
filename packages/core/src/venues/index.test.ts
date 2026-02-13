@@ -11,10 +11,11 @@ const adapter: VenueAdapter = {
     name: "test",
     supportedChains: [1],
     actions: ["swap"],
+    supportedConstraints: [],
     executionType: "offchain",
   },
   async executeAction() {
-    return { id: "ok" };
+    return { id: "ok", status: "submitted" };
   },
 };
 

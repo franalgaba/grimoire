@@ -1,8 +1,10 @@
-import type { Action, Address, VenueAdapter } from "@grimoirelabs/core";
+import type { Action, Address, VenueAdapter, VenueBuildMetadata } from "@grimoirelabs/core";
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { encodeFunctionData } from "viem";
+import { assertSupportedConstraints } from "./constraints.js";
 import { buildApprovalIfNeeded } from "./erc20.js";
+import { resolveTokenAddress } from "./token-registry.js";
 
 export interface MorphoBlueMarketConfig {
   id: string;
@@ -18,14 +20,23 @@ export interface MorphoBlueAdapterConfig {
 }
 
 export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueAdapter {
+  const meta: VenueAdapter["meta"] = {
+    name: "morpho_blue",
+    supportedChains: [1, 8453],
+    actions: ["lend", "withdraw", "borrow", "repay"],
+    supportedConstraints: [],
+    supportsQuote: false,
+    supportsSimulation: false,
+    supportsPreviewCommit: true,
+    dataEndpoints: ["info", "addresses", "vaults", "markets"],
+    description: "Morpho Blue adapter",
+  };
+
   return {
-    meta: {
-      name: "morpho_blue",
-      supportedChains: [1, 8453],
-      actions: ["lend", "withdraw", "borrow", "repay"],
-      description: "Morpho Blue adapter",
-    },
+    meta,
     async buildAction(action, ctx) {
+      assertSupportedConstraints(meta, action);
+
       if (!isMorphoAction(action)) {
         throw new Error(`Unsupported Morpho Blue action: ${action.type}`);
       }
@@ -89,8 +100,22 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
           })
         : [];
 
+      const metadata = buildMorphoMetadata(action, market, {
+        chainId: ctx.chainId,
+        morphoAddress: addresses.morpho as Address,
+        amount,
+      });
+
       return [
-        ...approvalTxs,
+        ...approvalTxs.map((tx) => ({
+          ...tx,
+          metadata: buildMorphoMetadata(action, market, {
+            chainId: ctx.chainId,
+            morphoAddress: addresses.morpho as Address,
+            amount,
+            isApproval: true,
+          }),
+        })),
         {
           tx: {
             to: addresses.morpho as Address,
@@ -99,6 +124,7 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
           },
           description: `Morpho Blue ${action.type} ${action.asset}`,
           action,
+          metadata,
         },
       ];
     },
@@ -169,28 +195,9 @@ function resolveAssetAddress(asset?: string, chainId?: number): Address {
   if (!asset) {
     throw new Error("Asset is required for Morpho Blue action");
   }
-  if (asset.startsWith("0x") && asset.length === 42) {
-    return asset as Address;
-  }
-
-  const KNOWN_TOKENS: Record<number, Record<string, Address>> = {
-    1: {
-      USDC: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
-      WETH: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
-    },
-    8453: {
-      USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address,
-      WETH: "0x4200000000000000000000000000000000000006" as Address,
-    },
-  };
-
-  const chainTokens = KNOWN_TOKENS[chainId ?? 1] ?? KNOWN_TOKENS[1];
-  const address = chainTokens?.[asset.toUpperCase()];
-  if (!address) {
-    throw new Error(`Unknown asset: ${asset} on chain ${chainId ?? 1}. Provide address directly.`);
-  }
-
-  return address;
+  return resolveTokenAddress(asset, chainId ?? 1, {
+    treatEthAsWrapped: true,
+  });
 }
 
 function toBigInt(amount: unknown): bigint {
@@ -216,4 +223,36 @@ function isLiteralAmount(
     (value as { kind?: unknown }).kind === "literal" &&
     "value" in value
   );
+}
+
+function buildMorphoMetadata(
+  action: Extract<Action, { type: "lend" | "withdraw" | "borrow" | "repay" }>,
+  market: MorphoBlueMarketConfig,
+  options: {
+    chainId: number;
+    morphoAddress: Address;
+    amount: bigint;
+    isApproval?: boolean;
+  }
+): VenueBuildMetadata {
+  const quote =
+    action.type === "borrow" || action.type === "withdraw"
+      ? { expectedOut: options.amount }
+      : { expectedIn: options.amount };
+
+  return {
+    quote: options.isApproval ? undefined : quote,
+    route: {
+      chainId: options.chainId,
+      morphoAddress: options.morphoAddress,
+      marketId: market.id,
+      loanToken: market.loanToken,
+      collateralToken: market.collateralToken,
+      oracle: market.oracle,
+      irm: market.irm,
+      lltv: market.lltv.toString(),
+      approval: options.isApproval === true,
+      utilization: null,
+    },
+  };
 }
