@@ -3,6 +3,12 @@
  */
 
 import type { Action } from "../types/actions.js";
+import type {
+  BridgeLifecycleAdapter,
+  BridgeLifecycleStatusInput,
+  BridgeLifecycleStatusResult,
+  CrossChainTrackRole,
+} from "../types/cross-chain.js";
 import type { Address } from "../types/primitives.js";
 import type { Provider } from "../wallet/provider.js";
 import type { BuiltTransaction } from "../wallet/tx-builder.js";
@@ -54,6 +60,21 @@ export interface VenueAdapterContext {
   vault?: Address;
   /** Execution mode (simulate, dry-run, execute). Undefined when adapters are used directly. */
   mode?: "simulate" | "dry-run" | "execute";
+  /**
+   * Cross-chain orchestration context (Phase 1).
+   * Present only when action execution is orchestrated across source/destination tracks.
+   */
+  crossChain?: {
+    enabled: boolean;
+    runId?: string;
+    trackId?: string;
+    role?: CrossChainTrackRole;
+    stepId?: string;
+    actionRef?: string;
+    morphoMarketIds?: Record<string, string>;
+  };
+  /** Optional warning sink for adapter-level warnings. */
+  onWarning?: (message: string) => void;
 }
 
 export interface OffchainExecutionResult {
@@ -71,6 +92,10 @@ export interface VenueAdapter {
   meta: VenueAdapterMeta;
   buildAction?: (action: Action, ctx: VenueAdapterContext) => Promise<VenueBuildResult>;
   executeAction?: (action: Action, ctx: VenueAdapterContext) => Promise<OffchainExecutionResult>;
+  bridgeLifecycle?: BridgeLifecycleAdapter;
+  resolveHandoffStatus?: (
+    input: BridgeLifecycleStatusInput
+  ) => Promise<BridgeLifecycleStatusResult>;
 }
 
 export interface VenueRegistry {

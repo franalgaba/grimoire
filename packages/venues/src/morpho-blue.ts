@@ -42,7 +42,12 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
       }
 
       const addresses = getChainAddresses(ctx.chainId);
-      const market = resolveMarket(config.markets, action, ctx.chainId);
+      const explicitMarketId = resolveExplicitMarketId(action, ctx);
+      const market = resolveMarket(config.markets, action, ctx.chainId, {
+        explicitMarketId,
+        isCrossChain: ctx.crossChain?.enabled === true,
+        onWarning: ctx.onWarning,
+      });
       const amount = toBigInt(action.amount);
 
       const marketParams = {
@@ -165,8 +170,23 @@ function isMorphoAction(
 function resolveMarket(
   markets: MorphoBlueMarketConfig[],
   action: Action,
-  chainId: number
+  chainId: number,
+  options: {
+    explicitMarketId?: string;
+    isCrossChain: boolean;
+    onWarning?: (message: string) => void;
+  }
 ): MorphoBlueMarketConfig {
+  if (options.explicitMarketId) {
+    const byId = markets.find((market) => market.id === options.explicitMarketId);
+    if (!byId) {
+      throw new Error(
+        `Morpho Blue market_id '${options.explicitMarketId}' not configured. Candidates: ${markets.map((m) => m.id).join(", ")}`
+      );
+    }
+    return byId;
+  }
+
   const loanToken = resolveAssetAddress("asset" in action ? action.asset : undefined, chainId);
   const collateral =
     "collateral" in action && action.collateral
@@ -179,7 +199,17 @@ function resolveMarket(
     if (match) return match;
   }
 
+  if (options.isCrossChain) {
+    const candidateIds = matches.map((market) => market.id);
+    throw new Error(
+      `Morpho Blue cross-chain action '${action.type}' requires explicit market_id. Candidates: ${candidateIds.join(", ") || "none"}`
+    );
+  }
+
   if (matches.length > 0) {
+    options.onWarning?.(
+      `Morpho Blue action '${action.type}' is using implicit market selection. Set explicit market_id to avoid ambiguity.`
+    );
     const first = matches[0];
     if (first) return first;
   }
@@ -189,6 +219,20 @@ function resolveMarket(
       "asset" in action ? action.asset : "unknown"
     } on chain ${chainId}`
   );
+}
+
+function resolveExplicitMarketId(
+  action: Action,
+  ctx: Parameters<NonNullable<VenueAdapter["buildAction"]>>[1]
+): string | undefined {
+  if ("marketId" in action && typeof action.marketId === "string" && action.marketId.length > 0) {
+    return action.marketId;
+  }
+  const actionRef = ctx.crossChain?.actionRef;
+  if (!actionRef) {
+    return undefined;
+  }
+  return ctx.crossChain?.morphoMarketIds?.[actionRef];
 }
 
 function resolveAssetAddress(asset?: string, chainId?: number): Address {

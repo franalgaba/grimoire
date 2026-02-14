@@ -92,6 +92,19 @@ export async function historyCommand(
         if (run.error) {
           console.log(`        ${chalk.red(run.error)}`);
         }
+
+        if (run.crossChain) {
+          const trackSummary = run.crossChain.tracks
+            .map((track) => `${track.trackId}:${track.status}`)
+            .join(", ");
+          const handoffSummary = run.crossChain.handoffs
+            .map((handoff) => `${handoff.handoffId}:${handoff.status}`)
+            .join(", ");
+          console.log(`        ${chalk.dim(`cross_chain tracks=[${trackSummary}]`)}`);
+          if (handoffSummary.length > 0) {
+            console.log(`        ${chalk.dim(`cross_chain handoffs=[${handoffSummary}]`)}`);
+          }
+        }
       }
 
       console.log();

@@ -3,7 +3,7 @@ name: grimoire
 description: Install and operate Grimoire, author .spell files with full syntax coverage (including advisory decision logic), and run compile/validate/simulate/cast safely. Use when users ask to create, edit, debug, validate, simulate, execute, or explain Grimoire strategies.
 compatibility: "Requires one of: global grimoire CLI, npx access to @grimoirelabs/cli, or repo-local Bun execution."
 metadata:
-  version: "2.4"
+  version: "2.5"
   focus: "installation usage syntax advisory execution"
 ---
 
@@ -19,7 +19,7 @@ Use this skill when the task includes:
 - creating or editing `.spell` files
 - syntax questions about DSL capability
 - advisory (`advise`) authoring, debugging, and replay workflows
-- compile/validate/simulate/cast workflows
+- compile/validate/simulate/cast/resume workflows
 - debugging spell compile/runtime failures
 
 ## Mandatory Loading Rules
@@ -81,6 +81,13 @@ If all three pass, proceed to spell authoring.
 8. For advisory steps intended for deterministic execution, record and then use `--advisory-replay <runId>` in dry-run/live cast.
 9. If spell includes irreversible actions, require `cast --dry-run` before any live cast.
 10. Ask for explicit user confirmation before live value-moving `cast`.
+11. For cross-chain mode, require explicit per-chain RPC mappings:
+   - `--rpc-url <sourceChainId>=<url>`
+   - `--rpc-url <destinationChainId>=<url>`
+12. For cross-chain Morpho actions, require explicit market mapping via:
+   - `--morpho-market-id <actionRef>=<marketId>` (repeatable), or
+   - `--morpho-market-map <path>`
+13. If a cross-chain run is left waiting, continue with `resume <runId>` (use `--watch` to poll settlement).
 
 ## Command Surface (Core)
 
@@ -95,6 +102,7 @@ If all three pass, proceed to spell authoring.
 - `venue doctor`
 - `history`
 - `log`
+- `resume`
 - `wallet` (`generate`, `address`, `balance`, `import`, `wrap`, `unwrap`)
 
 Use `references/cli-quick-reference.md` for concise command signatures and safety-critical flags.
@@ -105,6 +113,7 @@ Use `references/cli-quick-reference.md` for concise command signatures and safet
 - `simulate` and `cast --dry-run` are preview-only flows.
 - Live `cast` can commit irreversible actions when policy and runtime checks pass.
 - `simulate` supports explicit `--rpc-url`, with precedence: `--rpc-url` -> `RPC_URL_<chainId>` -> `RPC_URL`.
+- Phase 1 cross-chain execution uses two-spell orchestration (`--destination-spell`) with one logical run id and resume support.
 
 ## Advisory Operating Rules
 

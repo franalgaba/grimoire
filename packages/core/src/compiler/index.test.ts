@@ -120,6 +120,42 @@ describe("Compiler index", () => {
     }
   });
 
+  test("fails compilation when do references unknown block", () => {
+    const source = `spell DoMissing {
+
+  version: "1.0.0"
+
+  on manual: {
+    do unknown(1)
+  }
+}`;
+
+    const result = compile(source);
+    expect(result.success).toBe(false);
+    expect(result.errors.some((error) => error.message.includes("Unknown block"))).toBe(true);
+    expect(result.errors[0]?.line).toBeGreaterThan(0);
+  });
+
+  test("fails compilation when do arity mismatches block params", () => {
+    const source = `spell DoArity {
+
+  version: "1.0.0"
+
+  block add(a, b) {
+    x = a + b
+  }
+
+  on manual: {
+    do add(1)
+  }
+}`;
+
+    const result = compile(source);
+    expect(result.success).toBe(false);
+    expect(result.errors.some((error) => error.message.includes("expects 2 args"))).toBe(true);
+    expect(result.errors[0]?.line).toBeGreaterThan(0);
+  });
+
   test("handles file read errors", async () => {
     const missingPath = join(tmpdir(), "missing.spell");
 

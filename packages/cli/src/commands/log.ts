@@ -103,6 +103,32 @@ export async function logCommand(
         case "constraint_evaluated":
           details = chalk.dim(`step=${entry.event.stepId}`);
           break;
+        case "track_waiting":
+          details = chalk.yellow(
+            `track=${entry.event.trackId} chain=${entry.event.chainId} reason=${entry.event.reason}`
+          );
+          break;
+        case "track_resumed":
+          details = chalk.dim(`track=${entry.event.trackId} chain=${entry.event.chainId}`);
+          break;
+        case "track_completed":
+          details = entry.event.success
+            ? chalk.green(`track=${entry.event.trackId} chain=${entry.event.chainId}`)
+            : chalk.red(`track=${entry.event.trackId} chain=${entry.event.chainId}`);
+          break;
+        case "handoff_submitted":
+          details = chalk.dim(
+            `handoff=${entry.event.handoffId} step=${entry.event.stepId} submitted=${entry.event.submittedAmount}`
+          );
+          break;
+        case "handoff_settled":
+          details = chalk.green(
+            `handoff=${entry.event.handoffId} settled=${entry.event.settledAmount}`
+          );
+          break;
+        case "handoff_expired":
+          details = chalk.red(`handoff=${entry.event.handoffId} reason=${entry.event.reason}`);
+          break;
         default:
           details = chalk.dim(JSON.stringify(entry.event));
       }

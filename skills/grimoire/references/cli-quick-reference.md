@@ -20,6 +20,7 @@ Assume `<grimoire-cmd>` is one of:
 <grimoire-cmd> venues [--json]
 <grimoire-cmd> venue <adapter> [args...]
 <grimoire-cmd> venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]
+<grimoire-cmd> resume <runId> [--watch] [--poll-interval-sec <seconds>] [--json] [--state-dir <dir>]
 <grimoire-cmd> history [spell] [--limit <n>] [--json] [--state-dir <dir>]
 <grimoire-cmd> log <spell> <runId> [--json] [--state-dir <dir>]
 ```
@@ -50,6 +51,13 @@ Common options:
 - `-p, --params <json>`
 - `--chain <id>`
 - `--rpc-url <url>`
+- `--destination-spell <spell>`
+- `--destination-chain <id>`
+- `--handoff-timeout-sec <seconds>`
+- `--poll-interval-sec <seconds>`
+- `--watch`
+- `--morpho-market-id <actionRef>=<marketId>` (repeatable)
+- `--morpho-market-map <path>`
 - `--state-dir <dir>`
 - `--no-state`
 - `--advisor-skills-dir <dir...>`
@@ -69,6 +77,8 @@ Important:
 
 1. `simulate` supports `--rpc-url` for explicit per-run RPC selection.
 2. RPC resolution order is `--rpc-url`, then `RPC_URL_<chainId>`, then `RPC_URL`.
+3. Cross-chain mode is enabled by `--destination-spell` and requires explicit mapped RPCs for both chains: `--rpc-url <chainId>=<url>`.
+4. Cross-chain Morpho actions require explicit market mapping (`--morpho-market-id` or `--morpho-market-map`).
 
 ## Anvil Quickstart
 
@@ -123,6 +133,13 @@ Common options:
 - `--keystore <path>`
 - `--password-env <name>`
 - `--rpc-url <url>`
+- `--destination-spell <spell>`
+- `--destination-chain <id>`
+- `--handoff-timeout-sec <seconds>`
+- `--poll-interval-sec <seconds>`
+- `--watch`
+- `--morpho-market-id <actionRef>=<marketId>` (repeatable)
+- `--morpho-market-map <path>`
 - `--skip-confirm`
 - `--state-dir <dir>`
 - `--no-state`
@@ -145,6 +162,11 @@ Replay rule for advisory-gated execution:
 
 1. use `--advisory-replay <runId>` for dry-run/live consistency
 2. do not combine replay with `--no-state`
+
+Cross-chain continuation:
+
+1. if run status is waiting, continue with `resume <runId>`
+2. use `resume --watch` to poll handoff settlement and execute destination track
 
 ## Foundry Cast (RPC/Tx Diagnostics)
 

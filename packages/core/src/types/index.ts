@@ -143,6 +143,24 @@ export type {
   LedgerEntry,
 } from "./execution.js";
 
+// Cross-chain
+export type {
+  CrossChainTrackRole,
+  CrossChainTrackStatus,
+  CrossChainHandoffStatus,
+  CrossChainStepStatus,
+  CrossChainTrackReceiptEntry,
+  CrossChainHandoffReceiptEntry,
+  CrossChainReceipt,
+  RunTrackRecord,
+  RunHandoffRecord,
+  RunStepResultRecord,
+  BridgeLifecycleStatus,
+  BridgeLifecycleStatusInput,
+  BridgeLifecycleStatusResult,
+  BridgeLifecycleAdapter,
+} from "./cross-chain.js";
+
 // Receipt / Value-Flow
 export type {
   ValueDelta,

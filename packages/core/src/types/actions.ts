@@ -78,6 +78,7 @@ export interface LendAction {
   venue: string;
   asset: AssetId;
   amount: ActionAmount | "max";
+  marketId?: string;
 }
 
 /** Withdraw from protocol */
@@ -86,6 +87,7 @@ export interface WithdrawAction {
   venue: string;
   asset: AssetId;
   amount: ActionAmount | "max";
+  marketId?: string;
 }
 
 /** Borrow from protocol */
@@ -95,6 +97,7 @@ export interface BorrowAction {
   asset: AssetId;
   amount: ActionAmount;
   collateral?: AssetId;
+  marketId?: string;
 }
 
 /** Repay debt */
@@ -103,6 +106,7 @@ export interface RepayAction {
   venue: string;
   asset: AssetId;
   amount: ActionAmount | "max";
+  marketId?: string;
 }
 
 /** Stake tokens */

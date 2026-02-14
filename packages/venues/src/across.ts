@@ -43,6 +43,10 @@ export function createAcrossAdapter(
     description: "Across Protocol bridge adapter",
   };
 
+  const resolveHandoffStatus: NonNullable<VenueAdapter["resolveHandoffStatus"]> = async (input) => {
+    return await resolveAcrossHandoffStatus(input, config.apiUrl);
+  };
+
   return {
     meta,
     async buildAction(action, ctx) {
@@ -205,6 +209,10 @@ export function createAcrossAdapter(
 
       return [...approvalTxs, bridgeTx];
     },
+    bridgeLifecycle: {
+      resolveHandoffStatus,
+    },
+    resolveHandoffStatus,
   };
 }
 
@@ -297,4 +305,92 @@ async function estimateGasIfSupported(
   } catch {
     return undefined;
   }
+}
+
+async function resolveAcrossHandoffStatus(
+  input: Parameters<NonNullable<VenueAdapter["resolveHandoffStatus"]>>[0],
+  apiUrl?: string
+): Promise<{
+  status: "pending" | "settled" | "failed" | "expired";
+  settledAmount?: bigint;
+  reference?: string;
+  reason?: string;
+}> {
+  const reference = input.reference ?? input.originTxHash;
+  if (!reference) {
+    return { status: "pending" };
+  }
+
+  const base = apiUrl?.replace(/\/$/, "") ?? "https://app.across.to/api";
+  const candidates = input.originTxHash
+    ? [`${base}/deposits/status?txHash=${encodeURIComponent(input.originTxHash)}`]
+    : [`${base}/deposits/status?depositId=${encodeURIComponent(reference)}`];
+
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        continue;
+      }
+      const payload = (await response.json()) as Record<string, unknown>;
+      const statusText = String(
+        payload.status ?? payload.fillStatus ?? payload.state ?? payload.depositStatus ?? "pending"
+      ).toLowerCase();
+      if (
+        statusText === "settled" ||
+        statusText === "filled" ||
+        statusText === "completed" ||
+        statusText === "executed"
+      ) {
+        const settledAmount = toOptionalBigInt(
+          payload.settledAmount ?? payload.outputAmount ?? payload.amountFilled ?? payload.amount
+        );
+        return {
+          status: "settled",
+          settledAmount,
+          reference:
+            (typeof payload.depositId === "string" && payload.depositId) ||
+            (typeof payload.id === "string" && payload.id) ||
+            reference,
+        };
+      }
+      if (statusText === "failed" || statusText === "cancelled" || statusText === "error") {
+        return {
+          status: "failed",
+          reference,
+          reason:
+            (typeof payload.reason === "string" && payload.reason) ||
+            (typeof payload.error === "string" && payload.error) ||
+            "Across bridge reported failure",
+        };
+      }
+      if (statusText === "expired") {
+        return {
+          status: "expired",
+          reference,
+          reason:
+            (typeof payload.reason === "string" && payload.reason) ||
+            "Across bridge deposit expired",
+        };
+      }
+      return { status: "pending", reference };
+    } catch {}
+  }
+
+  return { status: "pending", reference };
+}
+
+function toOptionalBigInt(value: unknown): bigint | undefined {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return BigInt(Math.floor(value));
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    try {
+      return BigInt(value);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }

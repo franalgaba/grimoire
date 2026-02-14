@@ -3,6 +3,7 @@
  */
 
 import type { Action, ActionConstraintsResolved } from "./actions.js";
+import type { CrossChainHandoffReceiptEntry, CrossChainTrackReceiptEntry } from "./cross-chain.js";
 import type { ExecutionMetrics, LedgerEntry } from "./execution.js";
 import type { Address, AssetId, BasisPoints, ChainId, Timestamp } from "./primitives.js";
 import type { OnFailure } from "./steps.js";
@@ -165,6 +166,11 @@ export interface Receipt {
   metrics: ExecutionMetrics;
   finalState: Record<string, unknown>;
   error?: string;
+  crossChain?: {
+    runId: string;
+    tracks: CrossChainTrackReceiptEntry[];
+    handoffs: CrossChainHandoffReceiptEntry[];
+  };
 }
 
 // =============================================================================

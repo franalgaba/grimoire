@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LedgerEntry } from "../types/execution.js";
@@ -167,6 +168,51 @@ describe("SqliteStateStore", () => {
         input_params_hash: "sha256:test",
       });
     });
+
+    test("getRunById returns run when present", async () => {
+      await store.addRun("my-spell", makeRunRecord({ runId: "run-by-id" }));
+
+      const loaded = await store.getRunById("run-by-id");
+      expect(loaded?.runId).toBe("run-by-id");
+      expect(loaded?.success).toBe(true);
+    });
+
+    test("persists crossChain summary on run records", async () => {
+      await store.addRun(
+        "my-spell",
+        makeRunRecord({
+          runId: "run-cross-chain",
+          crossChain: {
+            runId: "run-cross-chain",
+            sourceSpellId: "source-spell",
+            destinationSpellId: "dest-spell",
+            sourceChainId: 8453,
+            destinationChainId: 42161,
+            tracks: [
+              {
+                trackId: "source",
+                role: "source",
+                spellId: "source-spell",
+                chainId: 8453,
+                status: "completed",
+              },
+              {
+                trackId: "destination",
+                role: "destination",
+                spellId: "dest-spell",
+                chainId: 42161,
+                status: "waiting",
+              },
+            ],
+            handoffs: [],
+          },
+        })
+      );
+
+      const loaded = await store.getRunById("run-cross-chain");
+      expect(loaded?.crossChain?.sourceChainId).toBe(8453);
+      expect(loaded?.crossChain?.tracks[1]?.status).toBe("waiting");
+    });
   });
 
   describe("run pruning", () => {
@@ -243,6 +289,120 @@ describe("SqliteStateStore", () => {
 
       const spells = await store.listSpells();
       expect(spells).toEqual(["alpha", "middle", "zebra"]);
+    });
+  });
+
+  describe("cross-chain tables", () => {
+    test("upserts and loads run tracks", async () => {
+      await store.upsertRunTrack({
+        runId: "run-cc",
+        trackId: "source",
+        role: "source",
+        spellId: "spell-a",
+        chainId: 8453,
+        status: "waiting",
+        updatedAt: new Date().toISOString(),
+      });
+
+      const tracks = await store.getRunTracks("run-cc");
+      expect(tracks).toHaveLength(1);
+      expect(tracks[0]?.trackId).toBe("source");
+      expect(tracks[0]?.status).toBe("waiting");
+    });
+
+    test("upserts and loads handoffs", async () => {
+      const now = new Date().toISOString();
+      await store.upsertRunHandoff({
+        runId: "run-cc",
+        handoffId: "handoff:1",
+        sourceTrackId: "source",
+        destinationTrackId: "destination",
+        sourceStepId: "action_1",
+        originChainId: 8453,
+        destinationChainId: 42161,
+        asset: "USDC",
+        submittedAmount: "1000",
+        status: "submitted",
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const handoffs = await store.getRunHandoffs("run-cc");
+      expect(handoffs).toHaveLength(1);
+      expect(handoffs[0]?.handoffId).toBe("handoff:1");
+      expect(handoffs[0]?.status).toBe("submitted");
+    });
+
+    test("upserts and loads step results", async () => {
+      await store.upsertRunStepResult({
+        runId: "run-cc",
+        trackId: "source",
+        stepId: "action_1",
+        status: "confirmed",
+        idempotencyKey: "run-cc:source:action_1",
+        updatedAt: new Date().toISOString(),
+      });
+
+      const stepResults = await store.getRunStepResults("run-cc");
+      expect(stepResults).toHaveLength(1);
+      expect(stepResults[0]?.idempotencyKey).toBe("run-cc:source:action_1");
+      expect(stepResults[0]?.status).toBe("confirmed");
+    });
+  });
+
+  describe("migrations", () => {
+    test("migrates legacy schema to include cross-chain tables", async () => {
+      const legacyPath = join(testDir, "legacy.db");
+      const require = createRequire(import.meta.url);
+      const { Database } = require("bun:sqlite") as {
+        Database: new (path: string) => { exec: (sql: string) => void; close: () => void };
+      };
+      const legacy = new Database(legacyPath);
+      legacy.exec(`
+        CREATE TABLE IF NOT EXISTS spell_state (
+          spell_id TEXT PRIMARY KEY,
+          state TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS runs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          spell_id TEXT NOT NULL,
+          run_id TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          success INTEGER NOT NULL,
+          error TEXT,
+          duration INTEGER NOT NULL,
+          metrics TEXT NOT NULL,
+          final_state TEXT NOT NULL,
+          UNIQUE(spell_id, run_id)
+        );
+        CREATE TABLE IF NOT EXISTS ledger (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          spell_id TEXT NOT NULL,
+          run_id TEXT NOT NULL,
+          entries TEXT NOT NULL,
+          UNIQUE(spell_id, run_id)
+        );
+        PRAGMA user_version = 1;
+      `);
+      legacy.close();
+
+      const migrated = new SqliteStateStore({ dbPath: legacyPath });
+      try {
+        await migrated.upsertRunTrack({
+          runId: "run-migrate",
+          trackId: "source",
+          role: "source",
+          spellId: "spell-a",
+          chainId: 8453,
+          status: "pending",
+          updatedAt: new Date().toISOString(),
+        });
+        const tracks = await migrated.getRunTracks("run-migrate");
+        expect(tracks.length).toBe(1);
+      } finally {
+        migrated.close();
+      }
     });
   });
 

@@ -40,6 +40,10 @@ export {
   createRunRecord,
   SqliteStateStore,
   CircuitBreakerManager,
+  orchestrateCrossChain,
+  toCrossChainReceipt,
+  injectHandoffParams,
+  rejectReservedCrossChainParams,
 } from "./runtime/index.js";
 export type {
   ExecuteOptions,
@@ -66,6 +70,8 @@ export type {
   TimestampedEvent,
   CircuitBreakerCheckResult,
   CircuitBreakerTriggerResult,
+  CrossChainOrchestrationOptions,
+  CrossChainOrchestrationResult,
 } from "./runtime/index.js";
 
 // Wallet

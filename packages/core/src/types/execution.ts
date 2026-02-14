@@ -3,6 +3,7 @@
  */
 
 import type { Action, ActionConstraintsResolved } from "./actions.js";
+import type { CrossChainReceipt } from "./cross-chain.js";
 import type { SpellIR } from "./ir.js";
 import type { PolicySet } from "./policy.js";
 import type { Address, ChainId, Timestamp, VenueAlias } from "./primitives.js";
@@ -84,6 +85,8 @@ export interface ExecutionResult {
   receipt?: Receipt;
   /** Commit result when irreversible actions are committed */
   commit?: CommitResult;
+  /** Cross-chain orchestration receipt (Phase 1) */
+  crossChain?: CrossChainReceipt;
 }
 
 /**
@@ -119,6 +122,13 @@ export type LedgerEvent =
   | StepCompletedEvent
   | StepFailedEvent
   | StepSkippedEvent
+  // Cross-chain orchestration
+  | TrackWaitingEvent
+  | TrackResumedEvent
+  | TrackCompletedEvent
+  | HandoffSubmittedEvent
+  | HandoffSettledEvent
+  | HandoffExpiredEvent
   // Actions
   | ActionSimulatedEvent
   | ActionSubmittedEvent
@@ -209,6 +219,65 @@ interface StepFailedEvent {
 interface StepSkippedEvent {
   type: "step_skipped";
   stepId: string;
+  reason: string;
+}
+
+// Cross-chain orchestration events
+interface TrackWaitingEvent {
+  type: "track_waiting";
+  runId: string;
+  trackId: string;
+  reason: string;
+  chainId: number;
+}
+
+interface TrackResumedEvent {
+  type: "track_resumed";
+  runId: string;
+  trackId: string;
+  chainId: number;
+}
+
+interface TrackCompletedEvent {
+  type: "track_completed";
+  runId: string;
+  trackId: string;
+  chainId: number;
+  success: boolean;
+}
+
+interface HandoffSubmittedEvent {
+  type: "handoff_submitted";
+  runId: string;
+  handoffId: string;
+  trackId: string;
+  stepId: string;
+  originChainId: number;
+  destinationChainId: number;
+  asset: string;
+  submittedAmount: string;
+  reference?: string;
+  txHash?: string;
+}
+
+interface HandoffSettledEvent {
+  type: "handoff_settled";
+  runId: string;
+  handoffId: string;
+  trackId: string;
+  originChainId: number;
+  destinationChainId: number;
+  settledAmount: string;
+  reference?: string;
+}
+
+interface HandoffExpiredEvent {
+  type: "handoff_expired";
+  runId: string;
+  handoffId: string;
+  trackId: string;
+  originChainId: number;
+  destinationChainId: number;
   reason: string;
 }
 
