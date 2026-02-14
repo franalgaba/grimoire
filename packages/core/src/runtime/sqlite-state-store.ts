@@ -6,6 +6,11 @@
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
+import type {
+  RunHandoffRecord,
+  RunStepResultRecord,
+  RunTrackRecord,
+} from "../types/cross-chain.js";
 import type { LedgerEntry } from "../types/execution.js";
 import type { RunRecord, StateStore } from "./state-store.js";
 
@@ -18,8 +23,9 @@ export interface SqliteStateStoreOptions {
 
 const DEFAULT_DB_PATH = ".grimoire/grimoire.db";
 const DEFAULT_MAX_RUNS = 100;
+const SCHEMA_VERSION = 2;
 
-type SqliteStatement<T, P extends unknown[]> = {
+type SqliteStatement<T, P extends unknown[] = unknown[]> = {
   get: (...params: P) => T | undefined;
   all: (...params: P) => T[];
   run: (...params: P) => void;
@@ -27,7 +33,7 @@ type SqliteStatement<T, P extends unknown[]> = {
 
 type DatabaseLike = {
   exec: (sql: string) => void;
-  query: <T, P extends unknown[]>(sql: string) => SqliteStatement<T, P>;
+  query: <T, P extends unknown[] = unknown[]>(sql: string) => SqliteStatement<T, P>;
   transaction: (fn: () => void) => () => void;
   close: () => void;
 };
@@ -112,7 +118,6 @@ export class SqliteStateStore implements StateStore {
     const dbPath = options.dbPath ?? DEFAULT_DB_PATH;
     this.maxRuns = options.maxRuns ?? DEFAULT_MAX_RUNS;
 
-    // Ensure parent directory exists
     mkdirSync(dirname(dbPath), { recursive: true });
 
     this.db = createDatabase(dbPath);
@@ -121,44 +126,135 @@ export class SqliteStateStore implements StateStore {
   }
 
   private initSchema(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS spell_state (
-        spell_id TEXT PRIMARY KEY,
-        state TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS runs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        spell_id TEXT NOT NULL,
-        run_id TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        success INTEGER NOT NULL,
-        error TEXT,
-        duration INTEGER NOT NULL,
-        metrics TEXT NOT NULL,
-        provenance TEXT,
-        final_state TEXT NOT NULL,
-        UNIQUE(spell_id, run_id)
-      );
-
-      CREATE TABLE IF NOT EXISTS ledger (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        spell_id TEXT NOT NULL,
-        run_id TEXT NOT NULL,
-        entries TEXT NOT NULL,
-        UNIQUE(spell_id, run_id)
-      );
-    `);
-
-    this.ensureRunsSchema();
+    this.applyMigrations();
+    this.ensureRunsColumns();
   }
 
-  private ensureRunsSchema(): void {
+  private applyMigrations(): void {
+    let version = this.getSchemaVersion();
+
+    if (version < 1) {
+      const migration = this.db.transaction(() => {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS spell_state (
+            spell_id TEXT PRIMARY KEY,
+            state TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          );
+
+          CREATE TABLE IF NOT EXISTS runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            spell_id TEXT NOT NULL,
+            run_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            success INTEGER NOT NULL,
+            error TEXT,
+            duration INTEGER NOT NULL,
+            metrics TEXT NOT NULL,
+            provenance TEXT,
+            cross_chain TEXT,
+            final_state TEXT NOT NULL,
+            UNIQUE(spell_id, run_id)
+          );
+
+          CREATE TABLE IF NOT EXISTS ledger (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            spell_id TEXT NOT NULL,
+            run_id TEXT NOT NULL,
+            entries TEXT NOT NULL,
+            UNIQUE(spell_id, run_id)
+          );
+        `);
+        this.setSchemaVersion(1);
+      });
+      migration();
+      version = 1;
+    }
+
+    if (version < 2) {
+      const migration = this.db.transaction(() => {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS run_tracks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            track_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            spell_id TEXT NOT NULL,
+            chain_id INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            last_step_id TEXT,
+            error TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE(run_id, track_id)
+          );
+
+          CREATE TABLE IF NOT EXISTS run_handoffs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            handoff_id TEXT NOT NULL,
+            source_track_id TEXT NOT NULL,
+            destination_track_id TEXT NOT NULL,
+            source_step_id TEXT NOT NULL,
+            origin_chain_id INTEGER NOT NULL,
+            destination_chain_id INTEGER NOT NULL,
+            asset TEXT NOT NULL,
+            submitted_amount TEXT NOT NULL,
+            settled_amount TEXT,
+            status TEXT NOT NULL,
+            reference TEXT,
+            origin_tx_hash TEXT,
+            reason TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            expires_at TEXT,
+            UNIQUE(run_id, handoff_id)
+          );
+
+          CREATE TABLE IF NOT EXISTS run_step_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            track_id TEXT NOT NULL,
+            step_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            reference TEXT,
+            error TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE(run_id, track_id, step_id),
+            UNIQUE(idempotency_key)
+          );
+        `);
+        this.setSchemaVersion(2);
+      });
+      migration();
+      version = 2;
+    }
+
+    if (version > SCHEMA_VERSION) {
+      throw new Error(
+        `State store schema version ${version} is newer than supported version ${SCHEMA_VERSION}`
+      );
+    }
+  }
+
+  private getSchemaVersion(): number {
+    const row = this.db.query<{ user_version: number }, []>("PRAGMA user_version").get();
+    return row?.user_version ?? 0;
+  }
+
+  private setSchemaVersion(version: number): void {
+    this.db.exec(`PRAGMA user_version = ${version}`);
+  }
+
+  private ensureRunsColumns(): void {
     const columns = this.db.query<{ name: string }, []>("PRAGMA table_info(runs)").all();
     const hasProvenance = columns.some((column) => column.name === "provenance");
+    const hasCrossChain = columns.some((column) => column.name === "cross_chain");
     if (!hasProvenance) {
       this.db.exec("ALTER TABLE runs ADD COLUMN provenance TEXT");
+    }
+    if (!hasCrossChain) {
+      this.db.exec("ALTER TABLE runs ADD COLUMN cross_chain TEXT");
     }
   }
 
@@ -185,8 +281,8 @@ export class SqliteStateStore implements StateStore {
     const tx = this.db.transaction(() => {
       this.db
         .query(
-          `INSERT INTO runs (spell_id, run_id, timestamp, success, error, duration, metrics, provenance, final_state)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO runs (spell_id, run_id, timestamp, success, error, duration, metrics, provenance, cross_chain, final_state)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           spellId,
@@ -196,11 +292,11 @@ export class SqliteStateStore implements StateStore {
           run.error ?? null,
           run.duration,
           JSON.stringify(run.metrics),
-          run.provenance ? JSON.stringify(run.provenance) : null,
-          JSON.stringify(run.finalState)
+          run.provenance ? JSON.stringify(run.provenance, bigintReplacer) : null,
+          run.crossChain ? JSON.stringify(run.crossChain, bigintReplacer) : null,
+          JSON.stringify(run.finalState, bigintReplacer)
         );
 
-      // Prune old runs beyond maxRuns
       this.db
         .query(
           `DELETE FROM runs WHERE spell_id = ? AND id NOT IN (
@@ -211,6 +307,13 @@ export class SqliteStateStore implements StateStore {
     });
 
     tx();
+  }
+
+  async getRunById(runId: string): Promise<RunRecord | null> {
+    const row = this.db
+      .query<RunRow, [string]>("SELECT * FROM runs WHERE run_id = ? ORDER BY id DESC LIMIT 1")
+      .get(runId);
+    return row ? rowToRunRecord(row) : null;
   }
 
   async getRuns(spellId: string, limit?: number): Promise<RunRecord[]> {
@@ -254,6 +357,198 @@ export class SqliteStateStore implements StateStore {
     return rows.map((r) => r.spell_id);
   }
 
+  async upsertRunTrack(track: RunTrackRecord): Promise<void> {
+    this.db
+      .query(
+        `INSERT INTO run_tracks (
+           run_id, track_id, role, spell_id, chain_id, status, last_step_id, error, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(run_id, track_id) DO UPDATE SET
+           role = excluded.role,
+           spell_id = excluded.spell_id,
+           chain_id = excluded.chain_id,
+           status = excluded.status,
+           last_step_id = excluded.last_step_id,
+           error = excluded.error,
+           updated_at = excluded.updated_at`
+      )
+      .run(
+        track.runId,
+        track.trackId,
+        track.role,
+        track.spellId,
+        track.chainId,
+        track.status,
+        track.lastStepId ?? null,
+        track.error ?? null,
+        track.updatedAt
+      );
+  }
+
+  async getRunTracks(runId: string): Promise<RunTrackRecord[]> {
+    const rows = this.db
+      .query<RunTrackRow, [string]>(
+        `SELECT run_id, track_id, role, spell_id, chain_id, status, last_step_id, error, updated_at
+         FROM run_tracks
+         WHERE run_id = ?
+         ORDER BY id ASC`
+      )
+      .all(runId);
+
+    return rows.map((row) => ({
+      runId: row.run_id,
+      trackId: row.track_id,
+      role: row.role as RunTrackRecord["role"],
+      spellId: row.spell_id,
+      chainId: row.chain_id,
+      status: row.status as RunTrackRecord["status"],
+      lastStepId: row.last_step_id ?? undefined,
+      error: row.error ?? undefined,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  async upsertRunHandoff(handoff: RunHandoffRecord): Promise<void> {
+    this.db
+      .query(
+        `INSERT INTO run_handoffs (
+           run_id, handoff_id, source_track_id, destination_track_id, source_step_id,
+           origin_chain_id, destination_chain_id, asset, submitted_amount, settled_amount,
+           status, reference, origin_tx_hash, reason, created_at, updated_at, expires_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(run_id, handoff_id) DO UPDATE SET
+           source_track_id = excluded.source_track_id,
+           destination_track_id = excluded.destination_track_id,
+           source_step_id = excluded.source_step_id,
+           origin_chain_id = excluded.origin_chain_id,
+           destination_chain_id = excluded.destination_chain_id,
+           asset = excluded.asset,
+           submitted_amount = excluded.submitted_amount,
+           settled_amount = excluded.settled_amount,
+           status = excluded.status,
+           reference = excluded.reference,
+           origin_tx_hash = excluded.origin_tx_hash,
+           reason = excluded.reason,
+           created_at = excluded.created_at,
+           updated_at = excluded.updated_at,
+           expires_at = excluded.expires_at`
+      )
+      .run(
+        handoff.runId,
+        handoff.handoffId,
+        handoff.sourceTrackId,
+        handoff.destinationTrackId,
+        handoff.sourceStepId,
+        handoff.originChainId,
+        handoff.destinationChainId,
+        handoff.asset,
+        handoff.submittedAmount,
+        handoff.settledAmount ?? null,
+        handoff.status,
+        handoff.reference ?? null,
+        handoff.originTxHash ?? null,
+        handoff.reason ?? null,
+        handoff.createdAt,
+        handoff.updatedAt,
+        handoff.expiresAt ?? null
+      );
+  }
+
+  async getRunHandoffs(runId: string): Promise<RunHandoffRecord[]> {
+    const rows = this.db
+      .query<RunHandoffRow, [string]>(
+        `SELECT
+           run_id,
+           handoff_id,
+           source_track_id,
+           destination_track_id,
+           source_step_id,
+           origin_chain_id,
+           destination_chain_id,
+           asset,
+           submitted_amount,
+           settled_amount,
+           status,
+           reference,
+           origin_tx_hash,
+           reason,
+           created_at,
+           updated_at,
+           expires_at
+         FROM run_handoffs
+         WHERE run_id = ?
+         ORDER BY id ASC`
+      )
+      .all(runId);
+
+    return rows.map((row) => ({
+      runId: row.run_id,
+      handoffId: row.handoff_id,
+      sourceTrackId: row.source_track_id,
+      destinationTrackId: row.destination_track_id,
+      sourceStepId: row.source_step_id,
+      originChainId: row.origin_chain_id,
+      destinationChainId: row.destination_chain_id,
+      asset: row.asset,
+      submittedAmount: row.submitted_amount,
+      settledAmount: row.settled_amount ?? undefined,
+      status: row.status as RunHandoffRecord["status"],
+      reference: row.reference ?? undefined,
+      originTxHash: row.origin_tx_hash ?? undefined,
+      reason: row.reason ?? undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      expiresAt: row.expires_at ?? undefined,
+    }));
+  }
+
+  async upsertRunStepResult(step: RunStepResultRecord): Promise<void> {
+    this.db
+      .query(
+        `INSERT INTO run_step_results (
+           run_id, track_id, step_id, status, idempotency_key, reference, error, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(run_id, track_id, step_id) DO UPDATE SET
+           status = excluded.status,
+           idempotency_key = excluded.idempotency_key,
+           reference = excluded.reference,
+           error = excluded.error,
+           updated_at = excluded.updated_at`
+      )
+      .run(
+        step.runId,
+        step.trackId,
+        step.stepId,
+        step.status,
+        step.idempotencyKey,
+        step.reference ?? null,
+        step.error ?? null,
+        step.updatedAt
+      );
+  }
+
+  async getRunStepResults(runId: string): Promise<RunStepResultRecord[]> {
+    const rows = this.db
+      .query<RunStepRow, [string]>(
+        `SELECT run_id, track_id, step_id, status, idempotency_key, reference, error, updated_at
+         FROM run_step_results
+         WHERE run_id = ?
+         ORDER BY id ASC`
+      )
+      .all(runId);
+
+    return rows.map((row) => ({
+      runId: row.run_id,
+      trackId: row.track_id,
+      stepId: row.step_id,
+      status: row.status as RunStepResultRecord["status"],
+      idempotencyKey: row.idempotency_key,
+      reference: row.reference ?? undefined,
+      error: row.error ?? undefined,
+      updatedAt: row.updated_at,
+    }));
+  }
+
   /** Close the database connection */
   close(): void {
     this.db.close();
@@ -270,7 +565,51 @@ interface RunRow {
   duration: number;
   metrics: string;
   provenance: string | null;
+  cross_chain: string | null;
   final_state: string;
+}
+
+interface RunTrackRow {
+  run_id: string;
+  track_id: string;
+  role: string;
+  spell_id: string;
+  chain_id: number;
+  status: string;
+  last_step_id: string | null;
+  error: string | null;
+  updated_at: string;
+}
+
+interface RunHandoffRow {
+  run_id: string;
+  handoff_id: string;
+  source_track_id: string;
+  destination_track_id: string;
+  source_step_id: string;
+  origin_chain_id: number;
+  destination_chain_id: number;
+  asset: string;
+  submitted_amount: string;
+  settled_amount: string | null;
+  status: string;
+  reference: string | null;
+  origin_tx_hash: string | null;
+  reason: string | null;
+  created_at: string;
+  updated_at: string;
+  expires_at: string | null;
+}
+
+interface RunStepRow {
+  run_id: string;
+  track_id: string;
+  step_id: string;
+  status: string;
+  idempotency_key: string;
+  reference: string | null;
+  error: string | null;
+  updated_at: string;
 }
 
 function rowToRunRecord(row: RunRow): RunRecord {
@@ -282,6 +621,7 @@ function rowToRunRecord(row: RunRow): RunRecord {
     duration: row.duration,
     metrics: JSON.parse(row.metrics),
     provenance: row.provenance ? JSON.parse(row.provenance) : undefined,
+    crossChain: row.cross_chain ? JSON.parse(row.cross_chain) : undefined,
     finalState: JSON.parse(row.final_state),
   };
 }

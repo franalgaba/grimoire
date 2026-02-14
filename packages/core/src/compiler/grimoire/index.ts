@@ -73,10 +73,7 @@ export function compileGrimoire(
   } catch (error) {
     const err = error as Error;
     const grimoireError = error instanceof GrimoireError ? error : undefined;
-    const code =
-      grimoireError?.code === "ADVISORY_INLINE_UNSUPPORTED"
-        ? "ADVISORY_INLINE_UNSUPPORTED"
-        : "GRIMOIRE_PARSE_ERROR";
+    const code = grimoireError?.code ?? "GRIMOIRE_PARSE_ERROR";
     return {
       success: false,
       errors: [

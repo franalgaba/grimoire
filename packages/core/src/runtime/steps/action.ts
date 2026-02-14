@@ -39,6 +39,14 @@ export interface ActionExecutionOptions {
   circuitBreakerManager?: CircuitBreakerManager;
   adapterRegistry?: VenueRegistry;
   previewAdapterContext?: Omit<VenueAdapterContext, "mode" | "vault">;
+  crossChain?: {
+    enabled: boolean;
+    runId: string;
+    trackId: string;
+    role: "source" | "destination";
+    morphoMarketIds?: Record<string, string>;
+  };
+  warningCallback?: (message: string) => void;
 }
 
 const EXPRESSION_KINDS = new Set([
@@ -132,10 +140,19 @@ export async function executeActionStep(
 
     const actionWithVenue = resolveActionVenue(step.action, skill, ctx, skillName);
     const resolvedAction = await resolveAction(actionWithVenue, evalCtx);
+    const crossChainAdjustedAction = applyCrossChainActionOverrides(
+      resolvedAction,
+      step.id,
+      options
+    );
+    maybeWarnMorphoImplicitMarket(crossChainAdjustedAction, step.id, options);
 
     const mergedConstraints = applySkillDefaults(step.constraints, skill);
     const resolvedConstraints = await resolveConstraints(mergedConstraints, evalCtx);
-    const actionWithConstraints = { ...resolvedAction, constraints: resolvedConstraints } as Action;
+    const actionWithConstraints = {
+      ...crossChainAdjustedAction,
+      constraints: resolvedConstraints,
+    } as Action;
     assertConstraintSupport(actionWithConstraints, options.adapterRegistry);
 
     ledger.emit({
@@ -626,6 +643,98 @@ function resolveVenueAlias(action: Action, ctx: ExecutionContext): VenueAlias {
   };
 }
 
+function buildActionRef(options: ActionExecutionOptions, stepId: string): string | undefined {
+  if (!options.crossChain?.enabled) {
+    return undefined;
+  }
+  return `${options.crossChain.role}:${stepId}`;
+}
+
+function buildCrossChainContext(
+  options: ActionExecutionOptions,
+  stepId: string
+): VenueAdapterContext["crossChain"] {
+  if (!options.crossChain?.enabled) {
+    return undefined;
+  }
+
+  return {
+    enabled: true,
+    runId: options.crossChain.runId,
+    trackId: options.crossChain.trackId,
+    role: options.crossChain.role,
+    stepId,
+    actionRef: buildActionRef(options, stepId),
+    morphoMarketIds: options.crossChain.morphoMarketIds,
+  };
+}
+
+function isMorphoValueMovingAction(action: Action): boolean {
+  return (
+    "venue" in action &&
+    action.venue === "morpho_blue" &&
+    (action.type === "lend" ||
+      action.type === "withdraw" ||
+      action.type === "borrow" ||
+      action.type === "repay")
+  );
+}
+
+function applyCrossChainActionOverrides(
+  action: Action,
+  stepId: string,
+  options: ActionExecutionOptions
+): Action {
+  if (!isMorphoValueMovingAction(action)) {
+    return action;
+  }
+
+  const explicitMarketId =
+    "marketId" in action && typeof action.marketId === "string" && action.marketId.length > 0
+      ? action.marketId
+      : undefined;
+
+  if (!options.crossChain?.enabled) {
+    return action;
+  }
+
+  const actionRef = buildActionRef(options, stepId);
+  const mappedMarketId =
+    actionRef && options.crossChain.morphoMarketIds
+      ? options.crossChain.morphoMarketIds[actionRef]
+      : undefined;
+  const marketId = explicitMarketId ?? mappedMarketId;
+
+  if (!marketId) {
+    throw new Error(
+      `Cross-chain Morpho action '${stepId}' is missing explicit market_id (actionRef '${actionRef ?? "unknown"}').`
+    );
+  }
+
+  return { ...action, marketId } as Action;
+}
+
+function maybeWarnMorphoImplicitMarket(
+  action: Action,
+  stepId: string,
+  options: ActionExecutionOptions
+): void {
+  if (!isMorphoValueMovingAction(action)) {
+    return;
+  }
+  if (options.crossChain?.enabled) {
+    return;
+  }
+  const hasExplicitMarket =
+    "marketId" in action && typeof action.marketId === "string" && action.marketId.length > 0;
+  if (hasExplicitMarket) {
+    return;
+  }
+  options.warningCallback?.(
+    `Step '${stepId}' uses Morpho without explicit market_id. Set market_id to avoid ambiguous market routing.`
+  );
+}
+
 function deriveSimulationInput(
   action: Action,
   amountText: string
@@ -808,7 +917,8 @@ async function deriveAdapterSimulationResult(
   action: Action,
   ctx: ExecutionContext,
   options: ActionExecutionOptions,
-  amountText: string
+  amountText: string,
+  stepId: string
 ): Promise<ActionSimulationResult | null> {
   if (!("venue" in action) || !action.venue) {
     return null;
@@ -873,11 +983,14 @@ async function deriveAdapterSimulationResult(
   }
 
   try {
+    const crossChainContext = buildCrossChainContext(options, stepId);
     const buildResult = await adapter.buildAction(action, {
       ...previewAdapterContext,
       chainId: ctx.chain,
       vault: ctx.vault,
       mode: "simulate",
+      crossChain: crossChainContext,
+      onWarning: options.warningCallback,
     });
     const built = normalizeVenueBuildResult(buildResult);
     const primary = built[built.length - 1];
@@ -1048,10 +1161,19 @@ export async function previewActionStep(
 
     const actionWithVenue = resolveActionVenue(step.action, skill, ctx, skillName);
     const resolvedAction = await resolveAction(actionWithVenue, evalCtx);
+    const crossChainAdjustedAction = applyCrossChainActionOverrides(
+      resolvedAction,
+      step.id,
+      options
+    );
+    maybeWarnMorphoImplicitMarket(crossChainAdjustedAction, step.id, options);
 
     const mergedConstraints = applySkillDefaults(step.constraints, skill);
     const resolvedConstraints = await resolveConstraints(mergedConstraints, evalCtx);
-    const actionWithConstraints = { ...resolvedAction, constraints: resolvedConstraints } as Action;
+    const actionWithConstraints = {
+      ...crossChainAdjustedAction,
+      constraints: resolvedConstraints,
+    } as Action;
     assertConstraintSupport(actionWithConstraints, options.adapterRegistry);
     assertPreviewAdapterAvailability(actionWithConstraints, ctx, options);
 
@@ -1077,7 +1199,8 @@ export async function previewActionStep(
       actionWithConstraints,
       ctx,
       options,
-      amountText
+      amountText,
+      step.id
     );
     if (
       adapterSimulationResult === null &&

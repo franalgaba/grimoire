@@ -306,4 +306,95 @@ describe("Morpho Blue adapter", () => {
 
     await expect(adapter.buildAction(action, ctx)).rejects.toThrow("Unsupported amount type");
   });
+
+  test("fails closed in cross-chain mode without explicit market_id", async () => {
+    const market2 = {
+      ...market,
+      id: "test2",
+      collateralToken: "0x6B175474E89094C44Da98b954EedeAC495271d0F" as Address,
+    };
+    const adapter = createMorphoBlueAdapter({ markets: [market, market2] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "borrow",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount1,
+    } as unknown as Action;
+
+    const crossChainCtx: VenueAdapterContext = {
+      ...ctx,
+      crossChain: {
+        enabled: true,
+        actionRef: "source:step_1",
+      },
+    };
+
+    await expect(adapter.buildAction(action, crossChainCtx)).rejects.toThrow(
+      "requires explicit market_id"
+    );
+  });
+
+  test("accepts explicit market_id in cross-chain mode via action payload", async () => {
+    const market2 = {
+      ...market,
+      id: "test2",
+      collateralToken: "0x6B175474E89094C44Da98b954EedeAC495271d0F" as Address,
+    };
+    const adapter = createMorphoBlueAdapter({ markets: [market, market2] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "borrow",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount1,
+      marketId: "test2",
+    } as unknown as Action;
+
+    const crossChainCtx: VenueAdapterContext = {
+      ...ctx,
+      crossChain: {
+        enabled: true,
+        actionRef: "source:step_1",
+      },
+    };
+
+    const result = await adapter.buildAction(action, crossChainCtx);
+    const built = Array.isArray(result) ? result : [result];
+    expect(built[0]?.description).toContain("Morpho Blue borrow");
+  });
+
+  test("accepts explicit market_id in cross-chain mode via actionRef mapping", async () => {
+    const market2 = {
+      ...market,
+      id: "test2",
+      collateralToken: "0x6B175474E89094C44Da98b954EedeAC495271d0F" as Address,
+    };
+    const adapter = createMorphoBlueAdapter({ markets: [market, market2] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "borrow",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount1,
+    } as unknown as Action;
+
+    const crossChainCtx: VenueAdapterContext = {
+      ...ctx,
+      crossChain: {
+        enabled: true,
+        actionRef: "destination:step_9",
+        morphoMarketIds: {
+          "destination:step_9": "test2",
+        },
+      },
+    };
+
+    const result = await adapter.buildAction(action, crossChainCtx);
+    const built = Array.isArray(result) ? result : [result];
+    expect(built[0]?.description).toContain("Morpho Blue borrow");
+  });
 });

@@ -88,6 +88,8 @@ export interface ExecuteOptions {
   vault: Address;
   /** Chain ID */
   chain: ChainId;
+  /** Optional run id override (used by cross-chain orchestrator) */
+  runId?: string;
   /** Parameter overrides */
   params?: Record<string, unknown>;
   /** Initial persistent state */
@@ -122,6 +124,10 @@ export interface ExecuteOptions {
   onAdvisory?: AdvisoryHandler;
   /** Optional callback for streaming emitted ledger entries */
   eventCallback?: (entry: LedgerEntry) => void;
+  /** Optional callback for non-fatal runtime warnings */
+  warningCallback?: (message: string) => void;
+  /** Cross-chain execution context for action-level enforcement */
+  crossChain?: ActionExecutionOptions["crossChain"];
 }
 
 // =============================================================================
@@ -135,6 +141,7 @@ export interface PreviewOptions {
   spell: SpellIR;
   vault: Address;
   chain: ChainId;
+  runId?: string;
   params?: Record<string, unknown>;
   persistentState?: Record<string, unknown>;
   trigger?: ExecutionContext["trigger"];
@@ -146,6 +153,8 @@ export interface PreviewOptions {
   onAdvisory?: AdvisoryHandler;
   progressCallback?: (message: string) => void;
   eventCallback?: (entry: LedgerEntry) => void;
+  warningCallback?: (message: string) => void;
+  crossChain?: ActionExecutionOptions["crossChain"];
 }
 
 /**
@@ -173,11 +182,14 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
       options.policy.circuitBreakers
     );
   }
+  actionExecution.crossChain = options.crossChain;
+  actionExecution.warningCallback = options.warningCallback;
 
   const ctx = createContext({
     spell,
     vault,
     chain,
+    runId: options.runId,
     trigger: options.trigger,
     params,
     persistentState,
@@ -721,6 +733,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     spell,
     vault,
     chain,
+    runId: options.runId,
     params,
     persistentState,
     trigger: options.trigger,
@@ -732,6 +745,8 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     onAdvisory: options.onAdvisory,
     progressCallback: options.progressCallback,
     eventCallback: options.eventCallback,
+    warningCallback: options.warningCallback,
+    crossChain: options.crossChain,
   });
 
   if (!previewResult.success || !previewResult.receipt) {

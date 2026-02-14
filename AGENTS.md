@@ -305,22 +305,35 @@ interface StateStore {
   load(spellId: string): Promise<Record<string, unknown> | null>;
   save(spellId: string, state: Record<string, unknown>): Promise<void>;
   addRun(spellId: string, run: RunRecord): Promise<void>;
+  getRunById(runId: string): Promise<RunRecord | null>;
   getRuns(spellId: string, limit?: number): Promise<RunRecord[]>;
   saveLedger(spellId: string, runId: string, entries: LedgerEntry[]): Promise<void>;
   loadLedger(spellId: string, runId: string): Promise<LedgerEntry[] | null>;
   listSpells(): Promise<string[]>;
+  upsertRunTrack(track: RunTrackRecord): Promise<void>;
+  getRunTracks(runId: string): Promise<RunTrackRecord[]>;
+  upsertRunHandoff(handoff: RunHandoffRecord): Promise<void>;
+  getRunHandoffs(runId: string): Promise<RunHandoffRecord[]>;
+  upsertRunStepResult(step: RunStepResultRecord): Promise<void>;
+  getRunStepResults(runId: string): Promise<RunStepResultRecord[]>;
 }
 ```
 
 ## SQLite schema
 
-Database lives at `.grimoire/grimoire.db` (configurable via `--state-dir`). Three tables: `spell_state` (persistent state), `runs` (execution history), `ledger` (event logs per run). Old runs are pruned beyond `maxRuns` (default 100).
+Database lives at `.grimoire/grimoire.db` (configurable via `--state-dir`). Core tables: `spell_state` (persistent state), `runs` (execution history), `ledger` (event logs per run). Cross-chain tables: `run_tracks`, `run_handoffs`, `run_step_results`. Migrations are additive and versioned via `PRAGMA user_version`. Old runs are pruned beyond `maxRuns` (default 100).
 
 ## CLI flags
 
 - `--state-dir <dir>` - custom directory for `grimoire.db` (on `simulate`, `cast`, `history`, `log`)
 - `--no-state` - disable persistence entirely (on `simulate`, `cast`)
 - `--advisory-trace-verbose` - stream detailed advisory trace (prompt/schema, tool payloads, model text/thinking deltas) in non-JSON `simulate`/`cast` runs
+- `--destination-spell <spell>` - enable cross-chain orchestration by specifying destination spell
+- `--destination-chain <id>` - destination chain ID for cross-chain mode
+- `--handoff-timeout-sec <seconds>` - required handoff timeout in cross-chain mode
+- `--poll-interval-sec <seconds>` - handoff polling interval (default `30`)
+- `--watch` - keep process alive to continue after handoff settlement
+- `--morpho-market-id <actionRef>=<marketId>` / `--morpho-market-map <path>` - explicit Morpho market identity mapping for cross-chain runs
 
 # Action Constraints (Slippage)
 
@@ -340,8 +353,9 @@ For swaps, **always set both `max_slippage` and `min_output`** to prevent unexpe
 - `grimoire compile <spell>` - compile a `.spell` file to IR
 - `grimoire compile-all [dir]` - compile all `.spell` files in a directory
 - `grimoire validate <spell> [--strict] [--json]` - validate a `.spell` file
-- `grimoire simulate <spell> [--rpc-url <url>]` - simulate execution (dry run), with state persistence
-- `grimoire cast <spell>` - execute a spell onchain, with state persistence
+- `grimoire simulate <spell> [--rpc-url <url>|<chainId>=<url>] [--destination-spell <spell>]` - simulate execution (dry run), with state persistence
+- `grimoire cast <spell> [--rpc-url <url>|<chainId>=<url>] [--destination-spell <spell>]` - execute a spell onchain, with state persistence
+- `grimoire resume <runId> [--watch]` - resume a waiting cross-chain orchestration run
 - `grimoire history [spell]` - view execution history (all spells or runs for one spell)
 - `grimoire log <spell> <runId>` - view ledger events for a specific run
 - `grimoire venues` - list available venue adapters

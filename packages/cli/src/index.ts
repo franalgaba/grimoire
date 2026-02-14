@@ -8,9 +8,11 @@ import { Command } from "commander";
 import { castCommand } from "./commands/cast.js";
 import { compileAllCommand } from "./commands/compile-all.js";
 import { compileCommand } from "./commands/compile.js";
+import { collectRepeatedOption } from "./commands/cross-chain-helpers.js";
 import { historyCommand } from "./commands/history.js";
 import { initCommand } from "./commands/init.js";
 import { logCommand } from "./commands/log.js";
+import { resumeCommand } from "./commands/resume.js";
 import { simulateCommand } from "./commands/simulate.js";
 import { validateCommand } from "./commands/validate.js";
 import { venueCommand } from "./commands/venue.js";
@@ -64,7 +66,24 @@ program
   .option("-p, --params <json>", "Parameters as JSON")
   .option("--vault <address>", "Vault address")
   .option("--chain <id>", "Chain ID", "1")
-  .option("--rpc-url <url>", "RPC URL override for preview adapter context")
+  .option(
+    "--rpc-url <url>",
+    "RPC URL override (single URL) or chain mapping <chainId>=<url> (repeatable)",
+    collectRepeatedOption,
+    []
+  )
+  .option("--destination-spell <spell>", "Destination spell path for cross-chain orchestration")
+  .option("--destination-chain <id>", "Destination chain ID for cross-chain orchestration")
+  .option("--handoff-timeout-sec <seconds>", "Handoff timeout in seconds for cross-chain mode")
+  .option("--poll-interval-sec <seconds>", "Handoff polling interval in seconds (default: 30)")
+  .option("--watch", "Keep process alive and continue after handoff settlement")
+  .option(
+    "--morpho-market-id <mapping>",
+    "Morpho market mapping <actionRef>=<marketId> (repeatable)",
+    collectRepeatedOption,
+    []
+  )
+  .option("--morpho-market-map <path>", "JSON file mapping actionRef -> marketId")
   .option("--json", "Output results as JSON")
   .option("--advisor-skills-dir <dir...>", "Directory to load advisor skills (default: ./skills)")
   .option("--advisory-pi", "Force advisory steps via Pi SDK (auto when configured)")
@@ -102,7 +121,24 @@ program
   .option("--key-env <name>", "Environment variable containing private key")
   .option("--keystore <path>", "Path to keystore file")
   .option("--password-env <name>", "Environment variable for keystore password")
-  .option("--rpc-url <url>", "RPC URL (or set RPC_URL env var)")
+  .option(
+    "--rpc-url <url>",
+    "RPC URL (single URL) or chain mapping <chainId>=<url> (repeatable)",
+    collectRepeatedOption,
+    []
+  )
+  .option("--destination-spell <spell>", "Destination spell path for cross-chain orchestration")
+  .option("--destination-chain <id>", "Destination chain ID for cross-chain orchestration")
+  .option("--handoff-timeout-sec <seconds>", "Handoff timeout in seconds for cross-chain mode")
+  .option("--poll-interval-sec <seconds>", "Handoff polling interval in seconds (default: 30)")
+  .option("--watch", "Keep process alive and continue after handoff settlement")
+  .option(
+    "--morpho-market-id <mapping>",
+    "Morpho market mapping <actionRef>=<marketId> (repeatable)",
+    collectRepeatedOption,
+    []
+  )
+  .option("--morpho-market-map <path>", "JSON file mapping actionRef -> marketId")
   .option("--gas-multiplier <n>", "Gas price multiplier (default: 1.1)")
   .option("--skip-confirm", "Skip confirmation prompt (use with caution)")
   .option("-v, --verbose", "Show verbose output")
@@ -155,6 +191,16 @@ program
   .option("--json", "Output results as JSON")
   .option("--state-dir <dir>", "Directory for state database")
   .action(historyCommand);
+
+// Resume cross-chain continuation
+program
+  .command("resume <runId>")
+  .description("Resume a waiting cross-chain orchestration run")
+  .option("--watch", "Keep process alive and continue after handoff settlement")
+  .option("--poll-interval-sec <seconds>", "Handoff polling interval in seconds (default: 30)")
+  .option("--json", "Output results as JSON")
+  .option("--state-dir <dir>", "Directory for state database")
+  .action(resumeCommand);
 
 // Log command
 program

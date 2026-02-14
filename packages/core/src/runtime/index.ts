@@ -62,3 +62,11 @@ export {
   createRunRecord,
 } from "./state-store.js";
 export { SqliteStateStore, type SqliteStateStoreOptions } from "./sqlite-state-store.js";
+export {
+  orchestrateCrossChain,
+  toCrossChainReceipt,
+  injectHandoffParams,
+  rejectReservedCrossChainParams,
+  type CrossChainOrchestrationOptions,
+  type CrossChainOrchestrationResult,
+} from "./cross-chain-orchestrator.js";

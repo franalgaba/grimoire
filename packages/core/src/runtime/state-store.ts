@@ -3,6 +3,12 @@
  * Abstract persistence layer for spell state across runs
  */
 
+import type {
+  CrossChainReceipt,
+  RunHandoffRecord,
+  RunStepResultRecord,
+  RunTrackRecord,
+} from "../types/cross-chain.js";
 import type { ExecutionMetrics, ExecutionResult, LedgerEntry } from "../types/execution.js";
 
 /**
@@ -31,6 +37,7 @@ export interface RunRecord {
   metrics: RunMetrics;
   finalState: Record<string, unknown>;
   provenance?: RunProvenance;
+  crossChain?: CrossChainReceipt;
 }
 
 /**
@@ -46,6 +53,9 @@ export interface StateStore {
   /** Append a run record */
   addRun(spellId: string, run: RunRecord): Promise<void>;
 
+  /** Load a run record by run id */
+  getRunById(runId: string): Promise<RunRecord | null>;
+
   /** Get run records, most recent first */
   getRuns(spellId: string, limit?: number): Promise<RunRecord[]>;
 
@@ -57,6 +67,24 @@ export interface StateStore {
 
   /** List all spell IDs with saved state */
   listSpells(): Promise<string[]>;
+
+  /** Upsert per-track status for cross-chain orchestration */
+  upsertRunTrack(track: RunTrackRecord): Promise<void>;
+
+  /** Read per-track status for a logical run */
+  getRunTracks(runId: string): Promise<RunTrackRecord[]>;
+
+  /** Upsert a handoff lifecycle record for a logical run */
+  upsertRunHandoff(handoff: RunHandoffRecord): Promise<void>;
+
+  /** Read handoff lifecycle records for a logical run */
+  getRunHandoffs(runId: string): Promise<RunHandoffRecord[]>;
+
+  /** Upsert idempotent step execution status for a logical run */
+  upsertRunStepResult(step: RunStepResultRecord): Promise<void>;
+
+  /** Read idempotent step execution statuses for a logical run */
+  getRunStepResults(runId: string): Promise<RunStepResultRecord[]>;
 }
 
 /**
@@ -86,5 +114,6 @@ export function createRunRecord(result: ExecutionResult, provenance?: RunProvena
     metrics: serializeMetrics(result.metrics),
     finalState: result.finalState,
     provenance,
+    crossChain: result.crossChain,
   };
 }

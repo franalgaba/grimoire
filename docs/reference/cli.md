@@ -13,6 +13,7 @@ This page documents the `grimoire` CLI surface from `packages/cli/src/index.ts` 
 - `grimoire venues`
 - `grimoire venue [adapter] [args...]`
 - `grimoire venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]`
+- `grimoire resume <runId>`
 - `grimoire history [spell]`
 - `grimoire log <spell> <runId>`
 - `grimoire wallet <subcommand>`
@@ -117,7 +118,7 @@ Core options:
 - `-p, --params <json>`: parameter override JSON
 - `--vault <address>`: vault address (default `0x000...000`)
 - `--chain <id>`: EVM chain id (default `1`)
-- `--rpc-url <url>`: explicit RPC URL override for preview adapter context
+- `--rpc-url <url>`: explicit RPC URL override, or chain mapping `--rpc-url <chainId>=<url>` (repeatable)
 - `--json`: JSON output
 
 RPC resolution order:
@@ -125,6 +126,23 @@ RPC resolution order:
 1. `--rpc-url <url>`
 2. `RPC_URL_<chainId>` (for example `RPC_URL_1`)
 3. `RPC_URL`
+
+Cross-chain options:
+
+- `--destination-spell <spell>`
+- `--destination-chain <id>`
+- `--handoff-timeout-sec <seconds>`
+- `--poll-interval-sec <seconds>` (default `30`)
+- `--watch`
+- `--morpho-market-id <actionRef>=<marketId>` (repeatable)
+- `--morpho-market-map <path>`
+
+Cross-chain requirements:
+
+1. Cross-chain mode is enabled when `--destination-spell` is provided.
+2. `--destination-chain` and `--handoff-timeout-sec` are required.
+3. RPC URLs must be explicitly mapped for both chains using repeatable `--rpc-url <chainId>=<url>`.
+4. Morpho cross-chain actions require explicit market mapping (flags and/or map file).
 
 Advisory options:
 
@@ -188,9 +206,19 @@ Wallet/key options:
 
 Execution options:
 
-- `--rpc-url <url>`
+- `--rpc-url <url>` or chain mapping `--rpc-url <chainId>=<url>` (repeatable)
 - `--gas-multiplier <n>`
 - `--skip-confirm`
+
+Cross-chain options:
+
+- `--destination-spell <spell>`
+- `--destination-chain <id>`
+- `--handoff-timeout-sec <seconds>`
+- `--poll-interval-sec <seconds>` (default `30`)
+- `--watch`
+- `--morpho-market-id <actionRef>=<marketId>` (repeatable)
+- `--morpho-market-map <path>`
 
 Advisory/data/ENS/state options are the same family as `simulate`.
 
@@ -205,6 +233,8 @@ Behavior notes:
 - Always runs preview first.
 - Commits only when mode is `execute`, a wallet exists, and receipt has planned actions.
 - Hyperliquid adapter is key-configured dynamically in wallet paths.
+- In cross-chain mode, source and destination runs share one logical `runId`.
+- If `--watch` is not set in execute mode, runs can return a waiting state and must be continued with `resume`.
 
 ## `venues`
 
@@ -277,6 +307,21 @@ Exit code:
 - `0` when all checks pass (or are skipped)
 - `1` when any check fails or arguments are invalid
 
+## `resume`
+
+Resume a waiting cross-chain orchestration run.
+
+```bash
+grimoire resume <runId> [--watch] [--poll-interval-sec <seconds>] [--json] [--state-dir <dir>]
+```
+
+Notes:
+
+- Expects a persisted cross-chain run manifest from prior `cast`/`simulate` run state.
+- Rehydrates handoff/track status from state store tables.
+- With `--watch`, polls handoff lifecycle and executes destination track after settlement.
+- Without `--watch`, returns current waiting status without executing destination.
+
 ## `history`
 
 Inspect persisted run history.
@@ -289,6 +334,7 @@ Modes:
 
 - No `spell`: list spells with persisted state.
 - With `spell`: list runs plus session ledger and P&L rollups.
+- Cross-chain runs include track and handoff status summaries when available.
 
 ## `log`
 
@@ -299,6 +345,15 @@ grimoire log <spell> <runId> [--json] [--state-dir <dir>]
 ```
 
 Outputs chronological ledger entries with event-specific formatting.
+
+Cross-chain lifecycle events include:
+
+- `handoff_submitted`
+- `handoff_settled`
+- `handoff_expired`
+- `track_waiting`
+- `track_resumed`
+- `track_completed`
 
 ## `wallet`
 

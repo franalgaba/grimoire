@@ -52,7 +52,7 @@ describe("Module exports", () => {
     // This should trigger an error in parsing
     const result = compileGrimoire("spell @invalid");
     expect(result.success).toBe(false);
-    expect(result.errors[0]?.code).toBe("GRIMOIRE_PARSE_ERROR");
+    expect(result.errors[0]?.code).toBe("PARSE_ERROR");
   });
 
   test("compileGrimoire emits advisory inline unsupported code", () => {

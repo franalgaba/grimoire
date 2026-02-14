@@ -16,6 +16,7 @@ export interface CreateContextOptions {
   policy?: PolicySet;
   vault: Address;
   chain: ChainId;
+  runId?: string;
   trigger?: ExecutionContext["trigger"];
   params?: Record<string, unknown>;
   persistentState?: Record<string, unknown>;
@@ -25,7 +26,16 @@ export interface CreateContextOptions {
  * Create a new execution context
  */
 export function createContext(options: CreateContextOptions): ExecutionContext {
-  const { spell, policy, vault, chain, trigger, params = {}, persistentState = {} } = options;
+  const {
+    spell,
+    policy,
+    vault,
+    chain,
+    runId,
+    trigger,
+    params = {},
+    persistentState = {},
+  } = options;
 
   // Generate run ID
   const now = new Date();
@@ -34,7 +44,7 @@ export function createContext(options: CreateContextOptions): ExecutionContext {
     .replace(/[-:]/g, "")
     .replace(/\.\d+Z$/, "");
   const random = Math.random().toString(36).slice(2, 8);
-  const runId = `${timestamp}-${random}`;
+  const resolvedRunId = runId ?? `${timestamp}-${random}`;
 
   // Initialize state from schema
   const persistent = new Map<string, unknown>();
@@ -91,7 +101,7 @@ export function createContext(options: CreateContextOptions): ExecutionContext {
   return {
     spell,
     policy,
-    runId,
+    runId: resolvedRunId,
     startTime: now.getTime(),
     trigger: trigger ?? normalizeTrigger(spell.triggers[0]),
     vault,

@@ -42,6 +42,7 @@ import type {
   VenueRefExpr,
   WaitNode,
 } from "./ast.js";
+import { TransformError } from "./errors.js";
 import { parse } from "./parser.js";
 
 const INLINE_ADVISORY_UNSUPPORTED_MESSAGE =
@@ -718,10 +719,19 @@ export class Transformer {
   private transformDo(stmt: DoNode): Array<Record<string, unknown>> {
     const block = this.blockMap.get(stmt.name);
     if (!block) {
-      return [];
+      throw new TransformError(`Unknown block '${stmt.name}' in do invocation`, {
+        location: stmt.span?.start,
+        span: stmt.span,
+      });
     }
     if (block.params.length !== stmt.args.length) {
-      return [];
+      throw new TransformError(
+        `Block '${stmt.name}' expects ${block.params.length} args, got ${stmt.args.length}`,
+        {
+          location: stmt.span?.start,
+          span: stmt.span,
+        }
+      );
     }
 
     const assignments: AssignmentNode[] = block.params.map((param, i) => ({
