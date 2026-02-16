@@ -1,5 +1,22 @@
 # @grimoirelabs/venues
 
+## 0.6.0
+
+### Minor Changes
+
+- db19d26: Add first-class Pendle venue support across core, venues, and CLI.
+
+  - add typed Pendle actions in core compiler/runtime pathways
+  - add Pendle hosted SDK adapter with convert planning and approvals
+  - add Pendle venue CLI integration and venue proxy routing
+  - improve Pendle validation/error handling around routing, gas, and constraints
+  - harden Pendle fallback and malformed-response handling coverage in adapter tests
+
+### Patch Changes
+
+- Updated dependencies [db19d26]
+  - @grimoirelabs/core@0.12.0
+
 ## 0.5.0
 
 ### Minor Changes
