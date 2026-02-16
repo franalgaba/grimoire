@@ -118,6 +118,62 @@ describe("Action Step", () => {
     }
   });
 
+  test("resolves typed pendle multi-input action amounts", async () => {
+    const step: ActionStep = {
+      kind: "action",
+      id: "action_pendle_swap",
+      action: {
+        type: "pendle_swap",
+        venue: "pendle",
+        inputs: [
+          { asset: "USDC", amount: { kind: "literal", value: 10, type: "int" } },
+          { asset: "USDC", amount: { kind: "param", name: "second_amount" } },
+        ],
+        outputs: ["PT"],
+      },
+      constraints: {},
+      dependsOn: [],
+      onFailure: "revert",
+    };
+
+    const spell = {
+      ...createSpell(),
+      aliases: [
+        ...createSpell().aliases,
+        {
+          alias: "pendle",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000007" as Address,
+        },
+      ],
+      params: [{ name: "second_amount", type: "number" as const, default: 25 }],
+    };
+
+    const ctx = createContext({
+      spell,
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+      params: { second_amount: 25 },
+    });
+    const ledger = new InMemoryLedger(ctx.runId, ctx.spell.id);
+
+    const result = await executeActionStep(step, ctx, ledger, { mode: "simulate" });
+    expect(result.success).toBe(true);
+
+    const simulated = ledger.getEntries().find((entry) => entry.event.type === "action_simulated");
+    if (!simulated || simulated.event.type !== "action_simulated") {
+      throw new Error("Missing simulated action event");
+    }
+
+    expect(simulated.event.action.type).toBe("pendle_swap");
+    if (simulated.event.action.type === "pendle_swap") {
+      expect(simulated.event.action.inputs[0]?.amount).toBe(10n);
+      expect(simulated.event.action.inputs[1]?.amount).toBe(25n);
+    }
+    expect(simulated.event.result.input.amount).toBe("35");
+    expect(simulated.event.result.output.asset).toBe("PT");
+  });
+
   test("preview uses adapter quote and gas metadata when available", async () => {
     const step: ActionStep = {
       kind: "action",

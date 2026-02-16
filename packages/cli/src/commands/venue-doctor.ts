@@ -62,6 +62,7 @@ const ADAPTER_FILTER_MAP: Record<string, string[]> = {
   morpho_blue: ["morpho_blue"],
   hyperliquid: ["hyperliquid"],
   across: ["across"],
+  pendle: ["pendle"],
 };
 
 export function parseVenueDoctorArgs(args: string[]): VenueDoctorOptions | { help: true } {

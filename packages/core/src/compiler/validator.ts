@@ -304,22 +304,56 @@ function validateStep(
           message: `Step '${step.id}' references undefined asset '${step.action.assetIn}'`,
         });
       }
-      if ("assetOut" in step.action && !ctx.assetSymbols.has(step.action.assetOut)) {
-        warnings.push({
-          code: "UNKNOWN_ASSET",
-          message: `Step '${step.id}' references undefined asset '${step.action.assetOut}'`,
-        });
-      }
       if ("asset" in step.action && !ctx.assetSymbols.has(step.action.asset)) {
         warnings.push({
           code: "UNKNOWN_ASSET",
           message: `Step '${step.id}' references undefined asset '${step.action.asset}'`,
         });
       }
+      if (
+        "assetOut" in step.action &&
+        step.action.assetOut &&
+        !ctx.assetSymbols.has(step.action.assetOut)
+      ) {
+        warnings.push({
+          code: "UNKNOWN_ASSET",
+          message: `Step '${step.id}' references undefined asset '${step.action.assetOut}'`,
+        });
+      }
+      if ("outputs" in step.action) {
+        const outputs = step.action.outputs;
+        if (outputs) {
+          for (const outputAsset of outputs) {
+            if (ctx.assetSymbols.has(outputAsset)) continue;
+            warnings.push({
+              code: "UNKNOWN_ASSET",
+              message: `Step '${step.id}' references undefined asset '${outputAsset}'`,
+            });
+          }
+        }
+      }
+      if ("inputs" in step.action) {
+        for (const input of step.action.inputs) {
+          if (ctx.assetSymbols.has(input.asset)) continue;
+          warnings.push({
+            code: "UNKNOWN_ASSET",
+            message: `Step '${step.id}' references undefined asset '${input.asset}'`,
+          });
+        }
+      }
 
       // Validate amount expression if not "max"
       if ("amount" in step.action && step.action.amount !== "max") {
-        validateExpression(step.action.amount as Expression, ctx, errors, `step '${step.id}'`);
+        if (isExpressionNode(step.action.amount)) {
+          validateExpression(step.action.amount, ctx, errors, `step '${step.id}'`);
+        }
+      }
+      if ("inputs" in step.action) {
+        for (const input of step.action.inputs) {
+          if (isExpressionNode(input.amount)) {
+            validateExpression(input.amount, ctx, errors, `step '${step.id}'`);
+          }
+        }
       }
 
       // Validate skill reference
@@ -442,6 +476,10 @@ function validateStep(
       // No additional validation needed
       break;
   }
+}
+
+function isExpressionNode(value: unknown): value is Expression {
+  return typeof value === "object" && value !== null && "kind" in value;
 }
 
 /**

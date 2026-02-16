@@ -722,6 +722,39 @@ describe("Transformer", () => {
       expect(getAction(actionStep)?.type).toBe("swap");
     });
 
+    test("maps typed Pendle method calls to typed actions", () => {
+      const cases = [
+        { method: "add_liquidity", args: "USDC, 100, LP" },
+        { method: "add_liquidity_dual", args: "inputs, outputs, true" },
+        { method: "remove_liquidity", args: "LP, 100, USDC" },
+        { method: "remove_liquidity_dual", args: "inputs, outputs" },
+        { method: "mint_py", args: "USDC, 100, PT" },
+        { method: "redeem_py", args: "PT, 100, USDC" },
+        { method: "mint_sy", args: "USDC, 100, SY" },
+        { method: "redeem_sy", args: "SY, 100, USDC" },
+        { method: "transfer_liquidity", args: "inputs, outputs, true" },
+        { method: "roll_over_pt", args: "PT, 100, PT2" },
+        { method: "exit_market", args: "inputs, outputs" },
+        { method: "convert_lp_to_pt", args: "LP, 100, PT" },
+        { method: "pendle_swap", args: "inputs, outputs" },
+      ];
+
+      for (const testCase of cases) {
+        const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    pendle.${testCase.method}(${testCase.args})
+  }
+}`;
+        const ast = parse(source);
+        const result = transform(ast);
+        const actionStep = findStep(result.steps, "action");
+        expect(actionStep).toBeDefined();
+        expect(getAction(actionStep)?.type).toBe(testCase.method);
+      }
+    });
+
     test("transforms generic method call", () => {
       const source = `spell Test {
   version: "1.0.0"
@@ -767,6 +800,36 @@ describe("Transformer", () => {
         size: 1,
         side: "buy",
         reduce_only: false,
+      });
+    });
+
+    test("transforms convert custom call to named args", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    pendle.convert("0x1,0x2", "10,20", "0x3", "0x4", true, [kyberswap], false, false, "impliedApy", true)
+  }
+}`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const actionStep = findStep(result.steps, "action");
+      const action = actionStep?.action as
+        | { type?: string; op?: string; args?: Record<string, unknown> }
+        | undefined;
+      expect(action?.type).toBe("custom");
+      expect(action?.op).toBe("convert");
+      expect(action?.args).toEqual({
+        tokens_in: "0x1,0x2",
+        amounts_in: "10,20",
+        tokens_out: "0x3",
+        receiver: "0x4",
+        enable_aggregator: true,
+        aggregators: ["kyberswap"],
+        redeem_rewards: false,
+        need_scale: false,
+        additional_data: "impliedApy",
+        use_limit_order: true,
       });
     });
 

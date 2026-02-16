@@ -5,6 +5,7 @@ describe("venue command helpers", () => {
   it("normalizes adapter names", () => {
     expect(normalizeAdapter("grimoire-morpho_blue")).toBe("morpho-blue");
     expect(normalizeAdapter("Uniswap_V3")).toBe("uniswap-v3");
+    expect(normalizeAdapter("PENDLE")).toBe("pendle");
   });
 
   it("resolves CLI path inside venues package", () => {

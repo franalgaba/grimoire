@@ -21,6 +21,7 @@ export const VENUE_CLI_MAP: Record<string, string> = {
   "morpho-blue": "morpho-blue",
   morpho: "morpho-blue",
   hyperliquid: "hyperliquid",
+  pendle: "pendle",
 };
 
 const PRIMARY_ADAPTERS = [
@@ -28,6 +29,7 @@ const PRIMARY_ADAPTERS = [
   { name: "uniswap", aliases: ["uniswap-v3", "uniswap-v4"] },
   { name: "morpho-blue", aliases: ["morpho"] },
   { name: "hyperliquid", aliases: [] },
+  { name: "pendle", aliases: [] },
 ];
 
 export function normalizeAdapter(adapter: string): string {
@@ -146,6 +148,6 @@ function printUsage(): void {
   }).join("\n");
 
   console.log(
-    `\nUsage:\n  grimoire venue <adapter> [args...]\n  grimoire venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]\n\nAdapters:\n${adapterLines}\n\nExamples:\n  grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell\n  grimoire venue uniswap tokens --chain 1 --symbol USDC\n  grimoire venue aave markets --chain 1\n  grimoire venue doctor --chain 1 --adapter uniswap\n`
+    `\nUsage:\n  grimoire venue <adapter> [args...]\n  grimoire venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]\n\nAdapters:\n${adapterLines}\n\nExamples:\n  grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell\n  grimoire venue uniswap tokens --chain 1 --symbol USDC\n  grimoire venue pendle chains\n  grimoire venue aave markets --chain 1\n  grimoire venue doctor --chain 1 --adapter uniswap\n`
   );
 }

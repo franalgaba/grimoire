@@ -32,6 +32,7 @@ Default adapter bundle order:
 - `morpho_blue`
 - `hyperliquid`
 - `across`
+- `pendle`
 
 ## Constraint Matrix
 
@@ -45,6 +46,7 @@ Default adapter bundle order:
 | `morpho_blue` | - | - | - | - | - | - | - | - | - |
 | `across` | ✓ | ✓ | - | - | - | - | ✓ | ✓ | ✓ |
 | `hyperliquid` | - | - | - | - | - | - | - | - | - |
+| `pendle` | ✓ | ✓ | - | - | - | - | ✓ | - | ✓ |
 
 Unsupported constraints fail fast with:
 
@@ -138,6 +140,20 @@ Implementation notes:
 - Returns structured quote/route/fee metadata, including ETA.
 - Supports `max_slippage`, `min_output`, `require_quote`, `require_simulation`, `max_gas`.
 
+## `pendle`
+
+- Type: `evm`
+- Actions: `swap`, `add_liquidity`, `add_liquidity_dual`, `remove_liquidity`, `remove_liquidity_dual`, `mint_py`, `redeem_py`, `mint_sy`, `redeem_sy`, `transfer_liquidity`, `roll_over_pt`, `exit_market`, `convert_lp_to_pt`, `pendle_swap`, `custom`
+- Data endpoints: `chains`, `supported-aggregators`, `markets`, `assets`, `market-tokens`
+
+Implementation notes:
+
+- Uses Pendle Hosted SDK convert endpoints (`/v3/sdk/{chainId}/convert`) with optional fallback to v2.
+- Selects `routes[0]`, builds tx from `route.tx`, and prepends ERC20 approvals from `requiredApprovals`.
+- `swap` only supports `mode: exact_in`; `exact_out` fails fast.
+- Default aggregator policy is disabled (`enableAggregator=false`) unless explicitly enabled per action.
+- Supports `max_slippage`, `min_output`, `require_quote`, `max_gas`.
+
 ## `hyperliquid`
 
 - Type: `offchain`
@@ -166,6 +182,7 @@ Implementation notes:
 - Uniswap
 - Morpho Blue
 - Hyperliquid
+- Pendle
 
 `grimoire venue doctor ...` runs cross-adapter diagnostics from the main CLI without calling a per-venue binary.
 
@@ -191,6 +208,7 @@ Per-venue CLIs support `--format <auto|json|table>` (plus `spell` for snapshot-c
 - `grimoire-uniswap`
 - `grimoire-morpho-blue`
 - `grimoire-hyperliquid`
+- `grimoire-pendle`
 
 ### `grimoire-aave`
 
@@ -238,3 +256,14 @@ Commands:
 - `withdraw`
 
 Most read-only commands support `--format spell` snapshot output.
+
+### `grimoire-pendle`
+
+Commands:
+
+- `info`
+- `chains`
+- `supported-aggregators`
+- `markets`
+- `assets`
+- `market-tokens`

@@ -3,7 +3,13 @@
  * Transforms SpellSource AST into SpellIR
  */
 
-import type { Action, ActionConstraints, CustomActionValue } from "../types/actions.js";
+import type {
+  Action,
+  ActionAmount,
+  ActionConstraints,
+  CustomActionValue,
+  PendleInputAmount,
+} from "../types/actions.js";
 import type { Expression } from "../types/expressions.js";
 import type {
   AdvisorDef,
@@ -748,6 +754,142 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
         assets: raw.assets as string[] | undefined,
       } as Action;
 
+    case "add_liquidity":
+      return {
+        type: "add_liquidity",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseActionAmount(raw.amount, errors),
+        assetOut: readAssetOut(raw),
+        outputs: parseOutputAssets(raw.outputs),
+        keepYt: parseOptionalBoolean(raw.keep_yt ?? raw.keepYt),
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "add_liquidity_dual":
+      return {
+        type: "add_liquidity_dual",
+        venue: raw.venue as string,
+        inputs: parsePendleInputs(raw.inputs, errors),
+        outputs: parseOutputAssets(raw.outputs) ?? [],
+        keepYt: parseOptionalBoolean(raw.keep_yt ?? raw.keepYt),
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "remove_liquidity":
+      return {
+        type: "remove_liquidity",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseActionAmount(raw.amount, errors),
+        assetOut: readAssetOut(raw),
+        outputs: parseOutputAssets(raw.outputs),
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "remove_liquidity_dual":
+      return {
+        type: "remove_liquidity_dual",
+        venue: raw.venue as string,
+        inputs: parsePendleInputs(raw.inputs, errors),
+        outputs: parseOutputAssets(raw.outputs) ?? [],
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "mint_py":
+      return {
+        type: "mint_py",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseActionAmount(raw.amount, errors),
+        assetOut: readAssetOut(raw),
+        outputs: parseOutputAssets(raw.outputs),
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "redeem_py":
+      return {
+        type: "redeem_py",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseActionAmount(raw.amount, errors),
+        assetOut: readAssetOut(raw),
+        outputs: parseOutputAssets(raw.outputs),
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "mint_sy":
+      return {
+        type: "mint_sy",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseActionAmount(raw.amount, errors),
+        assetOut: readAssetOut(raw),
+        outputs: parseOutputAssets(raw.outputs),
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "redeem_sy":
+      return {
+        type: "redeem_sy",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseActionAmount(raw.amount, errors),
+        assetOut: readAssetOut(raw),
+        outputs: parseOutputAssets(raw.outputs),
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "transfer_liquidity":
+      return {
+        type: "transfer_liquidity",
+        venue: raw.venue as string,
+        inputs: parsePendleInputs(raw.inputs, errors),
+        outputs: parseOutputAssets(raw.outputs) ?? [],
+        keepYt: parseOptionalBoolean(raw.keep_yt ?? raw.keepYt),
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "roll_over_pt":
+      return {
+        type: "roll_over_pt",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseActionAmount(raw.amount, errors),
+        assetOut: readAssetOut(raw),
+        outputs: parseOutputAssets(raw.outputs),
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "exit_market":
+      return {
+        type: "exit_market",
+        venue: raw.venue as string,
+        inputs: parsePendleInputs(raw.inputs, errors),
+        outputs: parseOutputAssets(raw.outputs) ?? [],
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "convert_lp_to_pt":
+      return {
+        type: "convert_lp_to_pt",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseActionAmount(raw.amount, errors),
+        assetOut: readAssetOut(raw),
+        outputs: parseOutputAssets(raw.outputs),
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
+    case "pendle_swap":
+      return {
+        type: "pendle_swap",
+        venue: raw.venue as string,
+        inputs: parsePendleInputs(raw.inputs, errors),
+        outputs: parseOutputAssets(raw.outputs) ?? [],
+        ...parsePendleActionOptions(raw),
+      } as Action;
+
     case "bridge": {
       const toChainValue = raw.to_chain ?? raw.toChain;
       if (toChainValue === undefined) {
@@ -811,6 +953,10 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
             args[key] = { kind: "literal", value, type: "string" };
             continue;
           }
+          if (op === "convert") {
+            args[key] = parseConvertCustomActionValue(value);
+            continue;
+          }
           args[key] = parseCustomActionValue(value, errors);
         }
       }
@@ -827,6 +973,143 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
       errors.push({ code: "UNKNOWN_ACTION_TYPE", message: `Unknown action type '${type}'` });
       return null;
   }
+}
+
+function parseActionAmount(value: unknown, errors: CompilationError[]): ActionAmount {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return parseExpressionSafe(value, errors);
+  }
+  if (typeof value === "string") {
+    return parseExpressionSafe(value, errors);
+  }
+  if (value && typeof value === "object" && "kind" in value) {
+    return value as ActionAmount;
+  }
+
+  errors.push({
+    code: "INVALID_ACTION_AMOUNT",
+    message: `Unsupported action amount value '${String(value)}'`,
+  });
+  return { kind: "literal", value: 0, type: "int" };
+}
+
+function readAssetOut(raw: Record<string, unknown>): string | undefined {
+  const assetOut = raw.asset_out ?? raw.assetOut;
+  if (typeof assetOut !== "string") {
+    return undefined;
+  }
+  return assetOut;
+}
+
+function parseOutputAssets(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const outputs = value.map((entry) => String(entry).trim()).filter((entry) => entry.length > 0);
+    return outputs.length > 0 ? outputs : undefined;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    if (!trimmed.includes(",")) {
+      return [trimmed];
+    }
+    const outputs = trimmed
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    return outputs.length > 0 ? outputs : undefined;
+  }
+
+  return undefined;
+}
+
+function parsePendleInputs(value: unknown, errors: CompilationError[]): PendleInputAmount[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const inputs: PendleInputAmount[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    const asset = record.asset;
+    const amount = record.amount;
+    if (typeof asset !== "string") {
+      errors.push({
+        code: "INVALID_PENDLE_INPUT",
+        message: "Pendle input entry is missing asset",
+      });
+      continue;
+    }
+    inputs.push({
+      asset,
+      amount: parseActionAmount(amount, errors),
+    });
+  }
+
+  return inputs;
+}
+
+function parseOptionalBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  return undefined;
+}
+
+function parseOptionalStringArray(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const items = value.map((entry) => String(entry).trim()).filter((entry) => entry.length > 0);
+    return items.length > 0 ? items : undefined;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const values = trimmed
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    return values.length > 0 ? values : undefined;
+  }
+
+  return undefined;
+}
+
+function parsePendleActionOptions(raw: Record<string, unknown>): Record<string, unknown> {
+  const enableAggregator = parseOptionalBoolean(raw.enable_aggregator ?? raw.enableAggregator);
+  const aggregators = parseOptionalStringArray(raw.aggregators);
+  const needScale = parseOptionalBoolean(raw.need_scale ?? raw.needScale);
+  const redeemRewards = parseOptionalBoolean(raw.redeem_rewards ?? raw.redeemRewards);
+  const additionalData = raw.additional_data ?? raw.additionalData;
+  const useLimitOrder = parseOptionalBoolean(raw.use_limit_order ?? raw.useLimitOrder);
+
+  const options: Record<string, unknown> = {};
+  if (enableAggregator !== undefined) options.enableAggregator = enableAggregator;
+  if (aggregators !== undefined) options.aggregators = aggregators;
+  if (needScale !== undefined) options.needScale = needScale;
+  if (redeemRewards !== undefined) options.redeemRewards = redeemRewards;
+  if (typeof additionalData === "string" && additionalData.trim().length > 0) {
+    options.additionalData = additionalData;
+  }
+  if (useLimitOrder !== undefined) options.useLimitOrder = useLimitOrder;
+  return options;
 }
 
 function parseCustomActionValue(input: unknown, errors: CompilationError[]): CustomActionValue {
@@ -860,6 +1143,34 @@ function parseCustomActionValue(input: unknown, errors: CompilationError[]): Cus
   }
 
   return { kind: "literal", value: String(input), type: "string" };
+}
+
+function parseConvertCustomActionValue(input: unknown): CustomActionValue {
+  if (input === null) {
+    return null;
+  }
+  if (
+    typeof input === "string" ||
+    typeof input === "number" ||
+    typeof input === "boolean" ||
+    typeof input === "bigint"
+  ) {
+    return input;
+  }
+  if (Array.isArray(input)) {
+    return input.map((item) => parseConvertCustomActionValue(item));
+  }
+  if (typeof input === "object") {
+    if ("kind" in input && typeof (input as { kind?: unknown }).kind === "string") {
+      return input as CustomActionValue;
+    }
+    const out: Record<string, CustomActionValue> = {};
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      out[key] = parseConvertCustomActionValue(value);
+    }
+    return out;
+  }
+  return String(input);
 }
 
 /**

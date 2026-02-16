@@ -54,6 +54,19 @@ type ActionBase =
   | ClaimAction
   | TransferAction
   | ApproveAction
+  | AddLiquidityAction
+  | AddLiquidityDualAction
+  | RemoveLiquidityAction
+  | RemoveLiquidityDualAction
+  | MintPyAction
+  | RedeemPyAction
+  | MintSyAction
+  | RedeemSyAction
+  | TransferLiquidityAction
+  | RollOverPtAction
+  | ExitMarketAction
+  | ConvertLpToPtAction
+  | PendleSwapAction
   | CustomAction;
 
 /** All action types */
@@ -155,6 +168,89 @@ export interface ApproveAction {
   asset: AssetId;
   amount: ActionAmount;
   spender: Address;
+}
+
+export interface PendleInputAmount {
+  asset: AssetId;
+  amount: ActionAmount;
+}
+
+export interface PendleActionOptions {
+  enableAggregator?: boolean;
+  aggregators?: string[];
+  needScale?: boolean;
+  redeemRewards?: boolean;
+  additionalData?: string;
+  useLimitOrder?: boolean;
+}
+
+interface PendleSingleInputActionBase extends PendleActionOptions {
+  venue: string;
+  asset: AssetId;
+  amount: ActionAmount;
+  assetOut?: AssetId;
+  outputs?: AssetId[];
+}
+
+interface PendleMultiInputActionBase extends PendleActionOptions {
+  venue: string;
+  inputs: PendleInputAmount[];
+  outputs: AssetId[];
+}
+
+export interface AddLiquidityAction extends PendleSingleInputActionBase {
+  type: "add_liquidity";
+  keepYt?: boolean;
+}
+
+export interface AddLiquidityDualAction extends PendleMultiInputActionBase {
+  type: "add_liquidity_dual";
+  keepYt?: boolean;
+}
+
+export interface RemoveLiquidityAction extends PendleSingleInputActionBase {
+  type: "remove_liquidity";
+}
+
+export interface RemoveLiquidityDualAction extends PendleMultiInputActionBase {
+  type: "remove_liquidity_dual";
+}
+
+export interface MintPyAction extends PendleSingleInputActionBase {
+  type: "mint_py";
+}
+
+export interface RedeemPyAction extends PendleSingleInputActionBase {
+  type: "redeem_py";
+}
+
+export interface MintSyAction extends PendleSingleInputActionBase {
+  type: "mint_sy";
+}
+
+export interface RedeemSyAction extends PendleSingleInputActionBase {
+  type: "redeem_sy";
+}
+
+export interface TransferLiquidityAction extends PendleMultiInputActionBase {
+  type: "transfer_liquidity";
+  keepYt?: boolean;
+}
+
+export interface RollOverPtAction extends PendleSingleInputActionBase {
+  type: "roll_over_pt";
+}
+
+export interface ExitMarketAction extends PendleMultiInputActionBase {
+  type: "exit_market";
+}
+
+export interface ConvertLpToPtAction extends PendleSingleInputActionBase {
+  type: "convert_lp_to_pt";
+}
+
+export interface PendleSwapAction extends PendleMultiInputActionBase {
+  type: "pendle_swap";
 }
 
 /** Generic custom action routed to venue adapters */

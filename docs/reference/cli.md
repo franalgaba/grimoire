@@ -272,8 +272,13 @@ Primary adapters supported by proxy mapping:
 - `uniswap` (`uniswap-v3`, `uniswap-v4` aliases)
 - `morpho-blue` (`morpho` alias)
 - `hyperliquid`
+- `pendle`
 
 This command forwards args to `grimoire-aave`, `grimoire-uniswap`, etc.
+
+Example:
+
+- `grimoire venue pendle chains`
 
 ## `venue doctor`
 
@@ -301,6 +306,7 @@ Adapter filter aliases:
 - `morpho`, `morpho-blue`
 - `hyperliquid`
 - `across`
+- `pendle`
 
 Exit code:
 

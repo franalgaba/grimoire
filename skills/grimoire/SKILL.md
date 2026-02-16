@@ -132,6 +132,7 @@ Use venue skills for snapshot parameters and market metadata:
 - `grimoire-uniswap`
 - `grimoire-morpho-blue`
 - `grimoire-hyperliquid`
+- `grimoire-pendle`
 
 Formatting policy for venue CLI output:
 

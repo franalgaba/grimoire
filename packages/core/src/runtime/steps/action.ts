@@ -162,11 +162,9 @@ export async function executeActionStep(
     });
 
     if (options.mode === "simulate") {
-      const amountValue =
-        "amount" in actionWithConstraints
-          ? (actionWithConstraints as { amount?: unknown }).amount
-          : undefined;
-      const amountText = amountValue !== undefined ? String(amountValue) : "";
+      const amountText = deriveActionAmountText(actionWithConstraints);
+      const simulationInput = deriveSimulationInput(actionWithConstraints, amountText);
+      const simulationOutput = deriveSimulationOutput(actionWithConstraints, amountText);
 
       ledger.emit({
         type: "action_simulated",
@@ -174,14 +172,8 @@ export async function executeActionStep(
         venue: resolveVenueAlias(actionWithConstraints, ctx),
         result: {
           success: true,
-          input: {
-            asset: "asset" in resolvedAction ? String(resolvedAction.asset ?? "") : "",
-            amount: amountText,
-          },
-          output: {
-            asset: "asset" in resolvedAction ? String(resolvedAction.asset ?? "") : "",
-            amount: amountText,
-          },
+          input: simulationInput,
+          output: simulationOutput,
           gasEstimate: "0",
         },
       });
@@ -416,6 +408,29 @@ async function resolveAction(
         toChain: await resolveChainId(action.toChain, evalCtx),
       } as Action;
 
+    case "add_liquidity":
+    case "remove_liquidity":
+    case "mint_py":
+    case "redeem_py":
+    case "mint_sy":
+    case "redeem_sy":
+    case "roll_over_pt":
+    case "convert_lp_to_pt":
+      return {
+        ...action,
+        amount: await resolveAmount(action.amount, evalCtx),
+      } as Action;
+
+    case "add_liquidity_dual":
+    case "remove_liquidity_dual":
+    case "transfer_liquidity":
+    case "exit_market":
+    case "pendle_swap":
+      return {
+        ...action,
+        inputs: await resolvePendleInputAmounts(action.inputs, evalCtx),
+      } as Action;
+
     case "transfer":
       return {
         ...action,
@@ -476,6 +491,19 @@ async function resolveCustomValue(
   }
 
   return value;
+}
+
+async function resolvePendleInputAmounts(
+  inputs: Array<{ asset: string; amount: ActionAmount }>,
+  evalCtx: ReturnType<typeof createEvalContext>
+): Promise<Array<{ asset: string; amount: bigint | "max" | null | undefined }>> {
+  const resolved = await Promise.all(
+    inputs.map(async (input) => ({
+      ...input,
+      amount: await resolveAmount(input.amount, evalCtx),
+    }))
+  );
+  return resolved;
 }
 
 function isExpressionValue(value: CustomActionValue): value is Expression {
@@ -751,7 +779,24 @@ function deriveSimulationInput(
     case "bridge":
     case "transfer":
     case "approve":
+    case "add_liquidity":
+    case "remove_liquidity":
+    case "mint_py":
+    case "redeem_py":
+    case "mint_sy":
+    case "redeem_sy":
+    case "roll_over_pt":
+    case "convert_lp_to_pt":
       return { asset: String(action.asset), amount: amountText };
+    case "add_liquidity_dual":
+    case "remove_liquidity_dual":
+    case "transfer_liquidity":
+    case "exit_market":
+    case "pendle_swap":
+      return {
+        asset: String(action.inputs[0]?.asset ?? ""),
+        amount: derivePendleInputAmountText(action.inputs) ?? amountText,
+      };
     default:
       return { asset: "", amount: amountText };
   }
@@ -770,14 +815,88 @@ function deriveSimulationOutput(
     case "bridge":
     case "transfer":
     case "approve":
+    case "remove_liquidity":
+    case "redeem_py":
+    case "redeem_sy":
+    case "roll_over_pt":
+    case "convert_lp_to_pt":
       return { asset: String(action.asset), amount: amountText };
     case "lend":
     case "repay":
     case "stake":
+    case "add_liquidity":
+    case "mint_py":
+    case "mint_sy":
       return { asset: String(action.asset), amount: "0" };
+    case "add_liquidity_dual":
+    case "remove_liquidity_dual":
+    case "transfer_liquidity":
+    case "exit_market":
+    case "pendle_swap":
+      return { asset: String(action.outputs[0] ?? ""), amount: "0" };
     default:
       return { asset: "", amount: "0" };
   }
+}
+
+function deriveActionAmountText(action: Action): string {
+  if ("amount" in action) {
+    const value = action.amount;
+    if (value !== undefined && value !== null) {
+      return String(value);
+    }
+  }
+
+  if ("inputs" in action) {
+    const total = derivePendleInputAmountText(action.inputs);
+    if (total !== undefined) {
+      return total;
+    }
+  }
+
+  return "";
+}
+
+function derivePendleInputAmountText(
+  inputs: Array<{ amount: unknown }> | undefined
+): string | undefined {
+  if (!inputs || inputs.length === 0) {
+    return undefined;
+  }
+
+  let total = 0n;
+  let hasAmount = false;
+  for (const input of inputs) {
+    const amount = toBigIntIfPossible(input.amount);
+    if (amount === undefined) continue;
+    total += amount;
+    hasAmount = true;
+  }
+
+  if (!hasAmount) {
+    return undefined;
+  }
+  return total.toString();
+}
+
+function toBigIntIfPossible(value: unknown): bigint | undefined {
+  if (typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return undefined;
+    return BigInt(Math.floor(value));
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "max") return undefined;
+    try {
+      return BigInt(trimmed);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function buildValueDeltas(input: {
@@ -1184,11 +1303,7 @@ export async function previewActionStep(
     });
 
     const venue = resolveVenueAlias(actionWithConstraints, ctx);
-    const amountValue =
-      "amount" in actionWithConstraints
-        ? (actionWithConstraints as { amount?: unknown }).amount
-        : undefined;
-    const amountText = amountValue !== undefined ? String(amountValue) : "";
+    const amountText = deriveActionAmountText(actionWithConstraints);
     const fallbackSimulationResult = {
       success: true,
       gasEstimate: "0",

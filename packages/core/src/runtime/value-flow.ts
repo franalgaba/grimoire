@@ -624,17 +624,48 @@ function toStringSet(value: unknown): Set<string> | undefined {
 }
 
 function extractActionAmount(action: Action): bigint | undefined {
-  if (!("amount" in action)) return undefined;
-  const raw = action.amount;
-  if (raw === undefined || raw === null || raw === "max") return undefined;
+  if ("amount" in action) {
+    const raw = action.amount;
+    if (raw === undefined || raw === null || raw === "max") return undefined;
 
-  if (typeof raw === "bigint") return raw;
-  if (typeof raw === "number") {
-    if (!Number.isFinite(raw)) return undefined;
-    return BigInt(Math.floor(raw));
+    if (typeof raw === "bigint") return raw;
+    if (typeof raw === "number") {
+      if (!Number.isFinite(raw)) return undefined;
+      return BigInt(Math.floor(raw));
+    }
+    if (typeof raw === "string") {
+      return toBigInt(raw);
+    }
   }
-  if (typeof raw === "string") {
-    return toBigInt(raw);
+
+  if ("inputs" in action) {
+    let total = 0n;
+    let hasAmount = false;
+    for (const input of action.inputs) {
+      const raw = input.amount;
+      if (raw === undefined || raw === null) continue;
+      if (typeof raw === "bigint") {
+        total += raw;
+        hasAmount = true;
+        continue;
+      }
+      if (typeof raw === "number") {
+        if (!Number.isFinite(raw)) continue;
+        total += BigInt(Math.floor(raw));
+        hasAmount = true;
+        continue;
+      }
+      if (typeof raw === "string") {
+        const parsed = toBigInt(raw);
+        if (parsed !== undefined) {
+          total += parsed;
+          hasAmount = true;
+        }
+      }
+    }
+    if (hasAmount) {
+      return total;
+    }
   }
 
   return undefined;
@@ -653,7 +684,21 @@ function extractRiskAsset(action: Action): string | undefined {
     case "bridge":
     case "transfer":
     case "approve":
+    case "add_liquidity":
+    case "remove_liquidity":
+    case "mint_py":
+    case "redeem_py":
+    case "mint_sy":
+    case "redeem_sy":
+    case "roll_over_pt":
+    case "convert_lp_to_pt":
       return action.asset;
+    case "add_liquidity_dual":
+    case "remove_liquidity_dual":
+    case "transfer_liquidity":
+    case "exit_market":
+    case "pendle_swap":
+      return action.inputs[0]?.asset;
     default:
       return undefined;
   }
