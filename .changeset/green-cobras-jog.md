@@ -10,3 +10,4 @@ Add first-class Pendle venue support across core, venues, and CLI.
 - add Pendle hosted SDK adapter with convert planning and approvals
 - add Pendle venue CLI integration and venue proxy routing
 - improve Pendle validation/error handling around routing, gas, and constraints
+- harden Pendle fallback and malformed-response handling coverage in adapter tests

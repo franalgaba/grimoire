@@ -32,9 +32,13 @@ const ERC20_APPROVE_ABI = parseAbi([
 function createCtx(
   provider?: Partial<Provider>,
   chainId = 1,
-  onWarning?: (message: string) => void
+  onWarning?: (message: string) => void,
+  overrides?: Partial<VenueAdapterContext>
 ): VenueAdapterContext {
+  const walletAddress = (overrides?.walletAddress ??
+    "0x00000000000000000000000000000000000000ff") as Address;
   return {
+    ...overrides,
     provider: {
       chainId,
       getClient: () => ({
@@ -42,7 +46,7 @@ function createCtx(
       }),
       ...provider,
     } as unknown as Provider,
-    walletAddress: "0x00000000000000000000000000000000000000ff" as Address,
+    walletAddress,
     chainId,
     onWarning,
   };
@@ -121,6 +125,143 @@ describe("Pendle adapter", () => {
     expect(request.enableAggregator).toBe(false);
     expect(request.inputs[0]?.token).toBe(ADDRS.usdc);
     expect(request.outputs[0]).toBe(ADDRS.pt);
+  });
+
+  test("uses action max_slippage over adapter config for convert request", async () => {
+    let requestBody: unknown;
+    const adapter = createPendleAdapter({
+      fetchFn: async (_input, init) => {
+        requestBody = init?.body ? JSON.parse(String(init.body)) : undefined;
+        return new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+      tokenMap,
+      supportedChains: [1],
+      slippageBps: 25,
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "pendle",
+        assetIn: "USDC",
+        assetOut: "PT",
+        amount: 100n,
+        mode: "exact_in",
+        constraints: {
+          maxSlippageBps: 123,
+        },
+      } as Action,
+      createCtx()
+    );
+
+    const request = requestBody as { slippage: number };
+    expect(request.slippage).toBe(0.0123);
+  });
+
+  test("uses adapter slippage config when action max_slippage is absent", async () => {
+    let requestBody: unknown;
+    const adapter = createPendleAdapter({
+      fetchFn: async (_input, init) => {
+        requestBody = init?.body ? JSON.parse(String(init.body)) : undefined;
+        return new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+      tokenMap,
+      supportedChains: [1],
+      slippageBps: 77,
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "pendle",
+        assetIn: "USDC",
+        assetOut: "PT",
+        amount: 100n,
+        mode: "exact_in",
+      } as Action,
+      createCtx()
+    );
+
+    const request = requestBody as { slippage: number };
+    expect(request.slippage).toBe(0.0077);
+  });
+
+  test("uses vault as default receiver when no explicit receiver is provided", async () => {
+    let requestBody: unknown;
+    const vault = "0x00000000000000000000000000000000000000f1" as Address;
+    const adapter = createPendleAdapter({
+      fetchFn: async (_input, init) => {
+        requestBody = init?.body ? JSON.parse(String(init.body)) : undefined;
+        return new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "pendle",
+        assetIn: "USDC",
+        assetOut: "PT",
+        amount: 100n,
+        mode: "exact_in",
+      } as Action,
+      createCtx(undefined, 1, undefined, { vault })
+    );
+
+    const request = requestBody as { receiver: string };
+    expect(request.receiver).toBe(vault);
+  });
+
+  test("uses explicit action receiver over vault default", async () => {
+    let requestBody: unknown;
+    const vault = "0x00000000000000000000000000000000000000f1" as Address;
+    const receiver = "0x00000000000000000000000000000000000000f2";
+    const adapter = createPendleAdapter({
+      fetchFn: async (_input, init) => {
+        requestBody = init?.body ? JSON.parse(String(init.body)) : undefined;
+        return new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "pendle",
+        assetIn: "USDC",
+        assetOut: "PT",
+        amount: 100n,
+        mode: "exact_in",
+        receiver,
+      } as Action,
+      createCtx(undefined, 1, undefined, { vault })
+    );
+
+    const request = requestBody as { receiver: string };
+    expect(request.receiver).toBe(receiver);
   });
 
   test("accepts routes that omit tx.value and defaults value to zero", async () => {
@@ -205,6 +346,83 @@ describe("Pendle adapter", () => {
     expect(decoded.args?.[1]).toBe(250n);
   });
 
+  test("skips approval tx when allowance is sufficient", async () => {
+    const adapter = createPendleAdapter({
+      fetchFn: async () =>
+        new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const builtResult = await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "pendle",
+        assetIn: "USDC",
+        assetOut: "PT",
+        amount: 100n,
+        mode: "exact_in",
+      } as Action,
+      createCtx({
+        getClient: () => ({
+          readContract: async () => 1_000n,
+        }),
+      } as unknown as Partial<Provider>)
+    );
+    const built = Array.isArray(builtResult) ? builtResult : [builtResult];
+
+    expect(built).toHaveLength(1);
+    expect(built[0]?.description).toContain("Pendle swap convert");
+  });
+
+  test("falls back to route spender when approval spender is invalid", async () => {
+    const adapter = createPendleAdapter({
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            ...createConvertResponse(),
+            requiredApprovals: [{ token: ADDRS.usdc, amount: "100", spender: "not-an-address" }],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        ),
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const builtResult = await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "pendle",
+        assetIn: "USDC",
+        assetOut: "PT",
+        amount: 100n,
+        mode: "exact_in",
+      } as Action,
+      createCtx()
+    );
+    const built = Array.isArray(builtResult) ? builtResult : [builtResult];
+    const approval = built.find((tx) => tx.description.includes("Approve"));
+    if (!approval?.tx.data) throw new Error("Missing approval tx data");
+
+    const decoded = decodeFunctionData({
+      abi: ERC20_APPROVE_ABI,
+      data: approval.tx.data as `0x${string}`,
+    });
+    expect(decoded.functionName).toBe("approve");
+    expect(String(decoded.args?.[0]).toLowerCase()).toBe(ADDRS.router.toLowerCase());
+    expect(decoded.args?.[1]).toBe(100n);
+  });
+
   test("rejects unconfigured chain", async () => {
     const adapter = createPendleAdapter({
       fetchFn: async () =>
@@ -230,6 +448,75 @@ describe("Pendle adapter", () => {
     await expect(adapter.buildAction(action, createCtx(undefined, 10))).rejects.toThrow(
       "Pendle adapter is not configured for chain 10"
     );
+  });
+
+  test("rejects non-JSON convert API response", async () => {
+    const adapter = createPendleAdapter({
+      fetchFn: async () =>
+        new Response("not-json", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "pendle",
+          assetIn: "USDC",
+          assetOut: "PT",
+          amount: 100n,
+          mode: "exact_in",
+        } as Action,
+        createCtx()
+      )
+    ).rejects.toThrow("returned non-JSON response");
+  });
+
+  test("rejects route without usable tx payload", async () => {
+    const adapter = createPendleAdapter({
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            ...createConvertResponse(),
+            routes: [
+              {
+                ...createConvertResponse().routes[0],
+                tx: {
+                  to: ADDRS.router,
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        ),
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "pendle",
+          assetIn: "USDC",
+          assetOut: "PT",
+          amount: 100n,
+          mode: "exact_in",
+        } as Action,
+        createCtx()
+      )
+    ).rejects.toThrow("did not return a usable tx route");
   });
 
   test("falls back to v2 when v3 returns no routes", async () => {
@@ -337,6 +624,55 @@ describe("Pendle adapter", () => {
     expect(mainTx.metadata?.warnings).toContain(
       "Used /v2/sdk/{chainId}/convert fallback after v3 convert response issue."
     );
+  });
+
+  test("surfaces v2 fallback error when both v3 and v2 requests fail", async () => {
+    const adapter = createPendleAdapter({
+      fetchFn: async (input) => {
+        const url = String(input);
+        if (url.includes("/v3/sdk/1/convert")) {
+          return new Response(
+            JSON.stringify({
+              message: "v3 unavailable",
+            }),
+            {
+              status: 502,
+              headers: { "content-type": "application/json" },
+            }
+          );
+        }
+        if (url.includes("/v2/sdk/1/convert")) {
+          return new Response(
+            JSON.stringify({
+              message: "v2 unavailable",
+            }),
+            {
+              status: 500,
+              headers: { "content-type": "application/json" },
+            }
+          );
+        }
+        throw new Error(`Unexpected URL: ${url}`);
+      },
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: true,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "pendle",
+          assetIn: "USDC",
+          assetOut: "PT",
+          amount: 100n,
+          mode: "exact_in",
+        } as Action,
+        createCtx()
+      )
+    ).rejects.toThrow("Pendle API /v2/sdk/1/convert failed (500): v2 unavailable");
   });
 
   test("surfaces v3 error when fallback is disabled", async () => {
@@ -513,6 +849,48 @@ describe("Pendle adapter", () => {
         createCtx()
       )
     ).rejects.toThrow("below min_output");
+  });
+
+  test("fails min_output check when route output amount is missing", async () => {
+    const adapter = createPendleAdapter({
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            ...createConvertResponse(),
+            routes: [
+              {
+                ...createConvertResponse().routes[0],
+                outputs: [{ token: ADDRS.pt }],
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        ),
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "pendle",
+          assetIn: "USDC",
+          assetOut: "PT",
+          amount: 100n,
+          mode: "exact_in",
+          constraints: {
+            minOutput: 1n,
+          },
+        } as Action,
+        createCtx()
+      )
+    ).rejects.toThrow("did not return output amount required for min_output check");
   });
 
   test("fails closed for max_gas when estimate is unavailable", async () => {
