@@ -12,7 +12,8 @@
     "grimoire-aave": "dist/cli/aave.js",
     "grimoire-uniswap": "dist/cli/uniswap.js",
     "grimoire-morpho-blue": "dist/cli/morpho-blue.js",
-    "grimoire-hyperliquid": "dist/cli/hyperliquid.js"
+    "grimoire-hyperliquid": "dist/cli/hyperliquid.js",
+    "grimoire-pendle": "dist/cli/pendle.js"
   },
   "repository": {
     "type": "git",

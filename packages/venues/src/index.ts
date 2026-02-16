@@ -3,6 +3,7 @@ import { aaveV3Adapter, createAaveV3Adapter } from "./aave-v3.js";
 import { acrossAdapter, createAcrossAdapter } from "./across.js";
 import { createHyperliquidAdapter, hyperliquidAdapter } from "./hyperliquid.js";
 import { createMorphoBlueAdapter, morphoBlueAdapter } from "./morpho-blue.js";
+import { createPendleAdapter, pendleAdapter } from "./pendle.js";
 import { createUniswapV3Adapter, defaultUniswapV3Routers, uniswapV3Adapter } from "./uniswap-v3.js";
 import {
   createUniswapV4Adapter,
@@ -17,6 +18,7 @@ export const adapters: VenueAdapter[] = [
   morphoBlueAdapter,
   hyperliquidAdapter,
   acrossAdapter,
+  pendleAdapter,
 ];
 
 export {
@@ -34,4 +36,6 @@ export {
   createMorphoBlueAdapter,
   hyperliquidAdapter,
   createHyperliquidAdapter,
+  pendleAdapter,
+  createPendleAdapter,
 };

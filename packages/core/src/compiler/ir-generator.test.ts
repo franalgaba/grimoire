@@ -127,6 +127,96 @@ describe("IR Generator", () => {
     expect(result.ir?.steps.length).toBe(9);
   });
 
+  test("transforms typed pendle actions", () => {
+    const source: SpellSource = {
+      ...baseSource,
+      steps: [
+        {
+          id: "add_liquidity",
+          action: {
+            type: "add_liquidity",
+            venue: "pendle",
+            asset: "USDC",
+            amount: "1",
+            asset_out: "LP",
+          },
+        },
+        {
+          id: "add_liquidity_dual",
+          action: {
+            type: "add_liquidity_dual",
+            venue: "pendle",
+            inputs: [
+              { asset: "USDC", amount: "1" },
+              { asset: "PT", amount: "2" },
+            ],
+            outputs: ["LP", "YT"],
+            keep_yt: true,
+          },
+        },
+        {
+          id: "pendle_swap",
+          action: {
+            type: "pendle_swap",
+            venue: "pendle",
+            inputs: [
+              { asset: "USDC", amount: "1" },
+              { asset: "DAI", amount: "2" },
+            ],
+            outputs: ["PT"],
+          },
+        },
+        {
+          id: "custom_convert",
+          action: {
+            type: "custom",
+            venue: "pendle",
+            op: "convert",
+            args: {
+              tokens_in: "0x1,0x2",
+              amounts_in: "10,20",
+              tokens_out: "0x3",
+              enable_aggregator: false,
+              aggregators: ["kyberswap", "odos"],
+            },
+          },
+        },
+      ],
+    };
+
+    const result = generateIR(source);
+    expect(result.success).toBe(true);
+    const steps = result.ir?.steps ?? [];
+    expect(steps).toHaveLength(4);
+
+    const addLiquidity = steps[0];
+    expect(addLiquidity?.kind).toBe("action");
+    if (addLiquidity?.kind === "action") {
+      expect(addLiquidity.action.type).toBe("add_liquidity");
+    }
+
+    const addLiquidityDual = steps[1];
+    expect(addLiquidityDual?.kind).toBe("action");
+    if (
+      addLiquidityDual?.kind === "action" &&
+      addLiquidityDual.action.type === "add_liquidity_dual"
+    ) {
+      expect(addLiquidityDual.action.inputs).toHaveLength(2);
+      expect(addLiquidityDual.action.outputs).toEqual(["LP", "YT"]);
+      expect(addLiquidityDual.action.keepYt).toBe(true);
+    }
+
+    const customConvert = steps[3];
+    expect(customConvert?.kind).toBe("action");
+    if (customConvert?.kind === "action" && customConvert.action.type === "custom") {
+      expect(customConvert.action.op).toBe("convert");
+      expect(customConvert.action.args.tokens_in).toBe("0x1,0x2");
+      expect(customConvert.action.args.amounts_in).toBe("10,20");
+      expect(customConvert.action.args.tokens_out).toBe("0x3");
+      expect(customConvert.action.args.aggregators).toEqual(["kyberswap", "odos"]);
+    }
+  });
+
   test("preserves hyperliquid order side as string literal", () => {
     const source: SpellSource = {
       ...baseSource,

@@ -781,6 +781,20 @@ export class Transformer {
       swap: "swap",
       bridge: "bridge",
       transfer: "transfer",
+      add_liquidity: "add_liquidity",
+      add_liquidity_dual: "add_liquidity_dual",
+      remove_liquidity: "remove_liquidity",
+      remove_liquidity_dual: "remove_liquidity_dual",
+      mint_py: "mint_py",
+      redeem_py: "redeem_py",
+      mint_sy: "mint_sy",
+      redeem_sy: "redeem_sy",
+      transfer_liquidity: "transfer_liquidity",
+      roll_over_pt: "roll_over_pt",
+      rollover_pt: "roll_over_pt",
+      exit_market: "exit_market",
+      convert_lp_to_pt: "convert_lp_to_pt",
+      pendle_swap: "pendle_swap",
       get_supply_rates: "query", // Query operations
       get_rates: "query",
     };
@@ -813,6 +827,24 @@ export class Transformer {
     }
 
     // Map arguments based on action type
+    const pendleSingleInputActions = new Set([
+      "add_liquidity",
+      "remove_liquidity",
+      "mint_py",
+      "redeem_py",
+      "mint_sy",
+      "redeem_sy",
+      "roll_over_pt",
+      "convert_lp_to_pt",
+    ]);
+    const pendleMultiInputActions = new Set([
+      "add_liquidity_dual",
+      "remove_liquidity_dual",
+      "transfer_liquidity",
+      "exit_market",
+      "pendle_swap",
+    ]);
+
     if (
       actionType === "lend" ||
       actionType === "withdraw" ||
@@ -893,6 +925,63 @@ export class Transformer {
           },
         },
       ];
+    } else if (pendleSingleInputActions.has(actionType)) {
+      const assetArg = stmt.args[0];
+      const amountArg = stmt.args[1];
+      const outputArg = stmt.args[2];
+      const keepYtArg = stmt.args[3];
+
+      if (assetArg) {
+        action.asset = this.exprToString(assetArg);
+      }
+      if (amountArg) {
+        action.amount = this.exprToString(amountArg);
+      }
+      if (outputArg) {
+        if (outputArg.kind === "array_literal") {
+          action.outputs = this.exprToValue(outputArg);
+        } else {
+          action.asset_out = this.exprToString(outputArg);
+        }
+      }
+
+      if (actionType === "add_liquidity") {
+        if (keepYtArg && keepYtArg.kind !== "object_literal") {
+          action.keep_yt = this.exprToValue(keepYtArg);
+        }
+        const optionsArg =
+          keepYtArg?.kind === "object_literal" ? keepYtArg : (stmt.args[4] ?? undefined);
+        this.applyPendleActionOptions(action, optionsArg);
+      } else {
+        this.applyPendleActionOptions(action, stmt.args[3]);
+      }
+    } else if (pendleMultiInputActions.has(actionType)) {
+      const inputsArg = stmt.args[0];
+      const outputsArg = stmt.args[1];
+      const keepYtArg = stmt.args[2];
+
+      if (inputsArg) {
+        action.inputs = this.exprToValue(inputsArg);
+      }
+      if (outputsArg) {
+        const outputValue = this.exprToValue(outputsArg);
+        if (Array.isArray(outputValue)) {
+          action.outputs = outputValue;
+        } else {
+          action.outputs = [this.exprToString(outputsArg)];
+        }
+      }
+
+      if (actionType === "add_liquidity_dual" || actionType === "transfer_liquidity") {
+        if (keepYtArg && keepYtArg.kind !== "object_literal") {
+          action.keep_yt = this.exprToValue(keepYtArg);
+        }
+        const optionsArg =
+          keepYtArg?.kind === "object_literal" ? keepYtArg : (stmt.args[3] ?? undefined);
+        this.applyPendleActionOptions(action, optionsArg);
+      } else {
+        this.applyPendleActionOptions(action, stmt.args[2]);
+      }
     } else if (actionType === "custom") {
       const args = this.buildCustomArgs(stmt);
       action.args = args;
@@ -934,6 +1023,9 @@ export class Transformer {
     if (stmt.method.toLowerCase() === "order") {
       return this.buildOrderCustomArgs(stmt);
     }
+    if (stmt.method.toLowerCase() === "convert") {
+      return this.buildConvertCustomArgs(stmt);
+    }
 
     const args: Record<string, unknown> = {};
     stmt.args.forEach((arg, i) => {
@@ -960,6 +1052,62 @@ export class Transformer {
     if (orderTypeArg) args.order_type = this.exprToValue(orderTypeArg);
 
     return args;
+  }
+
+  private buildConvertCustomArgs(stmt: MethodCallNode): Record<string, unknown> {
+    const args: Record<string, unknown> = {};
+    const tokensInArg = stmt.args[0];
+    const amountsInArg = stmt.args[1];
+    const tokensOutArg = stmt.args[2];
+    const receiverArg = stmt.args[3];
+    const enableAggregatorArg = stmt.args[4];
+    const aggregatorsArg = stmt.args[5];
+    const redeemRewardsArg = stmt.args[6];
+    const needScaleArg = stmt.args[7];
+    const additionalDataArg = stmt.args[8];
+    const useLimitOrderArg = stmt.args[9];
+
+    if (tokensInArg) args.tokens_in = this.exprToValue(tokensInArg);
+    if (amountsInArg) args.amounts_in = this.exprToValue(amountsInArg);
+    if (tokensOutArg) args.tokens_out = this.exprToValue(tokensOutArg);
+    if (receiverArg) args.receiver = this.exprToValue(receiverArg);
+    if (enableAggregatorArg) args.enable_aggregator = this.exprToValue(enableAggregatorArg);
+    if (aggregatorsArg) args.aggregators = this.exprToValue(aggregatorsArg);
+    if (redeemRewardsArg) args.redeem_rewards = this.exprToValue(redeemRewardsArg);
+    if (needScaleArg) args.need_scale = this.exprToValue(needScaleArg);
+    if (additionalDataArg) args.additional_data = this.exprToValue(additionalDataArg);
+    if (useLimitOrderArg) args.use_limit_order = this.exprToValue(useLimitOrderArg);
+
+    return args;
+  }
+
+  private applyPendleActionOptions(
+    action: Record<string, unknown>,
+    optionsArg: ExpressionNode | undefined
+  ): void {
+    if (!optionsArg || optionsArg.kind !== "object_literal") {
+      return;
+    }
+
+    const options = this.exprToValue(optionsArg);
+    if (!options || typeof options !== "object" || Array.isArray(options)) {
+      return;
+    }
+
+    const record = options as Record<string, unknown>;
+    const enableAggregator = record.enable_aggregator ?? record.enableAggregator;
+    const aggregators = record.aggregators;
+    const needScale = record.need_scale ?? record.needScale;
+    const redeemRewards = record.redeem_rewards ?? record.redeemRewards;
+    const additionalData = record.additional_data ?? record.additionalData;
+    const useLimitOrder = record.use_limit_order ?? record.useLimitOrder;
+
+    if (enableAggregator !== undefined) action.enable_aggregator = enableAggregator;
+    if (aggregators !== undefined) action.aggregators = aggregators;
+    if (needScale !== undefined) action.need_scale = needScale;
+    if (redeemRewards !== undefined) action.redeem_rewards = redeemRewards;
+    if (additionalData !== undefined) action.additional_data = additionalData;
+    if (useLimitOrder !== undefined) action.use_limit_order = useLimitOrder;
   }
 
   /** Transform emit to emit step */

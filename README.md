@@ -46,6 +46,7 @@ Want live snapshot params for strategy inputs?
 
 ```bash
 grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
+grimoire venue pendle chains
 ```
 
 Before running venue actions in a new environment, validate adapter/env/RPC readiness:
@@ -76,7 +77,7 @@ Use skills in `skills/` so agents can work immediately with Grimoire:
 
 - install: `npx skills add https://github.com/franalgaba/grimoire`
 - `skills/grimoire/` for install, CLI usage, syntax starter, and runbook
-- venue skills for snapshot params (`skills/grimoire-aave/`, `skills/grimoire-uniswap/`, `skills/grimoire-morpho-blue/`, `skills/grimoire-hyperliquid/`)
+- venue skills for snapshot params (`skills/grimoire-aave/`, `skills/grimoire-uniswap/`, `skills/grimoire-morpho-blue/`, `skills/grimoire-hyperliquid/`, `skills/grimoire-pendle/`)
 
 For Claude Code, run the same install command in the Claude Code terminal and start a new session to load the skills.
 
@@ -127,6 +128,7 @@ spell YieldOptimizer {
 - **Human-readable DSL** with brace-delimited syntax
 - **Explicit constraints** and limits via `with` and `limits`
 - **Adapter-based venues** (SDKs live in `@grimoirelabs/venues`)
+- **Official adapters** include Aave V3, Uniswap V3/V4, Morpho Blue, Across, Hyperliquid, and Pendle
 - **Onchain + offchain** actions (EVM + Hyperliquid)
 - **Judgment boundary** with explicit `advise` blocks
 - **Structured control flow** (loops, conditionals, try/catch, atomic)
