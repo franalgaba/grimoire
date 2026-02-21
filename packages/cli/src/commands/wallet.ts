@@ -9,7 +9,6 @@ import { dirname, join } from "node:path";
 import * as readline from "node:readline";
 import { Writable } from "node:stream";
 import {
-  type KeyConfig,
   createKeystore,
   createProvider,
   createWalletFromConfig,
@@ -18,6 +17,7 @@ import {
   getAddressFromConfig,
   getChainName,
   getNativeCurrencySymbol,
+  type KeyConfig,
 } from "@grimoirelabs/core";
 import chalk from "chalk";
 import { Command } from "commander";

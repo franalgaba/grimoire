@@ -4,7 +4,7 @@
  */
 
 import { join } from "node:path";
-import { SqliteStateStore, getSessionLedgerView, getSessionPnlView } from "@grimoirelabs/core";
+import { getSessionLedgerView, getSessionPnlView, SqliteStateStore } from "@grimoirelabs/core";
 import chalk from "chalk";
 
 interface HistoryOptions {

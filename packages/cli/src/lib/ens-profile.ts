@@ -1,4 +1,4 @@
-import { http, type Address, createPublicClient } from "viem";
+import { type Address, createPublicClient, http } from "viem";
 
 export const ENS_PROFILE_KEYS = [
   "io.grimoire.risk_profile",

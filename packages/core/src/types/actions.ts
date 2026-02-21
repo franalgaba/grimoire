@@ -48,6 +48,8 @@ type ActionBase =
   | WithdrawAction
   | BorrowAction
   | RepayAction
+  | SupplyCollateralAction
+  | WithdrawCollateralAction
   | StakeAction
   | UnstakeAction
   | BridgeAction
@@ -119,6 +121,24 @@ export interface RepayAction {
   venue: string;
   asset: AssetId;
   amount: ActionAmount | "max";
+  marketId?: string;
+}
+
+/** Supply collateral to protocol */
+export interface SupplyCollateralAction {
+  type: "supply_collateral";
+  venue: string;
+  asset: AssetId;
+  amount: ActionAmount;
+  marketId?: string;
+}
+
+/** Withdraw collateral from protocol */
+export interface WithdrawCollateralAction {
+  type: "withdraw_collateral";
+  venue: string;
+  asset: AssetId;
+  amount: ActionAmount;
   marketId?: string;
 }
 

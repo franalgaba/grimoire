@@ -9,17 +9,13 @@ spell TestPipeline {
   on manual: {
     result = assets | sort by index order asc: {
       pass
-    }
-    | take 3: {
+    } | take 3: {
       pass
-    }
-    | filter: {
+    } | filter: {
       keep = item != "USDC"
-    }
-    | map: {
+    } | map: {
       mapped = index + 1
-    }
-    | reduce(0): {
+    } | reduce(0): {
       sum = acc + item
     }
     emit pipeline_done(result=result)

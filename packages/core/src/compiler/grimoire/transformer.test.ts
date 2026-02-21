@@ -11,8 +11,8 @@ type StepRecord = Record<string, unknown>;
 const findStep = (steps: StepRecord[] | undefined, key: string): StepRecord | undefined =>
   steps?.find((step) => key in step);
 
-const getAction = (step: StepRecord | undefined): { type?: string; venue?: string } | undefined =>
-  step && "action" in step ? (step.action as { type?: string; venue?: string }) : undefined;
+const getAction = (step: StepRecord | undefined): StepRecord | undefined =>
+  step && "action" in step ? (step.action as StepRecord) : undefined;
 
 const getCompute = (step: StepRecord | undefined): Record<string, string> | undefined =>
   step && "compute" in step ? (step.compute as Record<string, string>) : undefined;
@@ -705,6 +705,63 @@ describe("Transformer", () => {
       const actionStep = findStep(result.steps, "action");
       expect(actionStep).toBeDefined();
       expect(getAction(actionStep)?.type).toBe("withdraw");
+    });
+
+    test("transforms Morpho collateral method calls", () => {
+      const supplySource = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    morpho_blue.supply_collateral(WETH, 100, "weth-usdc-86")
+  }
+}`;
+      const supplyAst = parse(supplySource);
+      const supplyResult = transform(supplyAst);
+      const supplyActionStep = findStep(supplyResult.steps, "action");
+      expect(supplyActionStep).toBeDefined();
+      expect(getAction(supplyActionStep)?.type).toBe("supply_collateral");
+      expect(getAction(supplyActionStep)?.asset).toBe("WETH");
+      expect(getAction(supplyActionStep)?.market_id).toBe("weth-usdc-86");
+
+      const withdrawSource = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    morpho_blue.withdraw_collateral(WETH, 50)
+  }
+}`;
+      const withdrawAst = parse(withdrawSource);
+      const withdrawResult = transform(withdrawAst);
+      const withdrawActionStep = findStep(withdrawResult.steps, "action");
+      expect(withdrawActionStep).toBeDefined();
+      expect(getAction(withdrawActionStep)?.type).toBe("withdraw_collateral");
+      expect(getAction(withdrawActionStep)?.asset).toBe("WETH");
+    });
+
+    test("binds optional market_id for lend/withdraw/repay and borrow", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    morpho_blue.lend(USDC, 100, "market-a")
+    morpho_blue.withdraw(USDC, 100, "market-b")
+    morpho_blue.repay(USDC, 100, "market-c")
+    morpho_blue.borrow(USDC, 100, WETH, "market-d")
+  }
+}`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const actions = result.steps?.map((step) => getAction(step)).filter(Boolean) ?? [];
+
+      expect(actions[0]?.type).toBe("lend");
+      expect(actions[0]?.market_id).toBe("market-a");
+      expect(actions[1]?.type).toBe("withdraw");
+      expect(actions[1]?.market_id).toBe("market-b");
+      expect(actions[2]?.type).toBe("repay");
+      expect(actions[2]?.market_id).toBe("market-c");
+      expect(actions[3]?.type).toBe("borrow");
+      expect(actions[3]?.collateral).toBe("WETH");
+      expect(actions[3]?.market_id).toBe("market-d");
     });
 
     test("transforms swap method call", () => {

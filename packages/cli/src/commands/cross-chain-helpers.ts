@@ -252,7 +252,9 @@ function isMorphoActionStep(spell: SpellIR, step: ActionStep): boolean {
     step.action.type !== "lend" &&
     step.action.type !== "withdraw" &&
     step.action.type !== "borrow" &&
-    step.action.type !== "repay"
+    step.action.type !== "repay" &&
+    step.action.type !== "supply_collateral" &&
+    step.action.type !== "withdraw_collateral"
   ) {
     return false;
   }

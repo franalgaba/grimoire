@@ -225,6 +225,8 @@ Examples:
 uniswap_v3.swap(USDC, WETH, params.amount)
 aave_v3.lend(USDC, amount)
 aave_v3.borrow(USDC, amount, WETH)
+morpho_blue.supply_collateral(WETH, amount, "weth-usdc-86")
+morpho_blue.withdraw_collateral(WETH, amount, "weth-usdc-86")
 across.bridge(USDC, amount, 42161)
 ```
 
@@ -238,6 +240,35 @@ Constraint alias normalization in transformer:
 - `slippage` -> `max_slippage`
 - `min_out` -> `min_output`
 - `max_in` -> `max_input`
+
+Morpho market routing:
+
+- `lend`, `withdraw`, `repay` support optional third arg `market_id`.
+- `borrow` supports optional fourth arg `market_id` (after collateral).
+- `supply_collateral` and `withdraw_collateral` support optional third arg `market_id`.
+
+Address literal formatting (important):
+
+- Use bare address literals when an address-like token value is intended.
+- Quoted address-like strings trigger validator error `QUOTED_ADDRESS_LITERAL`.
+
+Good:
+
+```spell
+pendle.swap(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, PT, amount)
+pendle.add_liquidity(USDC, amount, [0x..., 0x...])
+```
+
+Bad:
+
+```spell
+pendle.swap("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", PT, amount)
+pendle.add_liquidity(USDC, amount, ["0x...", "0x..."])
+```
+
+Typical diagnostic:
+
+- `Detected quoted address literal "0x...". Use bare address literal 0x... (without quotes).`
 
 ## Advisory Syntax
 

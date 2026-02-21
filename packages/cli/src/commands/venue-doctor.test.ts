@@ -149,4 +149,80 @@ describe("venue doctor", () => {
     expect(report.ok).toBe(false);
     expect(report.checks.find((check) => check.name === "rpc_reachability")?.status).toBe("fail");
   });
+
+  test("reports Morpho borrow readiness as ready with wallet collateral, allowance, and position", async () => {
+    const adapters: VenueAdapter[] = [
+      makeAdapter({
+        name: "morpho_blue",
+        supportedChains: [8453],
+        actions: ["borrow"],
+        supportedConstraints: [],
+      }),
+    ];
+
+    const report = await runVenueDoctor(
+      { chainId: 8453, adapter: "morpho_blue" },
+      {
+        adapters,
+        env: { WALLET_ADDRESS: "0x00000000000000000000000000000000000000f1" },
+        createProviderFn: () => ({
+          rpcUrl: "https://rpc.base.org",
+          getBlockNumber: async () => 10n,
+          getClient: () => ({
+            readContract: async ({ functionName }: { functionName: string }) => {
+              if (functionName === "balanceOf") return 1000n;
+              if (functionName === "allowance") return 500n;
+              if (functionName === "position") return [10n, 0n, 250n];
+              return 0n;
+            },
+          }),
+        }),
+      }
+    );
+
+    expect(report.morphoBorrowReadiness).toBeDefined();
+    expect(report.morphoBorrowReadiness?.status).toBe("ready");
+    expect(report.morphoBorrowReadiness?.borrowReady).toBe(true);
+    expect(report.morphoBorrowReadiness?.positionCollateral).toBe("250");
+    expect(report.checks.find((check) => check.name === "morpho_borrow_readiness")?.status).toBe(
+      "pass"
+    );
+  });
+
+  test("reports Morpho borrow readiness as not_ready when collateral prerequisites are missing", async () => {
+    const adapters: VenueAdapter[] = [
+      makeAdapter({
+        name: "morpho_blue",
+        supportedChains: [8453],
+        actions: ["borrow"],
+        supportedConstraints: [],
+      }),
+    ];
+
+    const report = await runVenueDoctor(
+      { chainId: 8453, adapter: "morpho_blue" },
+      {
+        adapters,
+        env: { WALLET_ADDRESS: "0x00000000000000000000000000000000000000f2" },
+        createProviderFn: () => ({
+          rpcUrl: "https://rpc.base.org",
+          getBlockNumber: async () => 11n,
+          getClient: () => ({
+            readContract: async ({ functionName }: { functionName: string }) => {
+              if (functionName === "position") return [0n, 0n, 0n];
+              return 0n;
+            },
+          }),
+        }),
+      }
+    );
+
+    expect(report.morphoBorrowReadiness).toBeDefined();
+    expect(report.morphoBorrowReadiness?.status).toBe("not_ready");
+    expect(report.morphoBorrowReadiness?.borrowReady).toBe(false);
+    expect(report.morphoBorrowReadiness?.reasons.length).toBeGreaterThan(0);
+    expect(report.checks.find((check) => check.name === "morpho_borrow_readiness")?.status).toBe(
+      "fail"
+    );
+  });
 });

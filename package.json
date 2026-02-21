@@ -4,7 +4,9 @@
   "private": true,
   "description": "A Portable Execution Language for Onchain Strategies",
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "bun run --filter @grimoirelabs/core build && bun run --filter @grimoirelabs/venues build && bun run --filter @grimoirelabs/cli build",
     "changeset": "changeset",
@@ -21,12 +23,12 @@
     "validate": "bun run lint && bun run typecheck && bun test"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.4.4",
     "@changesets/cli": "^2.29.8",
-    "@types/bun": "latest",
-    "lefthook": "^1.6.1",
+    "@types/bun": "^1.3.9",
+    "lefthook": "^2.1.1",
     "skills-ref": "^0.1.5",
-    "typescript": "^5.6.3"
+    "typescript": "^5.9.3"
   },
   "overrides": {
     "undici": "^6.23.0",

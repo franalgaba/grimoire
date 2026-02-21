@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compile, preview } from "@grimoirelabs/core";
 import type { Address, SpellIR, VenueAdapter } from "@grimoirelabs/core";
+import { compile, preview } from "@grimoirelabs/core";
 import { simulateCommand } from "./simulate.js";
 
 function assertIR(

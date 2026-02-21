@@ -4,11 +4,11 @@
 
 import { join } from "node:path";
 import {
+  createRunRecord,
   type ExecutionResult,
   type RunProvenance,
   type RunRecord,
   SqliteStateStore,
-  createRunRecord,
 } from "@grimoirelabs/core";
 
 interface StatePersistenceOptions {

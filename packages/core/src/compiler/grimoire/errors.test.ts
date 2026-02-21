@@ -4,13 +4,13 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  formatErrors,
   GrimoireError,
+  loc,
   ParseError,
+  span,
   TokenizeError,
   TransformError,
-  formatErrors,
-  loc,
-  span,
 } from "./errors.js";
 
 describe("Error Types", () => {

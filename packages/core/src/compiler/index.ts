@@ -3,22 +3,21 @@
  */
 
 export { parseExpression, tryParseExpression } from "./expression-parser.js";
-export { generateIR, type IRGeneratorResult } from "./ir-generator.js";
-export { typeCheckIR, type TypeCheckResult } from "./type-checker.js";
-export { validateIR, type AdvisorySummary, type ValidationResult } from "./validator.js";
-
 // Export new Grimoire syntax compiler
 export {
-  parse as parseGrimoireAST,
-  transform as transformGrimoireAST,
-  parseGrimoire,
   compileGrimoire,
-  type SpellAST,
-  type SectionNode,
-  type TriggerHandler,
-  type StatementNode,
   type ExpressionNode,
+  parse as parseGrimoireAST,
+  parseGrimoire,
+  type SectionNode,
+  type SpellAST,
+  type StatementNode,
+  type TriggerHandler,
+  transform as transformGrimoireAST,
 } from "./grimoire/index.js";
+export { generateIR, type IRGeneratorResult } from "./ir-generator.js";
+export { type TypeCheckResult, typeCheckIR } from "./type-checker.js";
+export { type AdvisorySummary, type ValidationResult, validateIR } from "./validator.js";
 
 import { readFile } from "node:fs/promises";
 import type { CompilationResult, SpellSource } from "../types/ir.js";

@@ -7,8 +7,8 @@
  * - Gas price estimation
  */
 
-import { http, type Abi, type PublicClient, createPublicClient } from "viem";
-import { type Chain, arbitrum, base, mainnet, optimism, polygon, sepolia } from "viem/chains";
+import { type Abi, createPublicClient, http, type PublicClient } from "viem";
+import { arbitrum, base, type Chain, mainnet, optimism, polygon, sepolia } from "viem/chains";
 import type { Address } from "../types/primitives.js";
 import type { GasEstimate, ProviderConfig } from "./types.js";
 

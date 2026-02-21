@@ -5,7 +5,6 @@ import * as readline from "node:readline";
 import { Writable } from "node:stream";
 import {
   type Address,
-  SqliteStateStore,
   compileFile,
   createProvider,
   createRunRecord,
@@ -13,6 +12,7 @@ import {
   execute,
   injectHandoffParams,
   loadPrivateKey,
+  SqliteStateStore,
 } from "@grimoirelabs/core";
 import { adapters, createHyperliquidAdapter } from "@grimoirelabs/venues";
 import chalk from "chalk";

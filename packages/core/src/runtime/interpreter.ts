@@ -30,25 +30,19 @@ import type {
 import type { Step } from "../types/steps.js";
 import { createVenueRegistry } from "../venues/index.js";
 import type { VenueAdapter } from "../venues/types.js";
-import { type ExecutionMode, createExecutor } from "../wallet/executor.js";
-import { type Provider, createProvider } from "../wallet/provider.js";
+import { createExecutor, type ExecutionMode } from "../wallet/executor.js";
+import { createProvider, type Provider } from "../wallet/provider.js";
 import type { Wallet } from "../wallet/types.js";
 import { CircuitBreakerManager } from "./circuit-breaker.js";
 import {
-  InMemoryLedger,
   createContext,
   getPersistentStateObject,
+  InMemoryLedger,
   incrementAdvisoryCalls,
   markStepExecuted,
 } from "./context.js";
-import { type EvalContext, createEvalContext, evaluateAsync } from "./expression-evaluator.js";
+import { createEvalContext, type EvalContext, evaluateAsync } from "./expression-evaluator.js";
 import { resolveAdvisorSkill } from "./skills/registry.js";
-import {
-  type ValueFlowViolation,
-  evaluatePreviewValueFlow,
-  inferDriftClass,
-} from "./value-flow.js";
-
 // Step executors
 import {
   type ActionExecutionOptions,
@@ -66,6 +60,11 @@ import { executeParallelStep } from "./steps/parallel.js";
 import { executePipelineStep } from "./steps/pipeline.js";
 import { executeTryStep } from "./steps/try.js";
 import { executeWaitStep } from "./steps/wait.js";
+import {
+  evaluatePreviewValueFlow,
+  inferDriftClass,
+  type ValueFlowViolation,
+} from "./value-flow.js";
 
 // Keep preview-issued receipts in-process so commit only accepts known receipts.
 const issuedReceipts = new Map<
@@ -1144,10 +1143,7 @@ async function resolveCommitDriftValue(
   driftKey: DriftKey,
   options: CommitOptions
 ): Promise<{ found: boolean; value: unknown }> {
-  if (
-    options.driftValues &&
-    Object.prototype.hasOwnProperty.call(options.driftValues, driftKey.field)
-  ) {
+  if (options.driftValues && Object.hasOwn(options.driftValues, driftKey.field)) {
     return { found: true, value: options.driftValues[driftKey.field] };
   }
 

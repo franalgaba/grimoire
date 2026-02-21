@@ -342,6 +342,8 @@ function validateStep(
         }
       }
 
+      addQuotedAddressLiteralDiagnostics(step.id, step.action, errors);
+
       // Validate amount expression if not "max"
       if ("amount" in step.action && step.action.amount !== "max") {
         if (isExpressionNode(step.action.amount)) {
@@ -476,6 +478,55 @@ function validateStep(
       // No additional validation needed
       break;
   }
+}
+
+const QUOTED_ADDRESS_LITERAL_PATTERN = /^"0x[0-9a-fA-F]+"$/;
+
+function addQuotedAddressLiteralDiagnostics(
+  stepId: string,
+  action: unknown,
+  errors: CompilationError[]
+): void {
+  const actionRecord = action as unknown as Record<string, unknown>;
+
+  const maybePush = (field: string, value: unknown): void => {
+    if (typeof value !== "string") return;
+    const trimmed = value.trim();
+    if (!isQuotedAddressLiteral(trimmed)) return;
+    const bare = trimmed.slice(1, -1);
+    errors.push({
+      code: "QUOTED_ADDRESS_LITERAL",
+      message:
+        `Step '${stepId}' field '${field}': Detected quoted address literal ${trimmed}. ` +
+        `Use bare address literal ${bare} (without quotes).`,
+    });
+  };
+
+  maybePush("asset", actionRecord.asset);
+  maybePush("asset_in", actionRecord.assetIn);
+  maybePush("asset_out", actionRecord.assetOut);
+  maybePush("collateral", actionRecord.collateral);
+  maybePush("to", actionRecord.to);
+  maybePush("spender", actionRecord.spender);
+
+  const outputs = actionRecord.outputs;
+  if (Array.isArray(outputs)) {
+    outputs.forEach((entry, index) => {
+      maybePush(`outputs[${index}]`, entry);
+    });
+  }
+
+  const inputs = actionRecord.inputs;
+  if (Array.isArray(inputs)) {
+    inputs.forEach((entry, index) => {
+      if (!entry || typeof entry !== "object") return;
+      maybePush(`inputs[${index}].asset`, (entry as Record<string, unknown>).asset);
+    });
+  }
+}
+
+function isQuotedAddressLiteral(value: string): boolean {
+  return QUOTED_ADDRESS_LITERAL_PATTERN.test(value);
 }
 
 function isExpressionNode(value: unknown): value is Expression {

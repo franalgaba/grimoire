@@ -2,7 +2,12 @@ import type { VenueAdapter } from "@grimoirelabs/core";
 import { aaveV3Adapter, createAaveV3Adapter } from "./aave-v3.js";
 import { acrossAdapter, createAcrossAdapter } from "./across.js";
 import { createHyperliquidAdapter, hyperliquidAdapter } from "./hyperliquid.js";
-import { createMorphoBlueAdapter, morphoBlueAdapter } from "./morpho-blue.js";
+import {
+  createMorphoBlueAdapter,
+  getMorphoBlueMarketId,
+  MORPHO_BLUE_DEFAULT_MARKETS,
+  morphoBlueAdapter,
+} from "./morpho-blue.js";
 import { createPendleAdapter, pendleAdapter } from "./pendle.js";
 import { createUniswapV3Adapter, defaultUniswapV3Routers, uniswapV3Adapter } from "./uniswap-v3.js";
 import {
@@ -34,6 +39,8 @@ export {
   defaultUniswapV4Routers,
   morphoBlueAdapter,
   createMorphoBlueAdapter,
+  MORPHO_BLUE_DEFAULT_MARKETS,
+  getMorphoBlueMarketId,
   hyperliquidAdapter,
   createHyperliquidAdapter,
   pendleAdapter,

@@ -21,7 +21,7 @@ spell TestAdviseOutput {
         values: ["hold", "buy", "sell"]
       }
       timeout: 10
-      fallback: true
+      fallback: "hold"
     }
     emit advised(decision=decision)
   }

@@ -6,6 +6,8 @@ import type {
   Provider,
   VenueAdapterContext,
 } from "@grimoirelabs/core";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { decodeFunctionData } from "viem";
 import { createMorphoBlueAdapter } from "./morpho-blue.js";
 
 const market = {
@@ -14,21 +16,52 @@ const market = {
   collateralToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
   oracle: "0x0000000000000000000000000000000000000007" as Address,
   irm: "0x0000000000000000000000000000000000000008" as Address,
-  lltv: 0n,
+  lltv: 860000000000000000n,
 };
 
-const providerStub = {
-  chainId: 1,
-  getClient: () => ({
-    readContract: async () => 0n,
-  }),
-} as unknown as Provider;
+function createProviderStub(overrides?: {
+  allowance?: bigint;
+  position?: readonly [bigint, bigint, bigint];
+  marketState?: readonly [bigint, bigint, bigint, bigint, bigint, bigint];
+  oraclePrice?: bigint;
+}): Provider {
+  const allowance = overrides?.allowance ?? 0n;
+  const position = overrides?.position ?? ([0n, 0n, 1000n] as const);
+  const marketState = overrides?.marketState ?? ([1000000n, 0n, 100n, 100n, 0n, 0n] as const);
+  const oraclePrice = overrides?.oraclePrice;
 
-const ctx: VenueAdapterContext = {
-  provider: providerStub,
-  walletAddress: "0x0000000000000000000000000000000000000001" as Address,
-  chainId: 1,
-};
+  return {
+    chainId: 1,
+    getClient: () => ({
+      readContract: async ({ functionName }: { functionName: string }): Promise<unknown> => {
+        if (functionName === "allowance") return allowance;
+        if (functionName === "position") return position;
+        if (functionName === "market") return marketState;
+        if (functionName === "price") {
+          if (oraclePrice === undefined) {
+            throw new Error("oracle unavailable");
+          }
+          return oraclePrice;
+        }
+        return 0n;
+      },
+    }),
+  } as unknown as Provider;
+}
+
+function createCtx(overrides?: {
+  mode?: VenueAdapterContext["mode"];
+  provider?: Provider;
+  crossChain?: VenueAdapterContext["crossChain"];
+}): VenueAdapterContext {
+  return {
+    provider: overrides?.provider ?? createProviderStub(),
+    walletAddress: "0x0000000000000000000000000000000000000001" as Address,
+    chainId: 1,
+    mode: overrides?.mode,
+    crossChain: overrides?.crossChain,
+  };
+}
 
 const amount1: Expression = { kind: "literal", value: 1n, type: "int" };
 const amount4: Expression = { kind: "literal", value: 4n, type: "int" };
@@ -49,7 +82,7 @@ describe("Morpho Blue adapter", () => {
       amount: amount5,
     };
 
-    const result = await adapter.buildAction(lendAction, ctx);
+    const result = await adapter.buildAction(lendAction, createCtx());
 
     const built = Array.isArray(result) ? result : [result];
 
@@ -72,7 +105,7 @@ describe("Morpho Blue adapter", () => {
       amount: amount5,
     };
 
-    const result = await adapter.buildAction(repayAction, ctx);
+    const result = await adapter.buildAction(repayAction, createCtx());
 
     const built = Array.isArray(result) ? result : [result];
 
@@ -95,7 +128,7 @@ describe("Morpho Blue adapter", () => {
       amount: amount5,
     };
 
-    const result = await adapter.buildAction(withdrawAction, ctx);
+    const result = await adapter.buildAction(withdrawAction, createCtx());
 
     const built = Array.isArray(result) ? result : [result];
 
@@ -117,10 +150,133 @@ describe("Morpho Blue adapter", () => {
       amount: amount5,
     };
 
-    const result = await adapter.buildAction(borrowAction, ctx);
+    const result = await adapter.buildAction(borrowAction, createCtx());
 
     const built = Array.isArray(result) ? result : [result];
 
+    expect(built).toHaveLength(1);
+    expect(built[0]?.description).toContain("Morpho Blue borrow");
+  });
+
+  test("adds approval for supply_collateral and uses collateral token spender path", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action: Action = {
+      type: "supply_collateral",
+      venue: "morpho_blue",
+      asset: "WETH",
+      amount: amount5,
+    };
+
+    const result = await adapter.buildAction(action, createCtx());
+    const built = Array.isArray(result) ? result : [result];
+
+    expect(built).toHaveLength(2);
+    expect(built[0]?.description).toContain("Approve WETH");
+    expect(built[1]?.description).toContain("Morpho Blue supply_collateral");
+    const calldata = built[1]?.tx.data;
+    expect(calldata).toBeDefined();
+    const decoded = decodeFunctionData({
+      abi: blueAbi,
+      data: calldata as `0x${string}`,
+    });
+    expect(decoded.functionName).toBe("supplyCollateral");
+  });
+
+  test("builds withdraw_collateral without approval", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action: Action = {
+      type: "withdraw_collateral",
+      venue: "morpho_blue",
+      asset: "WETH",
+      amount: amount5,
+    };
+
+    const result = await adapter.buildAction(action, createCtx());
+    const built = Array.isArray(result) ? result : [result];
+
+    expect(built).toHaveLength(1);
+    expect(built[0]?.description).toContain("Morpho Blue withdraw_collateral");
+    const calldata = built[0]?.tx.data;
+    expect(calldata).toBeDefined();
+    const decoded = decodeFunctionData({
+      abi: blueAbi,
+      data: calldata as `0x${string}`,
+    });
+    expect(decoded.functionName).toBe("withdrawCollateral");
+  });
+
+  test("borrow preflight fails when collateral is zero", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action: Action = {
+      type: "borrow",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount5,
+    };
+
+    await expect(
+      adapter.buildAction(
+        action,
+        createCtx({
+          provider: createProviderStub({
+            position: [0n, 0n, 0n],
+          }),
+        })
+      )
+    ).rejects.toThrow("supply_collateral");
+  });
+
+  test("borrow preflight fails when requested amount exceeds market liquidity", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action: Action = {
+      type: "borrow",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount5,
+    };
+
+    await expect(
+      adapter.buildAction(
+        action,
+        createCtx({
+          provider: createProviderStub({
+            position: [0n, 0n, 100n],
+            marketState: [5n, 0n, 4n, 4n, 0n, 0n],
+          }),
+        })
+      )
+    ).rejects.toThrow("available liquidity");
+  });
+
+  test("borrow preflight passes with collateral and available liquidity", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action: Action = {
+      type: "borrow",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount5,
+    };
+
+    const result = await adapter.buildAction(
+      action,
+      createCtx({
+        provider: createProviderStub({
+          position: [0n, 0n, 500n],
+          marketState: [1000n, 0n, 10n, 10n, 0n, 0n],
+        }),
+      })
+    );
+    const built = Array.isArray(result) ? result : [result];
     expect(built).toHaveLength(1);
     expect(built[0]?.description).toContain("Morpho Blue borrow");
   });
@@ -139,7 +295,9 @@ describe("Morpho Blue adapter", () => {
       amount: amount1,
     } as unknown as Action;
 
-    await expect(adapter.buildAction(unknownAssetAction, ctx)).rejects.toThrow("Unknown asset");
+    await expect(adapter.buildAction(unknownAssetAction, createCtx())).rejects.toThrow(
+      "Unknown asset"
+    );
 
     const maxAmountAction = {
       type: "lend",
@@ -148,7 +306,9 @@ describe("Morpho Blue adapter", () => {
       amount: "max",
     } as unknown as Action;
 
-    await expect(adapter.buildAction(maxAmountAction, ctx)).rejects.toThrow("explicit amount");
+    await expect(adapter.buildAction(maxAmountAction, createCtx())).rejects.toThrow(
+      "explicit amount"
+    );
   });
 
   test("handles collateral matching and numeric amounts", async () => {
@@ -166,7 +326,7 @@ describe("Morpho Blue adapter", () => {
       amount: 2,
     } as unknown as Action;
 
-    const result = await adapter.buildAction(numericAmountAction, ctx);
+    const result = await adapter.buildAction(numericAmountAction, createCtx());
 
     const built = Array.isArray(result) ? result : [result];
     expect(built[0]?.description).toContain("Morpho Blue borrow");
@@ -193,8 +353,8 @@ describe("Morpho Blue adapter", () => {
       amount: amount4,
     };
 
-    const stringResult = await adapter.buildAction(stringAmountAction, ctx);
-    const literalResult = await adapter.buildAction(literalAmountAction, ctx);
+    const stringResult = await adapter.buildAction(stringAmountAction, createCtx());
+    const literalResult = await adapter.buildAction(literalAmountAction, createCtx());
 
     const builtString = Array.isArray(stringResult) ? stringResult : [stringResult];
     const builtLiteral = Array.isArray(literalResult) ? literalResult : [literalResult];
@@ -214,7 +374,7 @@ describe("Morpho Blue adapter", () => {
       amount: amount1,
     } as unknown as Action;
 
-    await expect(adapter.buildAction(action, ctx)).rejects.toThrow(
+    await expect(adapter.buildAction(action, createCtx())).rejects.toThrow(
       "Unsupported Morpho Blue action"
     );
   });
@@ -237,7 +397,7 @@ describe("Morpho Blue adapter", () => {
       amount: amount1,
     } as unknown as Action;
 
-    const result = await adapter.buildAction(action, ctx);
+    const result = await adapter.buildAction(action, createCtx());
     const built = Array.isArray(result) ? result : [result];
     expect(built[0]?.description).toContain("Morpho Blue borrow");
   });
@@ -259,7 +419,7 @@ describe("Morpho Blue adapter", () => {
       amount: amount1,
     } as unknown as Action;
 
-    const result = await adapter.buildAction(action, ctx);
+    const result = await adapter.buildAction(action, createCtx());
     const built = Array.isArray(result) ? result : [result];
     expect(built[0]?.description).toContain("Morpho Blue borrow");
   });
@@ -276,7 +436,7 @@ describe("Morpho Blue adapter", () => {
       amount: amount1,
     } as unknown as Action;
 
-    await expect(adapter.buildAction(action, ctx)).rejects.toThrow("market not configured");
+    await expect(adapter.buildAction(action, createCtx())).rejects.toThrow("market not configured");
   });
 
   test("rejects missing asset", async () => {
@@ -290,7 +450,7 @@ describe("Morpho Blue adapter", () => {
       amount: amount1,
     } as unknown as Action;
 
-    await expect(adapter.buildAction(action, ctx)).rejects.toThrow("Asset is required");
+    await expect(adapter.buildAction(action, createCtx())).rejects.toThrow("Asset is required");
   });
 
   test("rejects unsupported amount type", async () => {
@@ -304,7 +464,9 @@ describe("Morpho Blue adapter", () => {
       amount: { foo: true },
     } as unknown as Action;
 
-    await expect(adapter.buildAction(action, ctx)).rejects.toThrow("Unsupported amount type");
+    await expect(adapter.buildAction(action, createCtx())).rejects.toThrow(
+      "Unsupported amount type"
+    );
   });
 
   test("fails closed in cross-chain mode without explicit market_id", async () => {
@@ -323,13 +485,35 @@ describe("Morpho Blue adapter", () => {
       amount: amount1,
     } as unknown as Action;
 
-    const crossChainCtx: VenueAdapterContext = {
-      ...ctx,
+    const crossChainCtx = createCtx({
       crossChain: {
         enabled: true,
         actionRef: "source:step_1",
       },
-    };
+    });
+
+    await expect(adapter.buildAction(action, crossChainCtx)).rejects.toThrow(
+      "requires explicit market_id"
+    );
+  });
+
+  test("fails closed for supply_collateral in cross-chain mode without explicit market_id", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "supply_collateral",
+      venue: "morpho_blue",
+      asset: "WETH",
+      amount: amount1,
+    } as unknown as Action;
+
+    const crossChainCtx = createCtx({
+      crossChain: {
+        enabled: true,
+        actionRef: "source:step_2",
+      },
+    });
 
     await expect(adapter.buildAction(action, crossChainCtx)).rejects.toThrow(
       "requires explicit market_id"
@@ -353,13 +537,12 @@ describe("Morpho Blue adapter", () => {
       marketId: "test2",
     } as unknown as Action;
 
-    const crossChainCtx: VenueAdapterContext = {
-      ...ctx,
+    const crossChainCtx = createCtx({
       crossChain: {
         enabled: true,
         actionRef: "source:step_1",
       },
-    };
+    });
 
     const result = await adapter.buildAction(action, crossChainCtx);
     const built = Array.isArray(result) ? result : [result];
@@ -382,8 +565,7 @@ describe("Morpho Blue adapter", () => {
       amount: amount1,
     } as unknown as Action;
 
-    const crossChainCtx: VenueAdapterContext = {
-      ...ctx,
+    const crossChainCtx = createCtx({
       crossChain: {
         enabled: true,
         actionRef: "destination:step_9",
@@ -391,7 +573,7 @@ describe("Morpho Blue adapter", () => {
           "destination:step_9": "test2",
         },
       },
-    };
+    });
 
     const result = await adapter.buildAction(action, crossChainCtx);
     const built = Array.isArray(result) ? result : [result];

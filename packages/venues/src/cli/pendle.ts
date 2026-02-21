@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createPendleAdapter } from "../pendle.js";
-import { type OutputFormat, getOption, parseArgs, printResult, requireOption } from "./utils.js";
+import { getOption, type OutputFormat, parseArgs, printResult, requireOption } from "./utils.js";
 
 const DEFAULT_BASE_URL = "https://api-v2.pendle.finance/core";
 

@@ -1,13 +1,12 @@
-import type { Address } from "@grimoirelabs/core";
-import type { VenueAdapter } from "@grimoirelabs/core";
+import type { Address, VenueAdapter } from "@grimoirelabs/core";
 import { CurrencyAmount, Percent, Token, TradeType } from "@uniswap/sdk-core";
 import {
+  computePoolAddress,
   type FeeAmount,
   Pool,
   Route,
   SwapRouter,
   Trade,
-  computePoolAddress,
 } from "@uniswap/v3-sdk";
 import { type Abi, encodeFunctionData, parseAbi } from "viem";
 import { assertSupportedConstraints } from "./constraints.js";

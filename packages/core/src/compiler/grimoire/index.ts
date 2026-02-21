@@ -4,10 +4,10 @@
  * This module provides the new Python-like syntax for spell definitions.
  */
 
-export * from "./errors.js";
-export * from "./tokenizer.js";
 export * from "./ast.js";
+export * from "./errors.js";
 export { Parser, parse } from "./parser.js";
+export * from "./tokenizer.js";
 export { Transformer, transform } from "./transformer.js";
 
 import type { CompilationResult, SpellSource } from "../../types/ir.js";

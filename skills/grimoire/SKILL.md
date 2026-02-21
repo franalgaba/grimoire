@@ -87,7 +87,12 @@ If all three pass, proceed to spell authoring.
 12. For cross-chain Morpho actions, require explicit market mapping via:
    - `--morpho-market-id <actionRef>=<marketId>` (repeatable), or
    - `--morpho-market-map <path>`
-13. If a cross-chain run is left waiting, continue with `resume <runId>` (use `--watch` to poll settlement).
+13. For Morpho collateral lifecycle, prefer explicit actions:
+   - `morpho_blue.supply_collateral(asset, amount[, market_id])`
+   - `morpho_blue.withdraw_collateral(asset, amount[, market_id])`
+14. Use bare `0x...` address literals in action token fields; quoted address-like strings trigger `QUOTED_ADDRESS_LITERAL`.
+15. For Morpho doctor readiness checks, set wallet env explicitly (`GRIMOIRE_WALLET_ADDRESS` preferred, fallback `WALLET_ADDRESS`).
+16. If a cross-chain run is left waiting, continue with `resume <runId>` (use `--watch` to poll settlement).
 
 ## Command Surface (Core)
 

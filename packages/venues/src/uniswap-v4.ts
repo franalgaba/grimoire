@@ -1,5 +1,10 @@
-import type { Action, Address, BuiltTransaction, VenueAdapterContext } from "@grimoirelabs/core";
-import type { VenueAdapter } from "@grimoirelabs/core";
+import type {
+  Action,
+  Address,
+  BuiltTransaction,
+  VenueAdapter,
+  VenueAdapterContext,
+} from "@grimoirelabs/core";
 import { type Abi, encodeAbiParameters, encodeFunctionData, parseAbi } from "viem";
 import { assertSupportedConstraints } from "./constraints.js";
 import { resolveTokenAddress as resolveVenueTokenAddress } from "./token-registry.js";

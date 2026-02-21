@@ -19,11 +19,9 @@ spell TestConstraintsExtended {
     uniswap_v3.swap(USDC, ETH, params.amount) with (
       slippage=50,
       deadline=300,
-      max_price_impact=200,
-      min_liquidity=1000000,
+      min_output=1,
+      max_input=200000,
       require_quote=true,
-      require_simulation=true,
-      max_gas=300000,
     )
     emit constraints_applied(amount=params.amount)
 

@@ -24,13 +24,12 @@ import type {
   VenueQuoteMetadata,
   VenueRegistry,
 } from "../../venues/types.js";
-import type { Executor } from "../../wallet/executor.js";
-import type { ExecutionMode } from "../../wallet/executor.js";
+import type { ExecutionMode, Executor } from "../../wallet/executor.js";
 import type { CircuitBreakerManager } from "../circuit-breaker.js";
-import { addGasUsed, incrementActions, setBinding } from "../context.js";
 import type { InMemoryLedger } from "../context.js";
+import { addGasUsed, incrementActions, setBinding } from "../context.js";
 import { classifyError } from "../error-classifier.js";
-import { type EvalValue, createEvalContext, evaluateAsync } from "../expression-evaluator.js";
+import { createEvalContext, type EvalValue, evaluateAsync } from "../expression-evaluator.js";
 import { FEE_BUCKET_ADDRESS, LOSS_BUCKET_ADDRESS } from "../value-flow.js";
 
 export interface ActionExecutionOptions {
@@ -389,6 +388,18 @@ async function resolveAction(
         amount: await resolveAmount(action.amount, evalCtx),
       } as Action;
 
+    case "supply_collateral":
+      return {
+        ...action,
+        amount: await resolveAmount(action.amount, evalCtx),
+      } as Action;
+
+    case "withdraw_collateral":
+      return {
+        ...action,
+        amount: await resolveAmount(action.amount, evalCtx),
+      } as Action;
+
     case "stake":
       return {
         ...action,
@@ -704,7 +715,9 @@ function isMorphoValueMovingAction(action: Action): boolean {
     (action.type === "lend" ||
       action.type === "withdraw" ||
       action.type === "borrow" ||
-      action.type === "repay")
+      action.type === "repay" ||
+      action.type === "supply_collateral" ||
+      action.type === "withdraw_collateral")
   );
 }
 
@@ -774,6 +787,8 @@ function deriveSimulationInput(
     case "withdraw":
     case "borrow":
     case "repay":
+    case "supply_collateral":
+    case "withdraw_collateral":
     case "stake":
     case "unstake":
     case "bridge":
@@ -811,6 +826,7 @@ function deriveSimulationOutput(
       return { asset: String(action.assetOut), amount: amountText };
     case "withdraw":
     case "borrow":
+    case "withdraw_collateral":
     case "unstake":
     case "bridge":
     case "transfer":
@@ -823,6 +839,7 @@ function deriveSimulationOutput(
       return { asset: String(action.asset), amount: amountText };
     case "lend":
     case "repay":
+    case "supply_collateral":
     case "stake":
     case "add_liquidity":
     case "mint_py":

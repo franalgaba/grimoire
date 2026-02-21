@@ -21,7 +21,7 @@
  *  - Nested config blocks (rate_limit:, default_constraints:, retry:) → `key: {` … `}`
  */
 
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 // ─────────────────────────────────────────────────────────────────────────────

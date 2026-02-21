@@ -145,7 +145,7 @@ export function formatRunReportText(report: RunReportEnvelope): string {
     lines.push("  (none)");
   } else {
     for (const [key, value] of bindings) {
-      lines.push(`  ${key}: ${JSON.stringify(value)}`);
+      lines.push(`  ${key}: ${stringifyValue(value)}`);
     }
   }
 
@@ -208,5 +208,11 @@ function formatEventData(data: Record<string, unknown>): string {
     return "";
   }
 
-  return pairs.map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(", ");
+  return pairs.map(([key, value]) => `${key}=${stringifyValue(value)}`).join(", ");
+}
+
+function stringifyValue(value: unknown): string {
+  return JSON.stringify(value, (_key, innerValue) =>
+    typeof innerValue === "bigint" ? innerValue.toString() : innerValue
+  );
 }

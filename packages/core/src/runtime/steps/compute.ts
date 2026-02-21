@@ -5,8 +5,8 @@
 
 import type { ExecutionContext, StepResult } from "../../types/execution.js";
 import type { ComputeStep } from "../../types/steps.js";
-import { setBinding } from "../context.js";
 import type { InMemoryLedger } from "../context.js";
+import { setBinding } from "../context.js";
 import { createEvalContext, evaluateAsync } from "../expression-evaluator.js";
 
 export async function executeComputeStep(

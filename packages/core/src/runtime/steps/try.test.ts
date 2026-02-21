@@ -7,7 +7,7 @@ import type { ExecutionContext, StepResult } from "../../types/execution.js";
 import type { SpellIR } from "../../types/ir.js";
 import type { Address } from "../../types/primitives.js";
 import type { TryStep } from "../../types/steps.js";
-import { InMemoryLedger, createContext } from "../context.js";
+import { createContext, InMemoryLedger } from "../context.js";
 import type { EvalContext } from "../expression-evaluator.js";
 import { executeTryStep } from "./try.js";
 

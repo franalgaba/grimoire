@@ -704,6 +704,7 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
         venue: raw.venue as string,
         asset: raw.asset as string,
         amount: raw.amount === "max" ? "max" : parseExpressionSafe(raw.amount as string, errors),
+        marketId: parseOptionalMarketId(raw.market_id ?? raw.marketId),
       } as Action;
 
     case "withdraw":
@@ -712,6 +713,7 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
         venue: raw.venue as string,
         asset: raw.asset as string,
         amount: raw.amount === "max" ? "max" : parseExpressionSafe(raw.amount as string, errors),
+        marketId: parseOptionalMarketId(raw.market_id ?? raw.marketId),
       } as Action;
 
     case "borrow":
@@ -721,6 +723,7 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
         asset: raw.asset as string,
         amount: parseExpressionSafe(raw.amount as string, errors),
         collateral: raw.collateral as string | undefined,
+        marketId: parseOptionalMarketId(raw.market_id ?? raw.marketId),
       } as Action;
 
     case "repay":
@@ -729,6 +732,25 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
         venue: raw.venue as string,
         asset: raw.asset as string,
         amount: raw.amount === "max" ? "max" : parseExpressionSafe(raw.amount as string, errors),
+        marketId: parseOptionalMarketId(raw.market_id ?? raw.marketId),
+      } as Action;
+
+    case "supply_collateral":
+      return {
+        type: "supply_collateral",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseExpressionSafe(raw.amount as string, errors),
+        marketId: parseOptionalMarketId(raw.market_id ?? raw.marketId),
+      } as Action;
+
+    case "withdraw_collateral":
+      return {
+        type: "withdraw_collateral",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseExpressionSafe(raw.amount as string, errors),
+        marketId: parseOptionalMarketId(raw.market_id ?? raw.marketId),
       } as Action;
 
     case "stake":
@@ -1026,6 +1048,14 @@ function parseOutputAssets(value: unknown): string[] | undefined {
   }
 
   return undefined;
+}
+
+function parseOptionalMarketId(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function parsePendleInputs(value: unknown, errors: CompilationError[]): PendleInputAmount[] {
