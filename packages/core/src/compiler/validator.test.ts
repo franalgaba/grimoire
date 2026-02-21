@@ -245,6 +245,81 @@ describe("Validator", () => {
     );
   });
 
+  test("reports QUOTED_ADDRESS_LITERAL for quoted token/address action fields", () => {
+    const ir = createValidIR();
+    ir.aliases.push({
+      alias: "pendle",
+      chain: 1,
+      address: "0x0000000000000000000000000000000000000010",
+    });
+    ir.steps = [
+      {
+        kind: "action",
+        id: "swap_with_quoted",
+        action: {
+          type: "swap",
+          venue: "aave",
+          assetIn: '"0x00000000000000000000000000000000000000aa"',
+          assetOut: "USDC",
+          amount: { kind: "literal", value: 1, type: "int" },
+          mode: "exact_in",
+        },
+        constraints: {},
+        onFailure: "revert",
+        dependsOn: [],
+      },
+      {
+        kind: "action",
+        id: "pendle_with_quoted_output",
+        action: {
+          type: "add_liquidity",
+          venue: "pendle",
+          asset: "USDC",
+          amount: { kind: "literal", value: 1, type: "int" },
+          outputs: ['"0x00000000000000000000000000000000000000bb"'],
+        },
+        constraints: {},
+        onFailure: "revert",
+        dependsOn: [],
+      },
+    ];
+
+    const result = validateIR(ir);
+    expect(result.valid).toBe(false);
+    const quotedErrors = result.errors.filter((error) => error.code === "QUOTED_ADDRESS_LITERAL");
+    expect(quotedErrors).toHaveLength(2);
+    expect(quotedErrors.some((error) => error.message.includes("swap_with_quoted"))).toBe(true);
+    expect(quotedErrors.some((error) => error.message.includes("asset_in"))).toBe(true);
+    expect(quotedErrors.some((error) => error.message.includes("pendle_with_quoted_output"))).toBe(
+      true
+    );
+    expect(quotedErrors.some((error) => error.message.includes("outputs[0]"))).toBe(true);
+  });
+
+  test("does not report QUOTED_ADDRESS_LITERAL for bare address literals", () => {
+    const ir = createValidIR();
+    ir.steps = [
+      {
+        kind: "action",
+        id: "swap_with_bare",
+        action: {
+          type: "swap",
+          venue: "aave",
+          assetIn: "0x00000000000000000000000000000000000000aa",
+          assetOut: "USDC",
+          amount: { kind: "literal", value: 1, type: "int" },
+          mode: "exact_in",
+        },
+        constraints: {},
+        onFailure: "revert",
+        dependsOn: [],
+      },
+    ];
+
+    const result = validateIR(ir);
+    expect(result.errors.some((error) => error.code === "QUOTED_ADDRESS_LITERAL")).toBe(false);
+  });
+
   test("validates complex steps", () => {
     const ir = createValidIR();
     ir.steps = [

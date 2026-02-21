@@ -23,7 +23,9 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "dependencies": {
     "ethers": "^6.12.1",
     "viem": "^2.21.0",

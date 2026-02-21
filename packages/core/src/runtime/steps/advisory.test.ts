@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import type { SpellIR } from "../../types/ir.js";
 import type { Address } from "../../types/primitives.js";
 import type { AdvisoryStep } from "../../types/steps.js";
-import { InMemoryLedger, createContext } from "../context.js";
+import { createContext, InMemoryLedger } from "../context.js";
 import { executeAdvisoryStep } from "./advisory.js";
 
 function createSpell(): SpellIR {

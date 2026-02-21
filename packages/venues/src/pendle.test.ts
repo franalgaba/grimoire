@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Action, Address, Provider, VenueAdapterContext } from "@grimoirelabs/core";
+import type { Action, Address, Provider, SpellIR, VenueAdapterContext } from "@grimoirelabs/core";
+import { compile, preview } from "@grimoirelabs/core";
 import { decodeFunctionData, parseAbi } from "viem";
 import { createPendleAdapter } from "./pendle.js";
 
@@ -78,6 +79,16 @@ function createConvertResponse(outputAmount = "90", options?: { includeTxValue?:
       },
     ],
   };
+}
+
+function assertCompileSuccess(
+  result: ReturnType<typeof compile>
+): asserts result is { success: true; ir: SpellIR; errors: never[]; warnings: never[] } {
+  if (!result.success || !result.ir) {
+    throw new Error(
+      `Expected compile success, got: ${result.errors.map((e) => e.message).join("; ")}`
+    );
+  }
 }
 
 describe("Pendle adapter", () => {
@@ -163,6 +174,51 @@ describe("Pendle adapter", () => {
     expect(request.slippage).toBe(0.0123);
   });
 
+  test("propagates DSL max_slippage through runtime constraint resolution to Pendle request", async () => {
+    let requestBody: unknown;
+    const adapter = createPendleAdapter({
+      fetchFn: async (_input, init) => {
+        requestBody = init?.body ? JSON.parse(String(init.body)) : undefined;
+        return new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+
+    const source = `spell PendleSlippage {
+  version: "1.0.0"
+  assets: [USDC, PT]
+  venues: {
+    pendle: @pendle
+  }
+  params: {
+    amount: 100
+  }
+  on manual: {
+    pendle.swap(USDC, PT, params.amount) with max_slippage=123
+  }
+}`;
+
+    const compiled = compile(source);
+    assertCompileSuccess(compiled);
+
+    const previewResult = await preview({
+      spell: compiled.ir,
+      vault: "0x00000000000000000000000000000000000000ff" as Address,
+      chain: 1,
+      adapters: [adapter],
+      provider: createCtx().provider,
+    });
+
+    expect(previewResult.success).toBe(true);
+    const request = requestBody as { slippage: number };
+    expect(request.slippage).toBe(0.0123);
+  });
+
   test("uses adapter slippage config when action max_slippage is absent", async () => {
     let requestBody: unknown;
     const adapter = createPendleAdapter({
@@ -194,6 +250,166 @@ describe("Pendle adapter", () => {
 
     const request = requestBody as { slippage: number };
     expect(request.slippage).toBe(0.0077);
+  });
+
+  test("uses default slippage when action and adapter slippage are absent", async () => {
+    let requestBody: unknown;
+    const adapter = createPendleAdapter({
+      fetchFn: async (_input, init) => {
+        requestBody = init?.body ? JSON.parse(String(init.body)) : undefined;
+        return new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "pendle",
+        assetIn: "USDC",
+        assetOut: "PT",
+        amount: 100n,
+        mode: "exact_in",
+      } as Action,
+      createCtx()
+    );
+
+    const request = requestBody as { slippage: number };
+    expect(request.slippage).toBe(0.005);
+  });
+
+  test("rejects negative max_slippage bps", async () => {
+    let called = false;
+    const adapter = createPendleAdapter({
+      fetchFn: async () => {
+        called = true;
+        return new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "pendle",
+          assetIn: "USDC",
+          assetOut: "PT",
+          amount: 100n,
+          mode: "exact_in",
+          constraints: {
+            maxSlippageBps: -1,
+          },
+        } as Action,
+        createCtx()
+      )
+    ).rejects.toThrow("within [0, 10000]");
+    expect(called).toBe(false);
+  });
+
+  test("rejects fractional max_slippage bps", async () => {
+    const adapter = createPendleAdapter({
+      fetchFn: async () =>
+        new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "pendle",
+          assetIn: "USDC",
+          assetOut: "PT",
+          amount: 100n,
+          mode: "exact_in",
+          constraints: {
+            maxSlippageBps: 12.5,
+          },
+        } as Action,
+        createCtx()
+      )
+    ).rejects.toThrow("integer");
+  });
+
+  test("rejects NaN max_slippage bps", async () => {
+    const adapter = createPendleAdapter({
+      fetchFn: async () =>
+        new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "pendle",
+          assetIn: "USDC",
+          assetOut: "PT",
+          amount: 100n,
+          mode: "exact_in",
+          constraints: {
+            maxSlippageBps: Number.NaN,
+          },
+        } as Action,
+        createCtx()
+      )
+    ).rejects.toThrow("finite integer");
+  });
+
+  test("rejects out-of-range max_slippage bps", async () => {
+    const adapter = createPendleAdapter({
+      fetchFn: async () =>
+        new Response(JSON.stringify(createConvertResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "pendle",
+          assetIn: "USDC",
+          assetOut: "PT",
+          amount: 100n,
+          mode: "exact_in",
+          constraints: {
+            maxSlippageBps: 10001,
+          },
+        } as Action,
+        createCtx()
+      )
+    ).rejects.toThrow("within [0, 10000]");
   });
 
   test("uses vault as default receiver when no explicit receiver is provided", async () => {

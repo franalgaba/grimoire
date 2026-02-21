@@ -8,12 +8,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Wallet as EthersWallet } from "ethers";
 import {
-  KeyLoadError,
   createKeystore,
   createWallet,
   createWalletFromConfig,
   generatePrivateKey,
   getAddressFromConfig,
+  KeyLoadError,
   loadPrivateKey,
 } from "./keystore.js";
 

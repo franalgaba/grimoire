@@ -108,10 +108,67 @@ describe("IR Generator", () => {
           id: "swap",
           action: { type: "swap", venue: "aave", asset_in: "USDC", asset_out: "USDC", amount: "1" },
         },
-        { id: "lend", action: { type: "lend", venue: "aave", asset: "USDC", amount: "1" } },
-        { id: "withdraw", action: { type: "withdraw", venue: "aave", asset: "USDC", amount: "1" } },
-        { id: "borrow", action: { type: "borrow", venue: "aave", asset: "USDC", amount: "1" } },
-        { id: "repay", action: { type: "repay", venue: "aave", asset: "USDC", amount: "1" } },
+        {
+          id: "lend",
+          action: {
+            type: "lend",
+            venue: "aave",
+            asset: "USDC",
+            amount: "1",
+            market_id: "market-1",
+          },
+        },
+        {
+          id: "withdraw",
+          action: {
+            type: "withdraw",
+            venue: "aave",
+            asset: "USDC",
+            amount: "1",
+            market_id: "market-1",
+          },
+        },
+        {
+          id: "borrow",
+          action: {
+            type: "borrow",
+            venue: "aave",
+            asset: "USDC",
+            amount: "1",
+            collateral: "WETH",
+            market_id: "market-1",
+          },
+        },
+        {
+          id: "repay",
+          action: {
+            type: "repay",
+            venue: "aave",
+            asset: "USDC",
+            amount: "1",
+            market_id: "market-1",
+          },
+        },
+        {
+          id: "supply_collateral",
+          action: {
+            type: "supply_collateral",
+            venue: "aave",
+            asset: "WETH",
+            amount: "1",
+            market_id: "market-1",
+          },
+        },
+        {
+          id: "withdraw_collateral",
+          action: {
+            type: "withdraw_collateral",
+            venue: "aave",
+            asset: "WETH",
+            amount: "1",
+            market_id: "market-1",
+          },
+        },
         { id: "stake", action: { type: "stake", venue: "aave", asset: "USDC", amount: "1" } },
         { id: "unstake", action: { type: "unstake", venue: "aave", asset: "USDC", amount: "1" } },
         { id: "claim", action: { type: "claim", venue: "aave" } },
@@ -124,7 +181,26 @@ describe("IR Generator", () => {
 
     const result = generateIR(source);
     expect(result.success).toBe(true);
-    expect(result.ir?.steps.length).toBe(9);
+    expect(result.ir?.steps.length).toBe(11);
+
+    const steps = result.ir?.steps ?? [];
+    const lend = steps.find((step) => step.kind === "action" && step.id === "lend");
+    expect(lend?.kind).toBe("action");
+    if (lend?.kind === "action" && lend.action.type === "lend") {
+      expect(lend.action.marketId).toBe("market-1");
+    }
+
+    const supplyCollateral = steps.find(
+      (step) => step.kind === "action" && step.id === "supply_collateral"
+    );
+    expect(supplyCollateral?.kind).toBe("action");
+    if (
+      supplyCollateral?.kind === "action" &&
+      supplyCollateral.action.type === "supply_collateral"
+    ) {
+      expect(supplyCollateral.action.marketId).toBe("market-1");
+      expect(supplyCollateral.action.asset).toBe("WETH");
+    }
   });
 
   test("transforms typed pendle actions", () => {

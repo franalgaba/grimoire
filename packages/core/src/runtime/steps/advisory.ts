@@ -10,8 +10,8 @@ import type {
   StepResult,
 } from "../../types/execution.js";
 import type { AdvisoryStep } from "../../types/steps.js";
-import { incrementAdvisoryCalls, setBinding } from "../context.js";
 import type { InMemoryLedger } from "../context.js";
+import { incrementAdvisoryCalls, setBinding } from "../context.js";
 import { createEvalContext, evaluateAsync } from "../expression-evaluator.js";
 
 export interface AdvisoryHandlerInput {

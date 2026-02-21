@@ -5,10 +5,9 @@
 import { describe, expect, test } from "bun:test";
 import type { WaitStep } from "../../types/steps.js";
 import { compile } from "../index.js";
+import { compileGrimoire, parseGrimoire } from "./index.js";
 import { parse } from "./parser.js";
 import { transform } from "./transformer.js";
-
-import { compileGrimoire, parseGrimoire } from "./index.js";
 
 describe("Module exports", () => {
   test("parseGrimoire returns SpellSource", () => {

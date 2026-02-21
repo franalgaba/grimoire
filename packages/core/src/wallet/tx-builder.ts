@@ -11,8 +11,8 @@ import { encodeFunctionData, parseAbi } from "viem";
 import type { Action } from "../types/actions.js";
 import type { Address } from "../types/primitives.js";
 import type { Provider } from "./provider.js";
-import { getNativeCurrencySymbol, isNativeCurrency } from "./types.js";
 import type { GasEstimate, TransactionRequest } from "./types.js";
+import { getNativeCurrencySymbol, isNativeCurrency } from "./types.js";
 
 /** Standard ERC20 ABI */
 const ERC20_ABI = parseAbi([

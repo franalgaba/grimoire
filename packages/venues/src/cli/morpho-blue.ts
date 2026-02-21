@@ -2,7 +2,7 @@
 
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { createMorphoBlueAdapter } from "../morpho-blue.js";
-import { type OutputFormat, getOption, parseArgs, printResult } from "./utils.js";
+import { getOption, type OutputFormat, parseArgs, printResult } from "./utils.js";
 
 async function main() {
   const { command, options } = parseArgs(process.argv.slice(2));

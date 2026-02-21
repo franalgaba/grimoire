@@ -12,7 +12,7 @@ import type { VenueAdapter } from "../../venues/types.js";
 import type { Executor } from "../../wallet/executor.js";
 import type { Provider } from "../../wallet/provider.js";
 import { CircuitBreakerManager } from "../circuit-breaker.js";
-import { InMemoryLedger, createContext } from "../context.js";
+import { createContext, InMemoryLedger } from "../context.js";
 import { executeActionStep, previewActionStep } from "./action.js";
 
 function createSpell(): SpellIR {

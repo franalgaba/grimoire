@@ -111,14 +111,20 @@ Implementation notes:
 ## `morpho_blue`
 
 - Type: `evm`
-- Actions: `lend`, `withdraw`, `borrow`, `repay`
-- Data endpoints: `info`, `addresses`, `vaults`
+- Actions: `lend`, `withdraw`, `borrow`, `repay`, `supply_collateral`, `withdraw_collateral`
+- Data endpoints: `info`, `addresses`, `vaults`, `markets`
 
 Implementation notes:
 
 - Encodes Blue contract calls with `blueAbi`.
 - Uses market resolution by loan token and optional collateral.
-- Approval path for `lend` and `repay`.
+- `supply_collateral` / `withdraw_collateral` resolve by collateral token.
+- Approval path for `lend`, `repay`, and `supply_collateral`.
+- Borrow preflight checks in preview/dry-run fail fast for:
+  - zero position collateral
+  - insufficient market liquidity
+  - clear collateral headroom shortfalls (when oracle price is available)
+- Borrow preflight errors include market context and suggest `supply_collateral`.
 
 Default embedded Base markets include:
 
@@ -153,6 +159,13 @@ Implementation notes:
 - `swap` only supports `mode: exact_in`; `exact_out` fails fast.
 - Default aggregator policy is disabled (`enableAggregator=false`) unless explicitly enabled per action.
 - Supports `max_slippage`, `min_output`, `require_quote`, `max_gas`.
+- `max_slippage` is validated as finite integer bps in `[0, 10000]`.
+- Slippage is always sent to Pendle as canonical decimal (`bps / 10000`).
+
+Output token formatting notes:
+
+- For `assetOut` and `outputs`, use bare address literals when passing explicit token addresses.
+- Quoted address-like strings (for example `"0x..."`) are invalid and surface validator code `QUOTED_ADDRESS_LITERAL`.
 
 ## `hyperliquid`
 

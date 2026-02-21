@@ -45,3 +45,6 @@ grimoire venue pendle market-tokens --chain 8453 --market 0x... --format json
 - Use `--format json` for automation and nested payloads.
 - Pendle `swap` currently supports `mode: exact_in` only.
 - Aggregators are disabled by default in adapter actions unless explicitly enabled.
+- For Pendle token outputs (`assetOut`, `outputs`), use bare address literals (`0x...`) and not quoted strings (`\"0x...\"`).
+- Quoted address-like token values trigger validator code `QUOTED_ADDRESS_LITERAL`.
+- `max_slippage` is validated as integer bps in `[0, 10000]` and converted to decimal (`bps / 10000`) before API requests.

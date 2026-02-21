@@ -52,7 +52,7 @@ function parseFrontmatter(content: string): { name?: string; allowedTools?: stri
     const [, key, value] = match;
     currentKey = key;
     if (key === "name") {
-      result.name = value.replace(/^\"|\"$/g, "");
+      result.name = value.replace(/^"|"$/g, "");
     }
     if (allowedToolsKeys.has(key)) {
       if (value.startsWith("[") && value.endsWith("]")) {
@@ -60,11 +60,11 @@ function parseFrontmatter(content: string): { name?: string; allowedTools?: stri
         if (inner) {
           result.allowedTools = inner
             .split(",")
-            .map((v) => v.trim().replace(/^\"|\"$/g, ""))
+            .map((v) => v.trim().replace(/^"|"$/g, ""))
             .filter(Boolean);
         }
       } else if (value) {
-        result.allowedTools = [value.replace(/^\"|\"$/g, "")];
+        result.allowedTools = [value.replace(/^"|"$/g, "")];
       } else {
         result.allowedTools = [];
       }

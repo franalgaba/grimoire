@@ -2,7 +2,7 @@
  * Brace-delimited tokenizer for Grimoire syntax
  */
 
-import { type SourceLocation, TokenizeError, loc } from "./errors.js";
+import { loc, type SourceLocation, TokenizeError } from "./errors.js";
 
 // =============================================================================
 // TOKEN TYPES

@@ -294,6 +294,16 @@ Checks:
 - required environment variables
 - adapter chain support (when `--chain` is provided)
 - RPC reachability via block-number fetch (when `--chain` is provided)
+- Morpho borrow readiness (when `--adapter morpho_blue` and `--chain` are provided):
+  - selected market metadata
+  - wallet collateral token balance
+  - collateral allowance to Morpho
+  - position shares/collateral snapshot
+  - ready/not-ready borrow verdict
+
+Morpho readiness wallet source:
+
+- `GRIMOIRE_WALLET_ADDRESS` (preferred), then `WALLET_ADDRESS`, then `VAULT_ADDRESS`.
 
 Offchain adapter note:
 

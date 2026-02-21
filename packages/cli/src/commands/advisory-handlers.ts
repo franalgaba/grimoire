@@ -1,17 +1,17 @@
 import { join } from "node:path";
-import { SqliteStateStore } from "@grimoirelabs/core";
 import type { AdvisoryHandler, AdvisoryHandlerInput, LedgerEntry } from "@grimoirelabs/core";
+import { SqliteStateStore } from "@grimoirelabs/core";
+import type { AgentSessionEvent, ResourceDiagnostic, Skill } from "@mariozechner/pi-coding-agent";
 import {
   AuthStorage,
+  createAgentSession,
+  createCodingTools,
+  createReadOnlyTools,
   DefaultResourceLoader,
   ModelRegistry,
   SessionManager,
   SettingsManager,
-  createAgentSession,
-  createCodingTools,
-  createReadOnlyTools,
 } from "@mariozechner/pi-coding-agent";
-import type { AgentSessionEvent, ResourceDiagnostic, Skill } from "@mariozechner/pi-coding-agent";
 
 type PiToolsMode = "none" | "read" | "coding";
 

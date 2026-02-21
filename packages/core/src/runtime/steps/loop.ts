@@ -6,7 +6,7 @@
 import type { ExecutionContext, StepResult } from "../../types/execution.js";
 import type { LoopStep } from "../../types/steps.js";
 import type { InMemoryLedger } from "../context.js";
-import { type EvalContext, createEvalContext, evaluateAsync } from "../expression-evaluator.js";
+import { createEvalContext, type EvalContext, evaluateAsync } from "../expression-evaluator.js";
 
 export interface LoopResult extends StepResult {
   iterations: number;

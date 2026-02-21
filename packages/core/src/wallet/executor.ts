@@ -6,7 +6,7 @@ import type {
   VenueBuildResult,
   VenueRegistry,
 } from "../venues/types.js";
-import { type Provider, formatGasCostUsd, formatWei } from "./provider.js";
+import { formatGasCostUsd, formatWei, type Provider } from "./provider.js";
 import { type BuiltTransaction, TransactionBuilder } from "./tx-builder.js";
 import type { TransactionReceipt, TransactionRequest, Wallet } from "./types.js";
 import { getChainName, getNativeCurrencySymbol, isTestnet } from "./types.js";

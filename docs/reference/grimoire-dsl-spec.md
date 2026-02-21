@@ -71,6 +71,12 @@ Constraint key normalization in action transform:
 - `min_out` -> `min_output`
 - `max_in` -> `max_input`
 
+Morpho-specific action mappings include:
+
+- `morpho_blue.supply_collateral(asset, amount[, market_id])` -> `type: "supply_collateral"`
+- `morpho_blue.withdraw_collateral(asset, amount[, market_id])` -> `type: "withdraw_collateral"`
+- Optional `market_id` is also mapped for `lend`, `withdraw`, `repay`, and `borrow`.
+
 ## IR (`SpellIR`) Structure
 
 Key fields:
@@ -137,6 +143,7 @@ Checks include:
 - advisory requirements (`timeout`, `fallback`, output schema, output binding)
 - advisory policy checks (`on_violation`, clamp constraints)
 - expression references in actions and guards
+- quoted address literal detection in action token/address fields (`QUOTED_ADDRESS_LITERAL`)
 
 Outputs:
 

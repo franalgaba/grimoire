@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
-import { type OutputFormat, getOption, parseArgs, printResult, requireOption } from "./utils.js";
+import { getOption, type OutputFormat, parseArgs, printResult, requireOption } from "./utils.js";
 
 async function main() {
   const { command, options } = parseArgs(process.argv.slice(2));
@@ -416,8 +416,8 @@ function createSnapshotLines(args: string[]): string[] {
   const snapshotSource = args.join(" ");
   const lines: string[] = [];
   lines.push("params:");
-  lines.push(`  snapshot_at: \"${snapshotAt}\"`);
-  lines.push(`  snapshot_source: \"${snapshotSource}\"`);
+  lines.push(`  snapshot_at: "${snapshotAt}"`);
+  lines.push(`  snapshot_source: "${snapshotSource}"`);
   return lines;
 }
 

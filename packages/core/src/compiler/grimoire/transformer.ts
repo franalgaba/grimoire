@@ -775,6 +775,8 @@ export class Transformer {
       borrow: "borrow",
       repay: "repay",
       withdraw: "withdraw",
+      supply_collateral: "supply_collateral",
+      withdraw_collateral: "withdraw_collateral",
       stake: "stake",
       unstake: "unstake",
       claim: "claim",
@@ -849,21 +851,28 @@ export class Transformer {
       actionType === "lend" ||
       actionType === "withdraw" ||
       actionType === "repay" ||
+      actionType === "supply_collateral" ||
+      actionType === "withdraw_collateral" ||
       actionType === "stake" ||
       actionType === "unstake"
     ) {
       const assetArg = stmt.args[0];
       const amountArg = stmt.args[1];
+      const marketIdArg = stmt.args[2];
       if (assetArg) {
         action.asset = this.exprToString(assetArg);
       }
       if (amountArg) {
         action.amount = this.exprToString(amountArg);
       }
+      if (marketIdArg) {
+        action.market_id = this.exprToValue(marketIdArg);
+      }
     } else if (actionType === "borrow") {
       const assetArg = stmt.args[0];
       const amountArg = stmt.args[1];
       const collateralArg = stmt.args[2];
+      const marketIdArg = stmt.args[3];
       if (assetArg) {
         action.asset = this.exprToString(assetArg);
       }
@@ -872,6 +881,9 @@ export class Transformer {
       }
       if (collateralArg) {
         action.collateral = this.exprToString(collateralArg);
+      }
+      if (marketIdArg) {
+        action.market_id = this.exprToValue(marketIdArg);
       }
     } else if (actionType === "claim") {
       const assetArg = stmt.args[0];

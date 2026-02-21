@@ -6,8 +6,8 @@
 
 import { Command } from "commander";
 import { castCommand } from "./commands/cast.js";
-import { compileAllCommand } from "./commands/compile-all.js";
 import { compileCommand } from "./commands/compile.js";
+import { compileAllCommand } from "./commands/compile-all.js";
 import { collectRepeatedOption } from "./commands/cross-chain-helpers.js";
 import { historyCommand } from "./commands/history.js";
 import { initCommand } from "./commands/init.js";

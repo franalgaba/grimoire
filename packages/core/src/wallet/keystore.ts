@@ -11,13 +11,13 @@
 import { readFileSync } from "node:fs";
 import { Wallet as EthersWallet } from "ethers";
 import {
-  http,
   type Account,
   type Chain,
+  createWalletClient,
+  http,
+  publicActions,
   type Transport,
   type WalletClient,
-  createWalletClient,
-  publicActions,
 } from "viem";
 import {
   mnemonicToAccount,

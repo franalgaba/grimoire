@@ -163,8 +163,10 @@ export function createPendleAdapter(config: PendleAdapterConfig = {}): VenueAdap
         throw new Error(`Pendle adapter does not support action '${action.type}'`);
       }
 
-      const slippageBps =
-        action.constraints?.maxSlippageBps ?? config.slippageBps ?? DEFAULT_SLIPPAGE_BPS;
+      const slippageBps = resolveSlippageBps(
+        action.constraints?.maxSlippageBps,
+        config.slippageBps
+      );
       const request = toConvertRequest(action, ctx, config, slippageBps);
 
       const convert = await requestConvert({
@@ -711,6 +713,24 @@ function parseOptionalBoolean(value: unknown): boolean | undefined {
     if (value === "false") return false;
   }
   return undefined;
+}
+
+function resolveSlippageBps(actionBps: number | undefined, configBps: number | undefined): number {
+  const source = actionBps ?? configBps ?? DEFAULT_SLIPPAGE_BPS;
+  return validateSlippageBps(source);
+}
+
+function validateSlippageBps(value: number): number {
+  if (!Number.isFinite(value)) {
+    throw new Error(`Pendle max_slippage must be a finite integer bps value; received ${value}`);
+  }
+  if (!Number.isInteger(value)) {
+    throw new Error(`Pendle max_slippage must be an integer bps value; received ${value}`);
+  }
+  if (value < 0 || value > 10_000) {
+    throw new Error(`Pendle max_slippage must be within [0, 10000] bps; received ${value}`);
+  }
+  return value;
 }
 
 function bpsToDecimal(bps: number): number {
