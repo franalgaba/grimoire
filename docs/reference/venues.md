@@ -33,6 +33,7 @@ Default adapter bundle order:
 - `hyperliquid`
 - `across`
 - `pendle`
+- `polymarket`
 
 ## Constraint Matrix
 
@@ -47,6 +48,7 @@ Default adapter bundle order:
 | `across` | ✓ | ✓ | - | - | - | - | ✓ | ✓ | ✓ |
 | `hyperliquid` | - | - | - | - | - | - | - | - | - |
 | `pendle` | ✓ | ✓ | - | - | - | - | ✓ | - | ✓ |
+| `polymarket` | - | - | - | - | - | - | - | - | - |
 
 Unsupported constraints fail fast with:
 
@@ -181,6 +183,31 @@ Implementation notes:
 - `hyperliquidAdapter` requires key-configured factory for real execution.
 - Foundry EVM tools (`anvil`, `cast`) are not applicable to Hyperliquid execution/diagnostics.
 
+## `polymarket`
+
+- Type: `offchain`
+- Actions: `custom`
+- Supported chains in metadata: `[137]`
+- Data endpoints: `book`, `midpoint`, `spread`, `events`, `markets`
+
+Implementation notes:
+
+- Order placement is represented as `custom` action with `op: "order"`.
+- Supported custom ops: `order`, `cancel_order`, `cancel_orders`, `cancel_all`, `heartbeat`.
+- `order` normalization accepts CLOB-style fields (`token_id`, `price`, `size`, `side`, `order_type`) and transformer-style aliases (`coin`, `arg0..arg5`).
+- Uses `@polymarket/clob-client` under the hood and maps:
+  - `GTC`/`GTD` -> `createAndPostOrder`
+  - `FOK`/`FAK` -> `createAndPostMarketOrder`
+- `reduce_only` is treated as a compatibility alias for `neg_risk` (boolean) or `tick_size` (string) when present.
+- The Grimoire Polymarket venue CLI wrapper (`grimoire venue polymarket ...`) uses the official `polymarket` CLI binary as backend.
+  - Install: `brew tap Polymarket/polymarket-cli && brew install polymarket`
+  - Optional override: `POLYMARKET_OFFICIAL_CLI=/path/to/polymarket`
+- `polymarketAdapter` resolves auth from env by default:
+  - required: `POLYMARKET_PRIVATE_KEY`
+  - optional API creds: `POLYMARKET_API_KEY`, `POLYMARKET_API_SECRET`, `POLYMARKET_API_PASSPHRASE`
+  - optional derive toggle: `POLYMARKET_DERIVE_API_KEY` (default: true)
+- Advanced users can inject a prebuilt client with `createPolymarketAdapter({ client })`.
+
 ## Core vs Venues Boundary
 
 - `@grimoirelabs/core` remains protocol-agnostic.
@@ -196,6 +223,7 @@ Implementation notes:
 - Morpho Blue
 - Hyperliquid
 - Pendle
+- Polymarket
 
 `grimoire venue doctor ...` runs cross-adapter diagnostics from the main CLI without calling a per-venue binary.
 
@@ -222,6 +250,7 @@ Per-venue CLIs support `--format <auto|json|table>` (plus `spell` for snapshot-c
 - `grimoire-morpho-blue`
 - `grimoire-hyperliquid`
 - `grimoire-pendle`
+- `grimoire-polymarket`
 
 ### `grimoire-aave`
 
@@ -280,3 +309,19 @@ Commands:
 - `markets`
 - `assets`
 - `market-tokens`
+
+### `grimoire-polymarket`
+
+Commands:
+
+- Official passthrough command groups:
+`markets`, `events`, `tags`, `series`, `sports`, `clob`, `data`, `status`.
+- Canonical agent commands:
+`info`, `search-markets`.
+- Blocked groups (not exposed by wrapper):
+`wallet`, `bridge`, `approve`, `ctf`, `setup`, `upgrade`, `shell`.
+- Legacy aliases remain for backward compatibility (`market`, `book`, `midpoint`, `spread`, `price`, `last-trade-price`, `tick-size`, `neg-risk`, `fee-rate`, `events`, `order`, `trades`, `open-orders`, `balance-allowance`, `closed-only-mode`) but should not be used for new agent flows.
+
+`search-markets` supports cross-category discovery filters: `--query`, `--slug`, `--question`,
+`--event`, `--tag`, `--category`, `--league`, `--sport`, plus pagination controls including
+`--stop-after-empty-pages`.

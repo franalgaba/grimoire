@@ -10,17 +10,39 @@ After this guide, you can:
 - resolve wallet address and balance
 - wrap and unwrap ETH and WETH
 - use the same wallet for `cast --dry-run` and live `cast`
+- reuse setup-managed password env safely in local and agent workflows
 
-## 1. Set Shared Variables
+## 1. Run Setup Once (Recommended)
+
+Run setup first to onboard execute mode and wallet defaults:
+
+```bash
+grimoire setup
+```
+
+Setup will:
+
+- prompt for wallet and keystore settings
+- run smoke preview and readiness checks
+- write `.grimoire/setup.env` when password is entered interactively (unless `--no-save-password-env`)
+- auto-load `.grimoire/setup.env` on future CLI runs under the same project tree
+
+## 2. Set Shared Variables
 
 ```bash
 export KEYSTORE=.grimoire/dev/keystore.json
-export KEYSTORE_PASSWORD=dev-only-password
 export RPC_URL=http://127.0.0.1:8545
 export CHAIN=1
 ```
 
-## 2. Create Or Import Wallet
+If setup already wrote `.grimoire/setup.env`, `KEYSTORE_PASSWORD` is auto-loaded by the CLI.
+If not, set it explicitly:
+
+```bash
+export KEYSTORE_PASSWORD=dev-only-password
+```
+
+## 3. Create Or Import Wallet
 
 Generate a new wallet:
 
@@ -41,7 +63,7 @@ grimoire wallet import \
   --password-env KEYSTORE_PASSWORD
 ```
 
-## 3. Check Address And Balance
+## 4. Check Address And Balance
 
 ```bash
 grimoire wallet address \
@@ -55,7 +77,7 @@ grimoire wallet balance \
   --password-env KEYSTORE_PASSWORD
 ```
 
-## 4. Wrap And Unwrap ETH
+## 5. Wrap And Unwrap ETH
 
 Wrap:
 
@@ -84,7 +106,7 @@ Notes:
 - `wrap` and `unwrap` require ETH-native chains.
 - Default chain for wrap and unwrap is `8453`; pass `--chain` explicitly when needed.
 
-## 5. Run Dry-Run And Live Cast With Same Wallet
+## 6. Run Dry-Run And Live Cast With Same Wallet
 
 Dry-run:
 
@@ -107,7 +129,7 @@ grimoire cast spells/uniswap-swap-execute.spell \
   --password-env KEYSTORE_PASSWORD
 ```
 
-## 6. Optional JSON Output For Automation
+## 7. Optional JSON Output For Automation
 
 Most wallet subcommands support `--json`, for example:
 
@@ -126,5 +148,8 @@ grimoire wallet balance \
   - generate or import wallet first, or fix `--keystore` path
 - `No password available`
   - set `KEYSTORE_PASSWORD` or pass `--password-env <name>`
+  - if using setup-managed file outside project tree, set `GRIMOIRE_SETUP_ENV_FILE=/abs/path/to/.grimoire/setup.env`
+- `Unknown venue adapter "doctor"`
+  - your global CLI is outdated; upgrade or use repo-local invocation (`bun run packages/cli/src/index.ts ...`)
 - `WETH only exists on ETH-native chains`
   - switch to an ETH-native chain (`1`, `8453`, `10`, `42161`)

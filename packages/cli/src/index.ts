@@ -13,11 +13,15 @@ import { historyCommand } from "./commands/history.js";
 import { initCommand } from "./commands/init.js";
 import { logCommand } from "./commands/log.js";
 import { resumeCommand } from "./commands/resume.js";
+import { setupCommand } from "./commands/setup.js";
 import { simulateCommand } from "./commands/simulate.js";
 import { validateCommand } from "./commands/validate.js";
 import { venueCommand } from "./commands/venue.js";
 import { venuesCommand } from "./commands/venues.js";
 import { walletCommand } from "./commands/wallet.js";
+import { loadSetupEnv } from "./lib/setup-env.js";
+
+loadSetupEnv();
 
 const program = new Command();
 program.enablePositionalOptions();
@@ -34,6 +38,23 @@ program
   .option("-f, --force", "Overwrite existing files")
   .option("--runtime-quickstart", "Create an embedded runtime quickstart scaffold")
   .action(initCommand);
+
+// Setup command
+program
+  .command("setup")
+  .description("Guided local execute setup (wallet, RPC, and readiness checks)")
+  .option("--chain <id>", "Chain ID for execute setup checks")
+  .option("--rpc-url <url>", "RPC URL (or set RPC_URL_<chainId> / RPC_URL)")
+  .option("--adapter <name>", "Adapter for venue doctor check")
+  .option("--keystore <path>", "Path to keystore file")
+  .option("--password-env <name>", "Environment variable for keystore password")
+  .option("--key-env <name>", "Environment variable containing private key", "PRIVATE_KEY")
+  .option("--import-key", "Import private key from --key-env if keystore is missing")
+  .option("--no-save-password-env", "Do not write .grimoire/setup.env after prompting password")
+  .option("--no-doctor", "Skip venue doctor readiness check")
+  .option("--non-interactive", "Disable interactive prompts")
+  .option("--json", "Output setup result as JSON")
+  .action(setupCommand);
 
 // Compile command
 program

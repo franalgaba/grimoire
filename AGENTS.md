@@ -253,6 +253,8 @@ Supported adapters:
 - `morpho_blue` - isolated lending markets
 - `hyperliquid` (offchain) - spot + perps via API
 - `across` (bridge) - cross-chain bridging
+- `pendle` - hosted SDK convert routes
+- `polymarket` (offchain) - prediction market CLOB execution on Polygon
 
 Adapters can return multi-transaction plans to handle approvals. Offchain venues implement `executeAction`.
 
@@ -355,6 +357,7 @@ For swaps, **always set both `max_slippage` and `min_output`** to prevent unexpe
 - `grimoire validate <spell> [--strict] [--json]` - validate a `.spell` file
 - `grimoire simulate <spell> [--rpc-url <url>|<chainId>=<url>] [--destination-spell <spell>]` - simulate execution (dry run), with state persistence
 - `grimoire cast <spell> [--rpc-url <url>|<chainId>=<url>] [--destination-spell <spell>]` - execute a spell onchain, with state persistence
+- `grimoire setup [--chain <id>] [--rpc-url <url>] [--adapter <name>] [--keystore <path>] [--password-env <name>] [--key-env <name>] [--import-key] [--no-save-password-env] [--no-doctor] [--non-interactive] [--json]` - guided local execute onboarding (wallet + RPC + readiness checks, with optional `.grimoire/setup.env` writing/autoload)
 - `grimoire resume <runId> [--watch]` - resume a waiting cross-chain orchestration run
 - `grimoire history [spell]` - view execution history (all spells or runs for one spell)
 - `grimoire log <spell> <runId>` - view ledger events for a specific run
@@ -366,6 +369,8 @@ For swaps, **always set both `max_slippage` and `min_output`** to prevent unexpe
   - `grimoire-uniswap`
   - `grimoire-morpho-blue`
   - `grimoire-hyperliquid`
+  - `grimoire-pendle`
+  - `grimoire-polymarket`
 
 # Documentation and Skills Maintenance
 
@@ -377,6 +382,8 @@ Skills live in `skills/` and provide LLM-consumable context:
 - `skills/grimoire-uniswap/` - Uniswap V3/V4 venue CLI
 - `skills/grimoire-morpho-blue/` - Morpho Blue venue CLI + default markets
 - `skills/grimoire-hyperliquid/` - Hyperliquid venue CLI
+- `skills/grimoire-pendle/` - Pendle Hosted SDK metadata workflows
+- `skills/grimoire-polymarket/` - Polymarket CLOB custom action workflows
 
 Keep docs and skills in sync with code changes:
 
@@ -387,7 +394,7 @@ Keep docs and skills in sync with code changes:
 | New/changed venue adapter | `docs/reference/venues.md`, matching `skills/grimoire-<venue>/SKILL.md` |
 | New venue adapter added | Create `skills/grimoire-<venue>/SKILL.md`, update `docs/reference/venues.md` |
 | Test runner changes | `docs/how-to/run-tests.md` |
-| Wallet/keystore changes | `docs/reference/cli.md` (wallet section) |
+| Wallet/keystore changes | `docs/reference/cli.md` (setup + wallet sections), `docs/how-to/use-wallet-commands-end-to-end.md` |
 | Bridge/amount thresholds | `docs/how-to/bridge-with-across.md`, `docs/reference/venues.md` |
 | State persistence changes | This file (State Persistence section) |
 | New example spells | `README.md` (Examples section), `docs/reference/grimoire-dsl-spec.md` |

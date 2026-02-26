@@ -27,10 +27,36 @@ bun run packages/cli/src/index.ts --help
 ```
 
 Use the same invocation style for all remaining commands in this tutorial.
+If `venue doctor` is not recognized by a global install, switch to `npx -y @grimoirelabs/cli@latest` or repo-local invocation.
 
-## 2. Run a Known Good Spell (No Side Effects)
+## 2. Run Execute Setup
 
-Use `spells/compute-only.spell` to verify your environment.
+Run the execute-mode onboarding flow:
+
+```bash
+grimoire setup
+```
+
+This guided flow asks for required execute parameters (chain, RPC URL, wallet setup, readiness checks) and configures local execution.
+
+What setup does:
+
+- runs a smoke preview check before wallet/network checks
+- if RPC input is blank, uses default public RPC for the selected chain
+- configures wallet via existing keystore, env private key import, or generated key
+- runs `venue doctor` (unless disabled with `--no-doctor`)
+- if password is typed interactively, writes `.grimoire/setup.env` for reuse (disable with `--no-save-password-env`)
+- CLI auto-loads nearest `.grimoire/setup.env` on startup unless the same env var is already set
+
+Agent safety notes:
+
+- never paste passwords/private keys into agent prompts
+- prefer interactive hidden password prompts
+- treat `.grimoire/setup.env` as sensitive plaintext and keep it local-only
+
+## 3. Run a Known Good Spell (No Side Effects)
+
+Use `spells/compute-only.spell` to verify your environment after setup.
 
 ```bash
 grimoire validate spells/compute-only.spell
@@ -43,7 +69,7 @@ Expected result:
 - simulation finishes with a successful preview run
 - a run record is written unless `--no-state` is used
 
-## 3. Learn the Minimal Spell Shape
+## 4. Learn the Minimal Spell Shape
 
 Use this as the baseline when creating new spells:
 
@@ -67,7 +93,7 @@ grimoire validate spells/hello.spell
 grimoire simulate spells/hello.spell
 ```
 
-## 4. Agent-Assisted Workflow
+## 5. Agent-Assisted Workflow
 
 Install Grimoire skills:
 
@@ -84,6 +110,8 @@ Installed skill set includes:
 - `skills/grimoire-uniswap/` for Uniswap snapshots
 - `skills/grimoire-morpho-blue/` for Morpho snapshots
 - `skills/grimoire-hyperliquid/` for Hyperliquid snapshots
+- `skills/grimoire-pendle/` for Pendle metadata snapshots
+- `skills/grimoire-polymarket/` for Polymarket order workflow guidance
 
 Starter prompts for the agent:
 
@@ -91,7 +119,7 @@ Starter prompts for the agent:
 2. `Validate and simulate spells/hello.spell. If validation fails, fix and re-run until success.`
 3. `If the spell has value-moving actions, run cast --dry-run first and summarize risks before live cast.`
 
-## 5. Safe Path for Value-Moving Spells
+## 6. Safe Path for Value-Moving Spells
 
 For swaps/lend/borrow/bridge flows:
 

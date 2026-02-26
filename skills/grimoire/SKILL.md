@@ -3,7 +3,7 @@ name: grimoire
 description: Install and operate Grimoire, author .spell files with full syntax coverage (including advisory decision logic), and run compile/validate/simulate/cast safely. Use when users ask to create, edit, debug, validate, simulate, execute, or explain Grimoire strategies.
 compatibility: "Requires one of: global grimoire CLI, npx access to @grimoirelabs/cli, or repo-local Bun execution."
 metadata:
-  version: "2.5"
+  version: "2.6"
   focus: "installation usage syntax advisory execution"
 ---
 
@@ -19,7 +19,7 @@ Use this skill when the task includes:
 - creating or editing `.spell` files
 - syntax questions about DSL capability
 - advisory (`advise`) authoring, debugging, and replay workflows
-- compile/validate/simulate/cast/resume workflows
+- setup/compile/validate/simulate/cast/resume workflows
 - debugging spell compile/runtime failures
 
 ## Mandatory Loading Rules
@@ -57,15 +57,25 @@ Select the first working invocation and reuse it for the session.
 
 If one path fails, move to the next path automatically.
 
+If `grimoire venue doctor ...` fails with `Unknown venue adapter "doctor"`, prefer repo-local invocation (`bun run packages/cli/src/index.ts`) or upgrade global CLI.
+
 ## Fast Start (Immediate Success Path)
 
 Use this sequence before writing custom spells:
 
 1. `<grimoire-cmd> --help`
-2. `<grimoire-cmd> validate spells/compute-only.spell`
-3. `<grimoire-cmd> simulate spells/compute-only.spell --chain 1`
+2. `<grimoire-cmd> setup` (guided interactive execute onboarding)
+3. `<grimoire-cmd> validate spells/compute-only.spell`
+4. `<grimoire-cmd> simulate spells/compute-only.spell --chain 1`
 
 If all three pass, proceed to spell authoring.
+
+Setup security/runtime expectations:
+
+- setup prompts for hidden passwords and never echoes input
+- blank RPC input falls back to chain default public RPC
+- setup may write `.grimoire/setup.env` unless `--no-save-password-env` is used
+- CLI auto-loads nearest `.grimoire/setup.env` at startup without overriding existing env vars
 
 ## Authoring and Execution Policy
 
@@ -93,10 +103,15 @@ If all three pass, proceed to spell authoring.
 14. Use bare `0x...` address literals in action token fields; quoted address-like strings trigger `QUOTED_ADDRESS_LITERAL`.
 15. For Morpho doctor readiness checks, set wallet env explicitly (`GRIMOIRE_WALLET_ADDRESS` preferred, fallback `WALLET_ADDRESS`).
 16. If a cross-chain run is left waiting, continue with `resume <runId>` (use `--watch` to poll settlement).
+17. Never place passwords/private keys in agent prompts or inline command assignments.
+18. Prefer keystore + `--password-env` over `--private-key` for dry-run/live casts.
+19. Treat `.grimoire/setup.env` as plaintext secret material: keep local-only and rotate/remove when no longer needed.
+20. For commands run outside the project tree, set `GRIMOIRE_SETUP_ENV_FILE=/abs/path/to/.grimoire/setup.env` when needed.
 
 ## Command Surface (Core)
 
 - `init`
+- `setup`
 - `compile`
 - `compile-all`
 - `validate`
@@ -138,6 +153,7 @@ Use venue skills for snapshot parameters and market metadata:
 - `grimoire-morpho-blue`
 - `grimoire-hyperliquid`
 - `grimoire-pendle`
+- `grimoire-polymarket`
 
 Formatting policy for venue CLI output:
 

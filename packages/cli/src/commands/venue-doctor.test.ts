@@ -123,6 +123,28 @@ describe("venue doctor", () => {
     expect(report.checks.find((check) => check.name === "chain_support")?.status).toBe("fail");
   });
 
+  test("filters polymarket adapter by name", async () => {
+    const adapters: VenueAdapter[] = [
+      makeAdapter({
+        name: "polymarket",
+        supportedChains: [137],
+        actions: ["custom"],
+        supportedConstraints: [],
+      }),
+    ];
+
+    const report = await runVenueDoctor(
+      { adapter: "polymarket" },
+      {
+        adapters,
+        env: {},
+      }
+    );
+
+    expect(report.adapters).toHaveLength(1);
+    expect(report.adapters[0]?.name).toBe("polymarket");
+  });
+
   test("marks rpc check failed when provider call fails", async () => {
     const adapters: VenueAdapter[] = [
       makeAdapter({

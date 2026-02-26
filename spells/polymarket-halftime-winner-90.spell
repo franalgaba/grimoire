@@ -1,0 +1,128 @@
+# Single-spell Polymarket strategy:
+# - Scan La Liga matches around halftime
+# - Bet only when win probability >= 90%
+# - Place BUY orders on the winning-team token
+
+spell PolymarketHalftimeWinner90 {
+
+  version: "1.0.0"
+  description: "Single-spell advisory strategy: La Liga halftime winner bet when probability >= 90%"
+  assets: []
+
+  params: {
+    min_win_probability: 0.90
+    max_entry_price: 0.95
+    max_markets_per_run: 3
+    stake_size: 5
+    tick_size: "0.01"
+    use_mock_now: false
+    mock_now_iso: ""
+    allow_mock_halftime: false
+    mock_fixture_queries: []
+    use_mock_plan: false
+    mock_bets: []
+  }
+
+  venues: {
+    polymarket: @polymarket
+  }
+
+  advisors: {
+    polymarket_scout: {
+      model: "anthropic:haiku"
+      skills: ["web-search"]
+    }
+  }
+
+  on "*/5 * * * *": {
+    candidate_bets = params.mock_bets
+    if not params.use_mock_plan {
+      plan = advise polymarket_scout: "Return JSON only, matching the schema exactly. Deterministic workflow: 1) Define NOW: if context.use_mock_now=true and context.mock_now_iso is non-empty, use context.mock_now_iso; otherwise use real current time. 2) Build weekend fixtures (Europe/Madrid): if context.mock_fixture_queries is a non-empty array, use those fixture queries directly (TEST MODE fixture source). Otherwise, search the web for this weekend's La Liga fixtures and extract TEAM_A/TEAM_B. 3) Eligibility: if context.allow_mock_halftime=true, treat all step-2 fixtures as eligible halftime candidates. Otherwise keep only fixtures currently in-play/halftime; if none remain, return exactly {\"bets\":[]}. 4) Market lookup: use ONLY venue CLI (no direct HTTP). For each eligible fixture run `bun run packages/cli/src/index.ts venue polymarket search-markets --question \"<fixture query>\" --active-only true --open-only true --tradable-only true --all-pages false --max-pages 2 --limit 20 --format json`. If needed, fallback with one team-name query per side using same flags. Total tool calls <= 6. 5) Keep only markets matching fixture teams/date, dedupe by conditionId (fallback slug/question). 6) From matched markets, pick likely winner token_id and derive probability/limit_price from venue data. Keep only 0.90 <= probability <= 0.95 and limit_price <= context.max_entry_price. 7) Return schema JSON only." {
+        context: {
+          min_win_probability: params.min_win_probability
+          max_entry_price: params.max_entry_price
+          max_markets_per_run: params.max_markets_per_run
+          use_mock_now: params.use_mock_now
+          mock_now_iso: params.mock_now_iso
+          allow_mock_halftime: params.allow_mock_halftime
+          mock_fixture_queries: params.mock_fixture_queries
+        }
+        within: execution
+        output: {
+          type: object
+          fields: {
+            bets: {
+              type: array
+              items: {
+                type: object
+                fields: {
+                  should_bet: boolean
+                  token_id: string
+                  team: string
+                  event_slug: string
+                  probability: number
+                  limit_price: number
+                  reason: string
+                }
+              }
+            }
+          }
+        }
+        on_violation: reject
+        timeout: 120
+        fallback: { bets: [] }
+      }
+      candidate_bets = plan.bets
+    }
+
+    eligible_bets = candidate_bets | filter: {
+      keep = (
+        item.should_bet and
+        item.token_id and
+        item.token_id != "" and
+        item.probability >= params.min_win_probability and
+        item.probability <= 1 and
+        item.limit_price > 0 and
+        item.limit_price <= params.max_entry_price and
+        index < params.max_markets_per_run
+      )
+    }
+
+    candidates = 0
+    for bet in candidate_bets {
+      candidates = candidates + 1
+    }
+
+    placed = 0
+    for bet in eligible_bets {
+      order_result = polymarket.order(
+        bet.token_id,
+        bet.limit_price,
+        params.stake_size,
+        "BUY",
+        params.tick_size,
+        "FOK",
+      )
+      placed = placed + 1
+      emit halftime_bet_placed(
+        token_id=bet.token_id,
+        team=bet.team,
+        event_slug=bet.event_slug,
+        probability=bet.probability,
+        price=bet.limit_price,
+        stake=params.stake_size,
+        order_ref=order_result.reference,
+      )
+    }
+
+    emit halftime_scan_completed(
+      candidates_count=candidates,
+      placed_count=placed,
+      min_probability=params.min_win_probability,
+      use_mock_now=params.use_mock_now,
+      mock_now_iso=params.mock_now_iso,
+      allow_mock_halftime=params.allow_mock_halftime,
+      use_mock_plan=params.use_mock_plan,
+    )
+  }
+}

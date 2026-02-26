@@ -22,6 +22,7 @@ export const VENUE_CLI_MAP: Record<string, string> = {
   morpho: "morpho-blue",
   hyperliquid: "hyperliquid",
   pendle: "pendle",
+  polymarket: "polymarket",
 };
 
 const PRIMARY_ADAPTERS = [
@@ -30,6 +31,7 @@ const PRIMARY_ADAPTERS = [
   { name: "morpho-blue", aliases: ["morpho"] },
   { name: "hyperliquid", aliases: [] },
   { name: "pendle", aliases: [] },
+  { name: "polymarket", aliases: [] },
 ];
 
 export function normalizeAdapter(adapter: string): string {
@@ -41,7 +43,19 @@ export function normalizeAdapter(adapter: string): string {
 
 export function resolveVenueCliPath(cliName: string): string {
   const venuesRoot = resolveVenuesRoot();
-  return path.join(venuesRoot, "dist", "cli", `${cliName}.js`);
+  const srcPath = path.join(venuesRoot, "src", "cli", `${cliName}.ts`);
+  if (isBunRuntime() && existsSync(srcPath)) {
+    return srcPath;
+  }
+
+  const distPath = path.join(venuesRoot, "dist", "cli", `${cliName}.js`);
+  if (existsSync(distPath)) return distPath;
+
+  if (existsSync(srcPath)) {
+    return srcPath;
+  }
+
+  return distPath;
 }
 
 function resolveVenuesRoot(): string {
@@ -148,6 +162,11 @@ function printUsage(): void {
   }).join("\n");
 
   console.log(
-    `\nUsage:\n  grimoire venue <adapter> [args...]\n  grimoire venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]\n\nAdapters:\n${adapterLines}\n\nExamples:\n  grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell\n  grimoire venue uniswap tokens --chain 1 --symbol USDC\n  grimoire venue pendle chains\n  grimoire venue aave markets --chain 1\n  grimoire venue doctor --chain 1 --adapter uniswap\n`
+    `\nUsage:\n  grimoire venue <adapter> [args...]\n  grimoire venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]\n\nAdapters:\n${adapterLines}\n\nExamples:\n  grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell\n  grimoire venue uniswap tokens --chain 1 --symbol USDC\n  grimoire venue pendle chains\n  grimoire venue polymarket markets --format json\n  grimoire venue aave markets --chain 1\n  grimoire venue doctor --chain 1 --adapter uniswap\n`
   );
+}
+
+function isBunRuntime(): boolean {
+  const versions = process.versions as Record<string, string | undefined>;
+  return typeof versions.bun === "string";
 }

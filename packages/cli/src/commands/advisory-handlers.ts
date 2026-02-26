@@ -156,9 +156,29 @@ export function createPiAdvisoryHandler(config: PiAdvisoryConfig): AdvisoryHandl
       ? createVerboseSessionTracer(input.stepId, traceLogger)
       : undefined;
 
+    let activeTextBuffer = "";
+    const completedTextBuffers: string[] = [];
+
     const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
       emitToolTrace(event, input);
       verboseTrace?.handle(event);
+      if (event.type !== "message_update") return;
+      const detail = event.assistantMessageEvent as { type?: unknown; delta?: unknown };
+      if (detail.type === "text_start") {
+        activeTextBuffer = "";
+        return;
+      }
+      if (detail.type === "text_delta" && typeof detail.delta === "string") {
+        activeTextBuffer += detail.delta;
+        return;
+      }
+      if (detail.type === "text_end") {
+        const trimmed = activeTextBuffer.trim();
+        if (trimmed.length > 0) {
+          completedTextBuffers.push(activeTextBuffer);
+        }
+        activeTextBuffer = "";
+      }
     });
 
     try {
@@ -166,6 +186,10 @@ export function createPiAdvisoryHandler(config: PiAdvisoryConfig): AdvisoryHandl
       await session.prompt(prompt);
       const responseText = extractAssistantText(session.messages);
       return parseJsonResponse(responseText);
+    } catch (error) {
+      const fallbackText = extractTextFromEventBuffers(completedTextBuffers, activeTextBuffer);
+      if (!fallbackText) throw error;
+      return parseJsonResponse(fallbackText);
     } finally {
       unsubscribe();
       verboseTrace?.flushAll();
@@ -378,25 +402,82 @@ function buildOutputExample(schema: AdvisoryHandlerInput["outputSchema"]): unkno
 function extractAssistantText(
   messages: Array<{ role?: string; content?: unknown; text?: unknown }>
 ): string {
+  let lastAssistantError: string | undefined;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
     if (message?.role !== "assistant") continue;
+    const messageRecord = message as Record<string, unknown>;
+    const assistantError =
+      readStringCandidate(messageRecord.errorMessage) ?? readStringCandidate(messageRecord.error);
+    if (assistantError) {
+      lastAssistantError = assistantError;
+    }
     const content = message.content ?? message.text;
     if (typeof content === "string") return content;
+    if (typeof content === "object" && content !== null) {
+      const obj = content as {
+        text?: unknown;
+        output_text?: unknown;
+        content?: unknown;
+        value?: unknown;
+      };
+      const scalarCandidate =
+        readStringCandidate(obj.text) ??
+        readStringCandidate(obj.output_text) ??
+        readStringCandidate(obj.content) ??
+        readStringCandidate(obj.value);
+      if (scalarCandidate) return scalarCandidate;
+    }
     if (Array.isArray(content)) {
       const textBlocks = content
-        .filter(
-          (block) =>
-            typeof block === "object" &&
-            block !== null &&
-            (block as { type?: string }).type === "text"
-        )
-        .map((block) => (block as { text?: unknown }).text)
+        .map((block) => {
+          if (typeof block !== "object" || block === null) {
+            return undefined;
+          }
+          const typedBlock = block as {
+            type?: string;
+            text?: unknown;
+            output_text?: unknown;
+            content?: unknown;
+            value?: unknown;
+          };
+          if (typedBlock.type !== "text" && typedBlock.type !== "output_text") {
+            return undefined;
+          }
+          return (
+            readStringCandidate(typedBlock.text) ??
+            readStringCandidate(typedBlock.output_text) ??
+            readStringCandidate(typedBlock.content) ??
+            readStringCandidate(typedBlock.value)
+          );
+        })
         .filter((text): text is string => typeof text === "string");
       if (textBlocks.length > 0) return textBlocks.join("");
     }
   }
+  if (lastAssistantError) {
+    throw new Error(`Advisory model returned no text response: ${lastAssistantError}`);
+  }
   throw new Error("No assistant response found for advisory");
+}
+
+function readStringCandidate(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? value : undefined;
+}
+
+function extractTextFromEventBuffers(completed: string[], active: string): string | undefined {
+  if (active.trim().length > 0) {
+    completed.push(active);
+  }
+  for (let i = completed.length - 1; i >= 0; i -= 1) {
+    const candidate = completed[i];
+    if (typeof candidate !== "string") continue;
+    const trimmed = candidate.trim();
+    if (trimmed.length > 0) return candidate;
+  }
+  return undefined;
 }
 
 function parseJsonResponse(text: string): unknown {

@@ -5,6 +5,7 @@ This page documents the `grimoire` CLI surface from `packages/cli/src/index.ts` 
 ## Command Summary
 
 - `grimoire init`
+- `grimoire setup`
 - `grimoire compile <spell>`
 - `grimoire compile-all [dir]`
 - `grimoire validate <spell>`
@@ -36,6 +37,73 @@ Creates:
 - `.grimoire/config.yaml`
 - `.grimoire/aliases/default.yaml`
 - `.grimoire/spells/...`
+
+## `setup`
+
+Configure local **execute mode** onboarding (wallet, RPC, and readiness checks).
+
+```bash
+grimoire setup [options]
+```
+
+Interactive behavior:
+
+- in interactive TTY mode, setup prompts for missing required values (chain, RPC URL, doctor adapter, wallet source)
+- leaving RPC URL blank uses the chain’s built-in public RPC default
+- use `--non-interactive` for automation/CI
+
+Options:
+
+- `--chain <id>`: chain ID for setup checks (default `1`)
+- `--rpc-url <url>`: explicit RPC URL (fallback: `RPC_URL_<chainId>`, then `RPC_URL`, then built-in public RPC)
+- `--adapter <name>`: adapter used for `venue doctor` check (default `uniswap`)
+- `--keystore <path>`: keystore file path (default `~/.grimoire/keystore.json`)
+- `--password-env <name>`: env var name for keystore password (default `KEYSTORE_PASSWORD`)
+- `--key-env <name>`: env var for import key (default `PRIVATE_KEY`)
+- `--import-key`: import key from `--key-env` when keystore is missing
+- `--no-save-password-env`: do not write `.grimoire/setup.env` after interactive password entry
+- `--no-doctor`: skip `venue doctor` checks
+- `--non-interactive`: disable interactive prompts
+- `--json`: emit machine-readable setup report
+
+Behavior:
+
+- creates local `.grimoire/` directory when missing
+- runs a built-in smoke compile + preview to verify runtime basics
+- checks RPC reachability with block number fetch
+- configures wallet in this order:
+  1. use existing keystore
+  2. import from env key when available
+  3. generate a new wallet keystore
+- checks wallet balance for the selected chain
+- runs `venue doctor` (unless skipped) with wallet address context
+- prints password-handling warnings for agent-run environments (Codex/Claude Code)
+- when password is typed interactively, writes `.grimoire/setup.env` for shell reuse (unless `--no-save-password-env`)
+- CLI auto-loads nearest `.grimoire/setup.env` on startup (searching parent directories), without overriding existing env vars
+- optional override path: `GRIMOIRE_SETUP_ENV_FILE=<path>`
+- `setup` JSON output includes `passwordEnv.name` and optional `passwordEnv.file`
+
+Password safety guidance shown after setup:
+
+- do not paste passwords/private keys into agent chat
+- prefer hidden interactive password prompts
+- for non-interactive runs, preload secret values outside the agent and pass only env var names
+- `.grimoire/setup.env` is plaintext; keep local-only and rotate/delete when no longer needed
+- avoid inline secrets in command text (for example `KEYSTORE_PASSWORD=... grimoire ...`)
+
+Setup env file semantics:
+
+- file path: `.grimoire/setup.env` by default
+- file write mode: `0600`
+- created only when password is collected interactively (not when already provided by env)
+- loaded automatically by CLI on startup from the nearest parent directory containing `.grimoire/setup.env`
+- existing environment variables always win (autoload never overrides already-set values)
+- process limitation: setup cannot export into a parent shell session directly; it can only write a sourceable env file
+
+Exit code:
+
+- `0` on successful execute-mode setup
+- `1` when any setup stage fails
 
 ## `compile`
 
@@ -273,12 +341,21 @@ Primary adapters supported by proxy mapping:
 - `morpho-blue` (`morpho` alias)
 - `hyperliquid`
 - `pendle`
+- `polymarket`
 
 This command forwards args to `grimoire-aave`, `grimoire-uniswap`, etc.
+
+Polymarket backend note:
+
+- `grimoire venue polymarket ...` delegates to the official `polymarket` CLI binary.
+- Install with `brew tap Polymarket/polymarket-cli && brew install polymarket`.
+- Optional binary override: `POLYMARKET_OFFICIAL_CLI=/path/to/polymarket`.
 
 Example:
 
 - `grimoire venue pendle chains`
+- `grimoire venue polymarket markets list --limit 10 --format json`
+- `grimoire venue polymarket search-markets --category sports --league "la liga" --active-only true --open-only true --format json`
 
 ## `venue doctor`
 
@@ -307,7 +384,11 @@ Morpho readiness wallet source:
 
 Offchain adapter note:
 
-- For offchain adapters such as `hyperliquid`, prefer `grimoire venue doctor --adapter hyperliquid --json` (omit `--chain`) to skip EVM RPC reachability checks.
+- For offchain adapters such as `hyperliquid` or `polymarket`, prefer `grimoire venue doctor --adapter <name> --json` (omit `--chain`) to skip EVM RPC reachability checks.
+
+Version mismatch note:
+
+- If `grimoire venue doctor ...` returns `Unknown venue adapter "doctor"`, your installed CLI is outdated. Upgrade (`npm i -g @grimoirelabs/cli@latest`) or use repo-local invocation.
 
 Adapter filter aliases:
 
@@ -317,6 +398,7 @@ Adapter filter aliases:
 - `hyperliquid`
 - `across`
 - `pendle`
+- `polymarket`
 
 Exit code:
 
@@ -395,6 +477,11 @@ Common options include:
 - `--key-env <name>` (where applicable)
 - `--chain <id>` and `--rpc-url <url>` for chain operations
 - `--json`
+
+Keystore/password notes:
+
+- wallet subcommands can use setup-managed `.grimoire/setup.env` via automatic env loading
+- you can still override via explicit env in shell or with `--password-env <name>`
 
 ## Exit Code Conventions
 
