@@ -1,0 +1,20 @@
+# Polymarket cancel order example (preview-safe)
+
+spell PolymarketCancelOrderExample {
+  version: "1.0.0"
+  description: "Example Polymarket CLOB cancel_order using custom op"
+
+  venues: {
+    polymarket: @polymarket
+  }
+
+  on manual: {
+    cancel_result = polymarket.cancel_order("demo-order-id")
+
+    emit polymarket_cancel_preview_done(
+      venue="polymarket",
+      simulated=cancel_result.simulated,
+      op=cancel_result.action.op,
+    )
+  }
+}

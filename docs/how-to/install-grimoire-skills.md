@@ -21,6 +21,8 @@ This installs the skills published in this repository, including:
 - `grimoire-uniswap`
 - `grimoire-morpho-blue`
 - `grimoire-hyperliquid`
+- `grimoire-pendle`
+- `grimoire-polymarket`
 
 ## 2. Use In Claude Code
 

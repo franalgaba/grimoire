@@ -11,7 +11,13 @@ describe("venue command helpers", () => {
   it("resolves CLI path inside venues package", () => {
     const path = resolveVenueCliPath("morpho-blue");
     const normalized = path.replace(/\\/g, "/");
-    expect(normalized.endsWith("dist/cli/morpho-blue.js")).toBe(true);
+    const prefersSrcOnBun =
+      typeof (process.versions as Record<string, string | undefined>).bun === "string";
+    expect(
+      prefersSrcOnBun
+        ? normalized.endsWith("src/cli/morpho-blue.ts")
+        : normalized.endsWith("dist/cli/morpho-blue.js")
+    ).toBe(true);
   });
 
   it("prints usage for missing adapter", () => {

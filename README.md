@@ -25,6 +25,8 @@ Use this for reproducible simulation and onchain execution with adapters and sta
 ```bash
 npm i -g @grimoirelabs/cli
 
+grimoire setup
+
 grimoire simulate spells/compute-only.spell --chain 1
 
 grimoire cast spells/uniswap-swap-execute.spell \
@@ -32,6 +34,17 @@ grimoire cast spells/uniswap-swap-execute.spell \
   --key-env PRIVATE_KEY \
   --rpc-url <rpc>
 ```
+
+`grimoire setup` notes:
+
+- setup is always execute-mode onboarding
+- guided mode prompts for required values (chain, RPC, wallet source, doctor checks)
+- blank RPC input falls back to public chain RPC
+- setup runs a smoke preview and `venue doctor` by default
+- when password is entered interactively, setup writes `.grimoire/setup.env` (can disable with `--no-save-password-env`)
+- CLI auto-loads nearest `.grimoire/setup.env` on startup and does not override already-set env vars
+- set `GRIMOIRE_SETUP_ENV_FILE` to point to an explicit env file when running outside the project tree
+- `.grimoire/setup.env` contains plaintext secrets; keep it local-only and rotate/delete when not needed
 
 `simulate` also supports `--rpc-url <rpc>` with resolution order:
 `--rpc-url` -> `RPC_URL_<chainId>` -> `RPC_URL`.
@@ -55,6 +68,13 @@ Before running venue actions in a new environment, validate adapter/env/RPC read
 grimoire venue doctor --chain 1 --adapter uniswap --rpc-url <rpc> --json
 ```
 
+If this command errors with `Unknown venue adapter "doctor"`, your installed CLI is outdated.
+Use one of:
+
+- `npm i -g @grimoirelabs/cli@latest`
+- `npx -y @grimoirelabs/cli@latest venue doctor --chain 1 --adapter uniswap --rpc-url <rpc> --json`
+- `bun run packages/cli/src/index.ts venue doctor --chain 1 --adapter uniswap --rpc-url <rpc> --json`
+
 Advisory steps (`advise`) call Pi when a model is configured (spell model, CLI model/provider, or Pi defaults). If no model is available, the runtime uses the spell’s fallback. Record advisory outputs with `simulate` (or `cast --dry-run`), then replay deterministically with `--advisory-replay` for live execution.
 
 Advisory docs:
@@ -77,7 +97,7 @@ Use skills in `skills/` so agents can work immediately with Grimoire:
 
 - install: `npx skills add https://github.com/franalgaba/grimoire`
 - `skills/grimoire/` for install, CLI usage, syntax starter, and runbook
-- venue skills for snapshot params (`skills/grimoire-aave/`, `skills/grimoire-uniswap/`, `skills/grimoire-morpho-blue/`, `skills/grimoire-hyperliquid/`, `skills/grimoire-pendle/`)
+- venue skills for snapshot params (`skills/grimoire-aave/`, `skills/grimoire-uniswap/`, `skills/grimoire-morpho-blue/`, `skills/grimoire-hyperliquid/`, `skills/grimoire-pendle/`, `skills/grimoire-polymarket/`)
 
 For Claude Code, run the same install command in the Claude Code terminal and start a new session to load the skills.
 
@@ -128,7 +148,7 @@ spell YieldOptimizer {
 - **Human-readable DSL** with brace-delimited syntax
 - **Explicit constraints** and limits via `with` and `limits`
 - **Adapter-based venues** (SDKs live in `@grimoirelabs/venues`)
-- **Official adapters** include Aave V3, Uniswap V3/V4, Morpho Blue, Across, Hyperliquid, and Pendle
+- **Official adapters** include Aave V3, Uniswap V3/V4, Morpho Blue, Across, Hyperliquid, Pendle, and Polymarket
 - **Onchain + offchain** actions (EVM + Hyperliquid)
 - **Judgment boundary** with explicit `advise` blocks
 - **Structured control flow** (loops, conditionals, try/catch, atomic)

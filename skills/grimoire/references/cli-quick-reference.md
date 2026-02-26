@@ -12,6 +12,7 @@ Assume `<grimoire-cmd>` is one of:
 
 ```bash
 <grimoire-cmd> init [--force] [--runtime-quickstart]
+<grimoire-cmd> setup [--chain <id>] [--rpc-url <url>] [--adapter <name>] [--keystore <path>] [--password-env <name>] [--key-env <name>] [--import-key] [--no-save-password-env] [--no-doctor] [--non-interactive] [--json]
 <grimoire-cmd> compile <spell> [-o <file>] [--pretty]
 <grimoire-cmd> compile-all [dir] [--fail-fast] [--json]
 <grimoire-cmd> validate <spell> [--strict] [--json]
@@ -24,6 +25,35 @@ Assume `<grimoire-cmd>` is one of:
 <grimoire-cmd> history [spell] [--limit <n>] [--json] [--state-dir <dir>]
 <grimoire-cmd> log <spell> <runId> [--json] [--state-dir <dir>]
 ```
+
+## Setup (Execute Onboarding)
+
+Use before first live or dry-run casts in a new local environment:
+
+```bash
+<grimoire-cmd> setup
+```
+
+Behavior:
+
+1. Creates local `.grimoire/` directory when missing.
+2. Runs built-in smoke compile + preview checks.
+3. Verifies RPC reachability.
+4. Provisions wallet keystore (existing, env import, or generated).
+5. Runs `venue doctor` by adapter (default `uniswap`) unless `--no-doctor`.
+6. Prompts for missing required values in interactive mode.
+7. Blank RPC input falls back to chain default public RPC.
+8. Writes `.grimoire/setup.env` after interactive password entry (unless `--no-save-password-env`).
+9. Shows password safety guidance to avoid leaking secrets in agent-run sessions.
+10. CLI auto-loads nearest `.grimoire/setup.env` on startup unless env vars are already set.
+11. `GRIMOIRE_SETUP_ENV_FILE` can point to an explicit setup env file path.
+
+Password safety:
+
+1. Do not paste passwords/private keys into Codex/Claude prompts.
+2. Prefer hidden interactive prompts over inline secret values.
+3. For automation, preload secret env values outside the agent and pass only env var names.
+4. `.grimoire/setup.env` is plaintext secret material; keep local-only and rotate/delete when done.
 
 ## Venue Doctor (Preflight)
 
@@ -43,6 +73,7 @@ Checks:
 Tip:
 
 - In `--json` output, confirm `rpcUrl` is the endpoint actually used.
+- If `grimoire venue doctor ...` fails with `Unknown venue adapter "doctor"`, your installed global CLI is old; use `npx -y @grimoirelabs/cli@latest ...` or repo-local invocation.
 
 ## Simulate (Preview)
 
@@ -209,3 +240,4 @@ For expanded patterns and Anvil debug RPC calls, use `references/cast-cheatsheet
 - `KEYSTORE_PASSWORD`
 - `RPC_URL`
 - `ENS_RPC_URL`
+- `GRIMOIRE_SETUP_ENV_FILE`

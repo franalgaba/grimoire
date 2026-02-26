@@ -1,0 +1,27 @@
+# Polymarket custom order example (preview-safe)
+
+spell PolymarketOrderExample {
+  version: "1.0.0"
+  description: "Example Polymarket CLOB order using custom op order"
+
+  venues: {
+    polymarket: @polymarket
+  }
+
+  on manual: {
+    order_result = polymarket.order(
+      "12345",
+      0.55,
+      10,
+      "BUY",
+      "0.01",
+      "GTC",
+    )
+
+    emit polymarket_preview_done(
+      venue="polymarket",
+      simulated=order_result.simulated,
+      op=order_result.action.op,
+    )
+  }
+}

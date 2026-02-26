@@ -9,6 +9,7 @@ import {
   morphoBlueAdapter,
 } from "./morpho-blue.js";
 import { createPendleAdapter, pendleAdapter } from "./pendle.js";
+import { createPolymarketAdapter, polymarketAdapter } from "./polymarket.js";
 import { createUniswapV3Adapter, defaultUniswapV3Routers, uniswapV3Adapter } from "./uniswap-v3.js";
 import {
   createUniswapV4Adapter,
@@ -24,6 +25,7 @@ export const adapters: VenueAdapter[] = [
   hyperliquidAdapter,
   acrossAdapter,
   pendleAdapter,
+  polymarketAdapter,
 ];
 
 export {
@@ -45,4 +47,6 @@ export {
   createHyperliquidAdapter,
   pendleAdapter,
   createPendleAdapter,
+  polymarketAdapter,
+  createPolymarketAdapter,
 };

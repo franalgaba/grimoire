@@ -101,6 +101,7 @@ cast send "$TO" "transfer(address,uint256)" "$RECIPIENT" "$AMOUNT" \
 
 Prefer keystore or env vars over inline raw private keys in shared shells.
 For local Anvil only, use funded dev keys and never production secrets.
+If setup generated `.grimoire/setup.env`, Grimoire CLI auto-loads it, but Foundry `cast` does not; export/source env vars explicitly before Cast commands.
 
 ## 7) Anvil-Fork Debug Helpers
 

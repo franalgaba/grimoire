@@ -98,6 +98,7 @@ const ADAPTER_FILTER_MAP: Record<string, string[]> = {
   hyperliquid: ["hyperliquid"],
   across: ["across"],
   pendle: ["pendle"],
+  polymarket: ["polymarket"],
 };
 
 const ERC20_ABI = parseAbi([
