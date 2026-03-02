@@ -7,6 +7,7 @@ import type { CallFrame, ExecutionContext, LedgerEntry, LedgerEvent } from "../t
 import type { SpellIR } from "../types/ir.js";
 import type { PolicySet } from "../types/policy.js";
 import type { Address, ChainId, Trigger } from "../types/primitives.js";
+import type { QueryProvider } from "../types/query-provider.js";
 
 /**
  * Options for creating an execution context
@@ -20,6 +21,7 @@ export interface CreateContextOptions {
   trigger?: ExecutionContext["trigger"];
   params?: Record<string, unknown>;
   persistentState?: Record<string, unknown>;
+  queryProvider?: QueryProvider;
 }
 
 /**
@@ -118,6 +120,7 @@ export function createContext(options: CreateContextOptions): ExecutionContext {
       errors: 0,
       retries: 0,
     },
+    queryProvider: options.queryProvider,
   };
 }
 

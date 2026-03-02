@@ -300,7 +300,8 @@ Expression forms:
 - objects: `{ key: value, ... }`
 - identifiers
 - property access and indexing
-- function calls (`min`, `max`, `balance`, `price`, `sum`, `avg`, `to_number`, `to_bigint`, etc.)
+- function calls (`min`, `max`, `sum`, `avg`, `to_number`, `to_bigint`, etc.)
+- query functions: `price(base, quote, source?)`, `balance(asset, address?)`
 
 ## Constraint Clause Capabilities
 

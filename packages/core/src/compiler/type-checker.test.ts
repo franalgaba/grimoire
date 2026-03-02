@@ -1439,4 +1439,212 @@ describe("Type Checker — Conversion Builtins", () => {
     const result = typeCheckIR(ir);
     expectErrorCode(result, "WRONG_ARG_COUNT");
   });
+
+  // ===========================================================================
+  // OPTIONAL ARGS — price() and balance()
+  // ===========================================================================
+
+  test("price(ETH, USDC) with 2 args is well-typed", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "px",
+            expression: {
+              kind: "call",
+              fn: "price",
+              args: [
+                { kind: "param", name: "token" },
+                { kind: "param", name: "token" },
+              ],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectClean(result);
+  });
+
+  test("price(ETH, USDC, source) with 3 args is well-typed", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "px",
+            expression: {
+              kind: "call",
+              fn: "price",
+              args: [
+                { kind: "param", name: "token" },
+                { kind: "param", name: "token" },
+                { kind: "literal", value: "chainlink", type: "string" },
+              ],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectClean(result);
+  });
+
+  test("price(ETH) with 1 arg produces WRONG_ARG_COUNT", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "px",
+            expression: {
+              kind: "call",
+              fn: "price",
+              args: [{ kind: "param", name: "token" }],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectErrorCode(result, "WRONG_ARG_COUNT");
+  });
+
+  test("price() with 4 args produces WRONG_ARG_COUNT", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "px",
+            expression: {
+              kind: "call",
+              fn: "price",
+              args: [
+                { kind: "param", name: "token" },
+                { kind: "param", name: "token" },
+                { kind: "literal", value: "src", type: "string" },
+                { kind: "literal", value: "extra", type: "string" },
+              ],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectErrorCode(result, "WRONG_ARG_COUNT");
+  });
+
+  test("balance(ETH) with 1 arg is well-typed", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "bal",
+            expression: {
+              kind: "call",
+              fn: "balance",
+              args: [{ kind: "param", name: "token" }],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectClean(result);
+  });
+
+  test("balance(ETH, address) with 2 args is well-typed", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "bal",
+            expression: {
+              kind: "call",
+              fn: "balance",
+              args: [
+                { kind: "param", name: "token" },
+                { kind: "param", name: "target" },
+              ],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectClean(result);
+  });
+
+  test("balance() with 0 args produces WRONG_ARG_COUNT", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "bal",
+            expression: {
+              kind: "call",
+              fn: "balance",
+              args: [],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectErrorCode(result, "WRONG_ARG_COUNT");
+  });
+
+  test("price optional arg with wrong type produces TYPE_MISMATCH", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "px",
+            expression: {
+              kind: "call",
+              fn: "price",
+              args: [
+                { kind: "param", name: "token" },
+                { kind: "param", name: "token" },
+                { kind: "literal", value: 42, type: "int" }, // number, not string
+              ],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectErrorCode(result, "TYPE_MISMATCH");
+    expect(result.errors[0].message).toContain("source");
+  });
 });

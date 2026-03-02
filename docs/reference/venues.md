@@ -208,6 +208,47 @@ Implementation notes:
   - optional derive toggle: `POLYMARKET_DERIVE_API_KEY` (default: true)
 - Advanced users can inject a prebuilt client with `createPolymarketAdapter({ client })`.
 
+## QueryProvider
+
+`@grimoirelabs/venues` exports a `QueryProvider` factory backed by Alchemy for on-chain balance reads and token price lookups.
+
+### `createAlchemyQueryProvider(config)`
+
+Creates a `QueryProvider` with two capabilities:
+
+- **`queryBalance(asset, address?)`** -- on-chain `ERC20.balanceOf()` via the RPC provider. Native ETH is handled via `provider.getBalance()`. Defaults to the configured vault address when `address` is omitted.
+- **`queryPrice(base, quote)`** -- token price via the [Alchemy Token Prices API](https://docs.alchemy.com/reference/token-prices). Requires an Alchemy API key. USD-denominated stablecoins (USD, USDC, USDT) are treated as 1:1 USD.
+
+Config type -- `AlchemyQueryProviderConfig`:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `provider` | `Provider` | yes | EVM RPC provider for balance reads |
+| `chainId` | `number` | yes | Chain ID for token address resolution |
+| `vault` | `Address` | yes | Default address for balance queries |
+| `alchemyApiKey` | `string` | no | Explicit Alchemy API key |
+| `rpcUrl` | `string` | no | Used to extract API key if `alchemyApiKey` is not set |
+
+API key resolution: if `alchemyApiKey` is not provided, the factory calls `extractAlchemyKey(rpcUrl)` which matches the pattern `https://{network}.g.alchemy.com/v2/{key}`. If no key is available, `queryPrice` throws at call time; `queryBalance` always works.
+
+Also exported: `extractAlchemyKey(rpcUrl?: string): string | undefined`
+
+Example:
+
+```ts
+import { createAlchemyQueryProvider } from "@grimoirelabs/venues";
+
+const qp = createAlchemyQueryProvider({
+  provider,
+  chainId: 1,
+  vault: "0xYourVault",
+  rpcUrl: "https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY",
+});
+
+const balance = await qp.queryBalance("USDC");       // on-chain balance
+const price   = await qp.queryPrice("ETH", "USDC");  // price via Alchemy API
+```
+
 ## Core vs Venues Boundary
 
 - `@grimoirelabs/core` remains protocol-agnostic.

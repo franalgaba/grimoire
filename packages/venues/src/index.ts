@@ -1,4 +1,11 @@
 import type { VenueAdapter } from "@grimoirelabs/core";
+
+export {
+  type AlchemyQueryProviderConfig,
+  createAlchemyQueryProvider,
+  extractAlchemyKey,
+} from "./query-provider.js";
+
 import { aaveV3Adapter, createAaveV3Adapter } from "./aave-v3.js";
 import { acrossAdapter, createAcrossAdapter } from "./across.js";
 import { createHyperliquidAdapter, hyperliquidAdapter } from "./hyperliquid.js";

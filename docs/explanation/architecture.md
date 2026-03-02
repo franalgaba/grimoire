@@ -180,10 +180,17 @@ Main extension seams:
 
 - new venues via adapter implementations in `packages/venues`
 - custom persistence via alternate `StateStore`
+- query providers via `QueryProvider` interface on `ExecutionContext`
 - host-level orchestration through library APIs
 - agent workflows via skills and docs
 
 These seams are deliberate and reduce pressure to modify core semantics for every new use case.
+
+### QueryProvider
+
+`QueryProvider` is an optional interface that plugs into `ExecutionContext` to supply live market and chain data at runtime. The wiring path is: CLI → `ExecuteOptions` → `ExecutionContext` → `createEvalContext()` → `EvalContext`. Once attached, all expression-level query functions (`price()`, `balance()`, and others) resolve through the provider automatically. The 15+ call sites in step executors are auto-wired through `EvalContext` — no executor code needs to know about the provider directly.
+
+The `venues` package ships `createAlchemyQueryProvider` as a concrete implementation backed by Alchemy RPC endpoints. Other implementations can be substituted by conforming to the same interface, keeping core runtime independent of any specific data source.
 
 ## Failure Surface and Debug Strategy
 

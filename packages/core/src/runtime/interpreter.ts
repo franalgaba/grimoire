@@ -12,6 +12,7 @@ import type {
 import type { AdvisorDef, Guard, GuardDef, SpellIR } from "../types/ir.js";
 import type { PolicySet } from "../types/policy.js";
 import type { Address, ChainId } from "../types/primitives.js";
+import type { QueryProvider } from "../types/query-provider.js";
 import type {
   AccountingSummary,
   AdvisoryResult,
@@ -127,6 +128,8 @@ export interface ExecuteOptions {
   warningCallback?: (message: string) => void;
   /** Cross-chain execution context for action-level enforcement */
   crossChain?: ActionExecutionOptions["crossChain"];
+  /** Pluggable query provider for balance/price/apy/etc. */
+  queryProvider?: QueryProvider;
 }
 
 // =============================================================================
@@ -154,6 +157,8 @@ export interface PreviewOptions {
   eventCallback?: (entry: LedgerEntry) => void;
   warningCallback?: (message: string) => void;
   crossChain?: ActionExecutionOptions["crossChain"];
+  /** Pluggable query provider for balance/price/apy/etc. */
+  queryProvider?: QueryProvider;
 }
 
 /**
@@ -192,6 +197,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
     trigger: options.trigger,
     params,
     persistentState,
+    queryProvider: options.queryProvider,
   });
   ctx.advisorTooling = buildAdvisorTooling(spell.advisors, options.advisorSkillsDirs);
 
@@ -746,6 +752,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     eventCallback: options.eventCallback,
     warningCallback: options.warningCallback,
     crossChain: options.crossChain,
+    queryProvider: options.queryProvider,
   });
 
   if (!previewResult.success || !previewResult.receipt) {

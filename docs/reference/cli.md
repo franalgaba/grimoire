@@ -240,6 +240,12 @@ State options:
 - `--state-dir <dir>`
 - `--no-state`
 
+Query provider:
+
+- When `--rpc-url` points to an Alchemy RPC (e.g. `https://eth-mainnet.g.alchemy.com/v2/<key>`), the API key is auto-extracted and used to enable `price()` queries via the Alchemy Token Prices API.
+- `balance()` queries work with any RPC provider (reads on-chain ERC20 balanceOf).
+- Non-Alchemy RPC URLs support `balance()` only; `price()` will error with a clear message.
+
 Behavior notes:
 
 - Uses `execute({ simulate: true })`, which internally runs `preview()`.
@@ -295,6 +301,10 @@ Runtime mode selection in command logic:
 - `simulate`: no key available and not `--dry-run`
 - `dry-run`: `--dry-run`
 - `execute`: key available and no `--dry-run`
+
+Query provider:
+
+- Same behavior as `simulate`: Alchemy RPC URLs auto-enable `price()` queries; any RPC supports `balance()`.
 
 Behavior notes:
 

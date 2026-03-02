@@ -60,6 +60,8 @@ Key responsibilities:
 - value-flow evaluation and constraints
 - receipt generation
 
+Accepts an optional `queryProvider` for blockchain data queries (see Query Provider API below).
+
 ### `commit(options: CommitOptions): Promise<CommitResult>`
 
 Commits planned actions from a `ready` preview receipt.
@@ -72,7 +74,7 @@ Validation and safety gates:
 
 ### `execute(options: ExecuteOptions): Promise<ExecutionResult>`
 
-Backward-compatible wrapper:
+Backward-compatible wrapper that also accepts an optional `queryProvider`:
 
 - always runs `preview()`
 - commits only if runtime mode requires commit and wallet is present
@@ -146,6 +148,47 @@ Preview artifact includes:
 - drift keys
 - approval requirement signal
 - final state and metrics
+
+## Query Provider API
+
+Source: `packages/core/src/types/query-provider.ts`
+
+`QueryProvider` is a pluggable interface that supplies blockchain data (balances, prices, APY, etc.) to spell expressions at runtime.
+
+### `QueryProvider`
+
+```ts
+interface QueryProvider {
+  meta: QueryProviderMeta;
+  queryBalance?: (asset: string, address?: string) => Promise<bigint>;
+  queryPrice?: (base: string, quote: string, source?: string) => Promise<number>;
+  queryApy?: (venue: string, asset: string) => Promise<number>;
+  queryHealthFactor?: (venue: string) => Promise<number>;
+  queryPosition?: (venue: string, asset: string) => Promise<unknown>;
+  queryDebt?: (venue: string, asset: string) => Promise<bigint>;
+}
+```
+
+All query methods are optional. The provider declares which queries it supports via `meta.supportedQueries`.
+
+### `QueryProviderMeta`
+
+```ts
+interface QueryProviderMeta {
+  name: string;
+  supportedQueries: Array<"balance" | "price" | "apy" | "health_factor" | "position" | "debt">;
+  description?: string;
+}
+```
+
+### Data flow
+
+1. Caller passes `queryProvider` on `PreviewOptions` or `ExecuteOptions`.
+2. `createContext()` copies it onto `ExecutionContext.queryProvider`.
+3. `createEvalContext()` binds each provider method onto the `EvalContext`.
+4. Expression evaluator maps spell functions (`balance()`, `price()`, `get_apy()`, `health_factor()`, `position()`, `debt()`) to the corresponding `query*` method on `EvalContext`.
+
+If a spell calls a query function and no provider (or no matching method) is available, the evaluator throws at runtime.
 
 ## Wallet and Provider API
 

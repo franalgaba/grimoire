@@ -379,6 +379,8 @@ Expression forms:
 - identifiers and keyword-like identifiers in expression context
 - property access and indexing
 - function calls (`min`, `max`, `balance`, `price`, ...)
+  - `price(base, quote)` or `price(base, quote, source?)` where `source` is an optional string (e.g. `"chainlink"`)
+  - `balance(asset)` or `balance(asset, address?)` where `address` is an optional address
 
 ## Constraints Clause
 

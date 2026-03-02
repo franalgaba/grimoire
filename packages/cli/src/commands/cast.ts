@@ -34,7 +34,11 @@ import {
   SqliteStateStore,
   toCrossChainReceipt,
 } from "@grimoirelabs/core";
-import { adapters, createHyperliquidAdapter } from "@grimoirelabs/venues";
+import {
+  adapters,
+  createAlchemyQueryProvider,
+  createHyperliquidAdapter,
+} from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { hydrateParamsFromEnsProfile, resolveEnsProfile } from "../lib/ens-profile.js";
@@ -329,6 +333,7 @@ async function executeWithWallet(
   }
 
   const vault = (options.vault ?? wallet.address) as Address;
+  const queryProvider = createAlchemyQueryProvider({ provider, chainId, vault, rpcUrl });
   console.log(`  ${chalk.dim("Vault:")} ${vault}`);
 
   if (!isTest) {
@@ -423,6 +428,7 @@ async function executeWithWallet(
         advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
         onAdvisory,
         eventCallback,
+        queryProvider,
       });
     }
   );
@@ -489,6 +495,11 @@ async function executeSimulation(
   }
 
   const vault = (options.vault ?? "0x0000000000000000000000000000000000000000") as Address;
+  const simRpcUrl = resolveRpcUrlFromOption(chainId, options.rpcUrl);
+  const simProvider = simRpcUrl ? createProvider(chainId, simRpcUrl) : undefined;
+  const simQueryProvider = simProvider
+    ? createAlchemyQueryProvider({ provider: simProvider, chainId, vault, rpcUrl: simRpcUrl })
+    : undefined;
   const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir) ?? [];
   const onAdvisory = await resolveAdvisoryHandler(spell.id, {
     advisoryPi: options.advisoryPi,
@@ -534,10 +545,12 @@ async function executeSimulation(
         params,
         persistentState,
         simulate: true,
+        provider: simProvider,
         adapters,
         advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
         onAdvisory,
         eventCallback,
+        queryProvider: simQueryProvider,
       });
     }
   );
