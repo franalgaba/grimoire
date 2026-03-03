@@ -110,6 +110,7 @@ Important:
 2. RPC resolution order is `--rpc-url`, then `RPC_URL_<chainId>`, then `RPC_URL`.
 3. Cross-chain mode is enabled by `--destination-spell` and requires explicit mapped RPCs for both chains: `--rpc-url <chainId>=<url>`.
 4. Cross-chain Morpho actions require explicit market mapping (`--morpho-market-id` or `--morpho-market-map`).
+5. When `--rpc-url` is an Alchemy URL (e.g. `https://eth-mainnet.g.alchemy.com/v2/<key>`), the API key is auto-extracted and used to enable `price()` queries via the Alchemy query provider.
 
 ## Anvil Quickstart
 

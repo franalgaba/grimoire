@@ -469,9 +469,16 @@ export function createEvalContext(execCtx: ExecutionContext): EvalContext {
     params.set(param.name, execCtx.bindings.get(param.name) ?? param.default);
   }
 
+  const qp = execCtx.queryProvider;
   return {
     params,
     bindings: execCtx.bindings,
     state: execCtx.state,
+    queryBalance: qp?.queryBalance?.bind(qp),
+    queryPrice: qp?.queryPrice?.bind(qp),
+    queryApy: qp?.queryApy?.bind(qp),
+    queryHealthFactor: qp?.queryHealthFactor?.bind(qp),
+    queryPosition: qp?.queryPosition?.bind(qp),
+    queryDebt: qp?.queryDebt?.bind(qp),
   };
 }

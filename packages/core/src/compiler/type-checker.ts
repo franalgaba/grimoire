@@ -70,6 +70,7 @@ interface BuiltinSig {
   returns: SpellType;
   variadic?: boolean; // If true, accepts 2+ args of the same type as the first arg
   minArgs?: number; // Minimum args for variadic functions
+  optionalArgs?: Array<[string, SpellType]>; // Optional trailing arguments
 }
 
 const BUILTIN_SIGNATURES: Record<string, BuiltinSig> = {
@@ -94,12 +95,17 @@ const BUILTIN_SIGNATURES: Record<string, BuiltinSig> = {
   abs: { args: [["n", "number"]], returns: "number" },
   sum: { args: [["arr", { kind: "array", element: "number" }]], returns: "number" },
   avg: { args: [["arr", { kind: "array", element: "number" }]], returns: "number" },
-  balance: { args: [["asset", "asset"]], returns: "bigint" },
+  balance: {
+    args: [["asset", "asset"]],
+    optionalArgs: [["address", "address"]],
+    returns: "bigint",
+  },
   price: {
     args: [
       ["base", "asset"],
       ["quote", "asset"],
     ],
+    optionalArgs: [["source", "string"]],
     returns: "number",
   },
   get_apy: {
@@ -453,6 +459,10 @@ function inferExprType(
       if (!sig) return "any";
 
       // Check argument count
+      const requiredCount = sig.args.length;
+      const optionalCount = sig.optionalArgs?.length ?? 0;
+      const maxCount = requiredCount + optionalCount;
+
       if (sig.variadic) {
         const minArgs = sig.minArgs ?? sig.args.length;
         if (expr.args.length < minArgs) {
@@ -462,10 +472,11 @@ function inferExprType(
           });
           return sig.returns;
         }
-      } else if (expr.args.length !== sig.args.length) {
+      } else if (expr.args.length < requiredCount || expr.args.length > maxCount) {
+        const expected = optionalCount > 0 ? `${requiredCount}–${maxCount}` : `${requiredCount}`;
         errors.push({
           code: "WRONG_ARG_COUNT",
-          message: `${location}: Function '${expr.fn}' expects ${sig.args.length} argument(s), got ${expr.args.length}`,
+          message: `${location}: Function '${expr.fn}' expects ${expected} argument(s), got ${expr.args.length}`,
         });
         return sig.returns;
       }
@@ -473,8 +484,14 @@ function inferExprType(
       // Check argument types
       for (let i = 0; i < expr.args.length; i++) {
         const argType = inferExprType(expr.args[i], env, errors, location);
-        // For variadic functions, extra args use the type of the first arg
-        const sigArg = sig.args[Math.min(i, sig.args.length - 1)];
+        let sigArg: [string, SpellType];
+        if (i < sig.args.length) {
+          // For variadic functions, extra args use the type of the last required arg
+          sigArg = sig.variadic ? sig.args[Math.min(i, sig.args.length - 1)] : sig.args[i];
+        } else {
+          // Optional arg
+          sigArg = (sig.optionalArgs ?? [])[i - sig.args.length];
+        }
         const expectedType = sigArg[1];
         if (argType !== "any" && !isAssignable(argType, expectedType)) {
           errors.push({

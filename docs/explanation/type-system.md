@@ -43,6 +43,10 @@ Subtyping examples:
 
 This model keeps authoring flexible while preserving meaningful checks.
 
+### Optional Arguments on Built-in Functions
+
+Some built-in functions accept optional trailing parameters, declared via `optionalArgs` on `BuiltinSig`. For example, `price(base: asset, quote: asset, source?: string)` has an optional `source` parameter, and `balance(asset: asset, address?: address)` has an optional `address` parameter. The type checker validates that the argument count falls between the number of required args and the total (required + optional), and each optional argument that is supplied is type-checked against its declared type. This keeps the call-site flexible — callers can omit trailing parameters — without sacrificing type safety.
+
 ## Validator: What It Guarantees
 
 Implemented in `packages/core/src/compiler/validator.ts`.

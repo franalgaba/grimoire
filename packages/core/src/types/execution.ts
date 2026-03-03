@@ -7,6 +7,7 @@ import type { CrossChainReceipt } from "./cross-chain.js";
 import type { SpellIR } from "./ir.js";
 import type { PolicySet } from "./policy.js";
 import type { Address, ChainId, Timestamp, VenueAlias } from "./primitives.js";
+import type { QueryProvider } from "./query-provider.js";
 import type { CommitResult, Receipt, StructuredError, ValueDelta } from "./receipt.js";
 
 /**
@@ -47,6 +48,9 @@ export interface ExecutionContext {
 
   // Metrics
   metrics: ExecutionMetrics;
+
+  // Query provider for blockchain data (balance, price, etc.)
+  queryProvider?: QueryProvider;
 }
 
 /** Call frame for tracking nested execution */

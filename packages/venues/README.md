@@ -31,6 +31,29 @@ await execute({
 
 Adapters may require configuration via factory functions for production use.
 
+## QueryProvider
+
+The package exports an Alchemy-backed `QueryProvider` for on-chain balance reads and token price lookups.
+
+```ts
+import { createAlchemyQueryProvider } from "@grimoirelabs/venues";
+
+const queryProvider = createAlchemyQueryProvider({
+  provider,
+  chainId: 1,
+  vault: "0x...",
+  rpcUrl: "https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY",
+});
+
+// queryProvider.queryBalance("ETH") → on-chain balance
+// queryProvider.queryPrice("ETH", "USDC") → price via Alchemy API
+```
+
+- `queryBalance` reads on-chain ERC20 balances (or native ETH) via the RPC provider.
+- `queryPrice` fetches token prices from the Alchemy Token Prices API. The API key is auto-extracted from the RPC URL, or can be set explicitly via `alchemyApiKey`.
+
+Also exported: `extractAlchemyKey(rpcUrl)` and the `AlchemyQueryProviderConfig` type.
+
 ## CLI tools
 
 Each venue exposes a small read-only CLI for fetching public data:

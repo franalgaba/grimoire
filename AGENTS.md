@@ -449,6 +449,7 @@ The expression parser (`packages/core/src/compiler/expression-parser.ts`) handle
 - Logical: `and`, `or`, `not` (case-insensitive)
 - Ternary: `condition ? then : else`
 - Function calls: `max(a, b)`, `min(x, y)`, `abs(n)`, `sum(arr)`, `avg(arr)`, `to_number(n)`, `to_bigint(n)`
+- Query functions: `price(base, quote, source?)`, `balance(asset, address?)`
 - Type conversions: `to_number(bigint_val)` → number, `to_bigint(number_val)` → bigint
 - Property access: `obj.prop`, `arr[0]`
 
@@ -456,7 +457,7 @@ The expression parser (`packages/core/src/compiler/expression-parser.ts`) handle
 
 ```typescript
 import { compile, execute, SqliteStateStore, createRunRecord } from "@grimoirelabs/core";
-import { adapters } from "@grimoirelabs/venues";
+import { adapters, createAlchemyQueryProvider } from "@grimoirelabs/venues";
 
 // Compile a spell
 const result = compile(spellSource);
@@ -477,6 +478,12 @@ const execResult = await execute({
   params: { amount: 1000 },
   persistentState,
   adapters,
+  queryProvider: createAlchemyQueryProvider({
+    provider,
+    chainId: 1,
+    vault: "0x...",
+    rpcUrl: "https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY",
+  }),
 });
 
 // Persist results

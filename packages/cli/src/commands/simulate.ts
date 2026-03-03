@@ -21,7 +21,7 @@ import {
   SqliteStateStore,
   toCrossChainReceipt,
 } from "@grimoirelabs/core";
-import { adapters } from "@grimoirelabs/venues";
+import { adapters, createAlchemyQueryProvider } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { hydrateParamsFromEnsProfile, resolveEnsProfile } from "../lib/ens-profile.js";
@@ -166,8 +166,15 @@ export async function simulateCommand(
       return;
     }
 
+    const rpcUrl = resolveRpcUrl(chain, options.rpcUrl);
     const provider = spellNeedsPreviewAdapterContext(spell)
-      ? createProvider(chain, resolveRpcUrl(chain, options.rpcUrl))
+      ? createProvider(chain, rpcUrl)
+      : rpcUrl
+        ? createProvider(chain, rpcUrl)
+        : undefined;
+
+    const queryProvider = provider
+      ? createAlchemyQueryProvider({ provider, chainId: chain, vault, rpcUrl })
       : undefined;
 
     const dataPolicy = resolveDataPolicy({
@@ -248,6 +255,7 @@ export async function simulateCommand(
           advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
           onAdvisory,
           eventCallback,
+          queryProvider,
         });
       }
     );

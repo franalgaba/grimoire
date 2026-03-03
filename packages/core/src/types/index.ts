@@ -140,6 +140,8 @@ export type {
   WalletMode,
 } from "./primitives.js";
 export { CHAINS } from "./primitives.js";
+// Query Provider
+export type { QueryProvider, QueryProviderMeta } from "./query-provider.js";
 // Receipt / Value-Flow
 export type {
   AccountingSummary,

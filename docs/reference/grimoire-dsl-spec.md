@@ -120,7 +120,10 @@ Subtyping:
 Built-in signatures include:
 
 - numeric: `min`, `max`, `abs`, `sum`, `avg`
-- chain queries: `balance`, `price`, `get_apy`, `get_health_factor`, `get_position`, `get_debt`
+- chain queries:
+  - `balance(asset[, address])` — optional `address` parameter to query a specific wallet
+  - `price(base, quote[, source])` — optional `source` string parameter (e.g. `"chainlink"`)
+  - `get_apy`, `get_health_factor`, `get_position`, `get_debt`
 - conversion: `to_number`, `to_bigint`
 
 The checker validates:
