@@ -1,5 +1,16 @@
 # @grimoirelabs/venues
 
+## 0.9.0
+
+### Minor Changes
+
+- 340da5d: Wire QueryProvider through the execution pipeline. Adds pluggable `QueryProvider` interface that flows from CLI through `ExecuteOptions` → `ExecutionContext` → `createEvalContext()`, enabling `price()` and `balance()` query functions at runtime. Includes Alchemy-backed implementation (`createAlchemyQueryProvider`) with auto-extracted API key from RPC URL. Type checker now supports optional arguments on built-in functions (`price(base, quote, source?)`, `balance(asset, address?)`).
+
+### Patch Changes
+
+- Updated dependencies [340da5d]
+  - @grimoirelabs/core@0.14.0
+
 ## 0.8.0
 
 ### Minor Changes
