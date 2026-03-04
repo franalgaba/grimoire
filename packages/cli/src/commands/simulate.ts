@@ -43,6 +43,7 @@ import {
   resolveReplayParams,
 } from "./data-provenance.js";
 import { buildRunReportEnvelope, formatRunReportText } from "./run-report.js";
+import { spellUsesQueryFunctions } from "./spell-analysis.js";
 import { withStatePersistence } from "./state-helpers.js";
 
 interface SimulateOptions {
@@ -167,11 +168,9 @@ export async function simulateCommand(
     }
 
     const rpcUrl = resolveRpcUrl(chain, options.rpcUrl);
-    const provider = spellNeedsPreviewAdapterContext(spell)
-      ? createProvider(chain, rpcUrl)
-      : rpcUrl
-        ? createProvider(chain, rpcUrl)
-        : undefined;
+    const needsProvider =
+      spellNeedsPreviewAdapterContext(spell) || spellUsesQueryFunctions(spell) || !!rpcUrl;
+    const provider = needsProvider ? createProvider(chain, rpcUrl) : undefined;
 
     const queryProvider = provider
       ? createAlchemyQueryProvider({ provider, chainId: chain, vault, rpcUrl })

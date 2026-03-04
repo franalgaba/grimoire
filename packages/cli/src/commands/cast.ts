@@ -64,6 +64,7 @@ import {
   resolveReplayParams,
 } from "./data-provenance.js";
 import { buildRunReportEnvelope, formatRunReportText } from "./run-report.js";
+import { spellUsesQueryFunctions } from "./spell-analysis.js";
 import { withStatePersistence } from "./state-helpers.js";
 
 const DEFAULT_KEYSTORE_PATH = join(homedir(), ".grimoire", "keystore.json");
@@ -496,7 +497,8 @@ async function executeSimulation(
 
   const vault = (options.vault ?? "0x0000000000000000000000000000000000000000") as Address;
   const simRpcUrl = resolveRpcUrlFromOption(chainId, options.rpcUrl);
-  const simProvider = simRpcUrl ? createProvider(chainId, simRpcUrl) : undefined;
+  const needsSimProvider = !!simRpcUrl || spellUsesQueryFunctions(spell);
+  const simProvider = needsSimProvider ? createProvider(chainId, simRpcUrl) : undefined;
   const simQueryProvider = simProvider
     ? createAlchemyQueryProvider({ provider: simProvider, chainId, vault, rpcUrl: simRpcUrl })
     : undefined;
