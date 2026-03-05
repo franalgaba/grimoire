@@ -125,6 +125,10 @@ export interface SpellIR {
   /** Triggers */
   triggers: Trigger[];
 
+  /** Maps trigger handler index (0-based) to its top-level step IDs.
+   *  Only populated for multi-trigger spells (trigger type "any"). */
+  triggerStepMap?: Record<number, string[]>;
+
   /** Source map: step ID -> source location in the .spell file */
   sourceMap?: Record<string, { line: number; column: number }>;
 }

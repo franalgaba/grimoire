@@ -186,6 +186,7 @@ program
   .option("--ens-rpc-url <url>", "RPC URL for ENS lookups (defaults to ENS_RPC_URL or RPC_URL)")
   .option("--state-dir <dir>", "Directory for state database")
   .option("--no-state", "Disable state persistence")
+  .option("--trigger <type>", "Run only the specified trigger handler (e.g., manual, hourly)")
   .action(castCommand);
 
 // Venues command

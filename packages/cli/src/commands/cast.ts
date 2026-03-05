@@ -114,6 +114,8 @@ interface CastOptions {
   ensName?: string;
   ensRpcUrl?: string;
   state?: boolean;
+  // Trigger filter
+  trigger?: string;
 }
 
 export async function castCommand(spellPath: string, options: CastOptions): Promise<void> {
@@ -154,6 +156,19 @@ export async function castCommand(spellPath: string, options: CastOptions): Prom
 
     const spell = compileResult.ir;
     spinner.succeed(chalk.green("Spell compiled successfully"));
+
+    // Validate --trigger option against available triggers
+    if (options.trigger) {
+      const anyTrigger = spell.triggers.find((t) => t.type === "any");
+      if (!anyTrigger || anyTrigger.type !== "any" || !spell.triggerStepMap) {
+        console.log(
+          chalk.yellow(
+            `Warning: --trigger "${options.trigger}" ignored — spell has a single trigger (no filtering needed).`
+          )
+        );
+      }
+    }
+
     const noState = resolveNoState(options);
 
     const hasExplicitKey = !!(options.privateKey || options.mnemonic || options.keystore);
@@ -430,6 +445,7 @@ async function executeWithWallet(
         onAdvisory,
         eventCallback,
         queryProvider,
+        triggerFilter: options.trigger,
       });
     }
   );
@@ -553,6 +569,7 @@ async function executeSimulation(
         onAdvisory,
         eventCallback,
         queryProvider: simQueryProvider,
+        triggerFilter: options.trigger,
       });
     }
   );
