@@ -1,5 +1,11 @@
 # @grimoirelabs/cli
 
+## 0.13.1
+
+### Patch Changes
+
+- c1d5ac1: Auto-create provider when spells use query functions (`balance()`, `price()`) in guards or expressions, even without explicit `--rpc-url`. Adds `spellUsesQueryFunctions()` static analysis to detect query function calls in spell IR. Documents delimiter rules (commas required inside `()`, newlines inside `{}`) and adds guidance to prefer `price()`/`balance()` over advisory for data fetching.
+
 ## 0.13.0
 
 ### Minor Changes
