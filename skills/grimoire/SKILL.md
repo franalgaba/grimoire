@@ -24,24 +24,25 @@ Use this skill when the task includes:
 
 ## Mandatory Loading Rules
 
-These rules are required and solve syntax coverage gaps.
+All `references/` and `docs/` paths below are relative to this skill directory (`skills/grimoire/`). These rules are **required** — they solve syntax coverage gaps that cause authoring errors.
 
-1. For any `.spell` authoring/editing task:
-   - first read `references/syntax-capabilities.md`
-   - then read `references/authoring-workflow.md`
-2. For CLI flag details:
-   - read `references/cli-quick-reference.md`
-3. For any advisory task (`advise`, `advisors`, replay):
-   - read `docs/how-to/use-advisory-decisions.md`
-   - read `docs/explanation/advisory-decision-flow.md`
-4. Do not rely on memory for DSL syntax when authoring; use the references above.
-5. For local fork preview workflows:
-   - read `references/anvil-cheatsheet.md`
-   - then read `docs/how-to/simulate-on-anvil-fork.md`
-6. For wallet setup and execution key flows:
-   - read `docs/how-to/use-wallet-commands-end-to-end.md`
-7. For RPC/signer/transaction diagnostics:
-   - read `references/cast-cheatsheet.md`
+**STOP — read this first:** Do NOT search the codebase, grep for syntax patterns, or rely on memory for DSL syntax. The reference files bundled with this skill are the single source of truth. IMMEDIATELY use the Read tool on the files listed below before writing or editing any spell content.
+
+1. For any `.spell` authoring/editing task — IMMEDIATELY read these files using the Read tool before doing anything else:
+   - `references/syntax-capabilities.md`
+   - `references/authoring-workflow.md`
+2. For CLI flag details — IMMEDIATELY read using the Read tool:
+   - `references/cli-quick-reference.md`
+3. For any advisory task (`advise`, `advisors`, replay) — IMMEDIATELY read using the Read tool:
+   - `docs/how-to/use-advisory-decisions.md`
+   - `docs/explanation/advisory-decision-flow.md`
+4. For local fork preview workflows — IMMEDIATELY read using the Read tool:
+   - `references/anvil-cheatsheet.md`
+   - `docs/how-to/simulate-on-anvil-fork.md`
+5. For wallet setup and execution key flows — IMMEDIATELY read using the Read tool:
+   - `docs/how-to/use-wallet-commands-end-to-end.md`
+6. For RPC/signer/transaction diagnostics — IMMEDIATELY read using the Read tool:
+   - `references/cast-cheatsheet.md`
 
 ## Installation Resolution
 
