@@ -118,8 +118,10 @@ export class Transformer {
       const triggers = ast.triggers.map((t) => this.transformTriggerType(t.trigger));
       source.trigger = { any: triggers as unknown as Array<Record<string, unknown>> };
 
-      // Merge all steps (simplified - in practice we'd need more complex handling)
-      source.steps = ast.triggers.flatMap((t) => this.transformStatements(t.body));
+      // Merge all steps, tagging each with its trigger index for triggerStepMap
+      source.steps = ast.triggers.flatMap((t, triggerIndex) =>
+        this.transformStatements(t.body).map((step) => ({ ...step, _triggerIndex: triggerIndex }))
+      );
     }
 
     return source;

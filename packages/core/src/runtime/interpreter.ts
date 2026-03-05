@@ -11,7 +11,7 @@ import type {
 } from "../types/execution.js";
 import type { AdvisorDef, Guard, GuardDef, SpellIR } from "../types/ir.js";
 import type { PolicySet } from "../types/policy.js";
-import type { Address, ChainId } from "../types/primitives.js";
+import type { Address, ChainId, Trigger } from "../types/primitives.js";
 import type { QueryProvider } from "../types/query-provider.js";
 import type {
   AccountingSummary,
@@ -130,6 +130,8 @@ export interface ExecuteOptions {
   crossChain?: ActionExecutionOptions["crossChain"];
   /** Pluggable query provider for balance/price/apy/etc. */
   queryProvider?: QueryProvider;
+  /** Filter execution to a specific trigger handler by type name (e.g., "manual", "hourly") */
+  triggerFilter?: string;
 }
 
 // =============================================================================
@@ -159,6 +161,28 @@ export interface PreviewOptions {
   crossChain?: ActionExecutionOptions["crossChain"];
   /** Pluggable query provider for balance/price/apy/etc. */
   queryProvider?: QueryProvider;
+  /** Filter execution to a specific trigger handler by type name (e.g., "manual", "hourly") */
+  triggerFilter?: string;
+}
+
+/** Check if a trigger matches a filter string (e.g., "manual", "hourly", "daily") */
+function matchesTriggerFilter(trigger: Trigger, filter: string): boolean {
+  if (trigger.type === filter) return true;
+  if (filter === "hourly" && trigger.type === "schedule" && trigger.cron === "0 * * * *")
+    return true;
+  if (filter === "daily" && trigger.type === "schedule" && trigger.cron === "0 0 * * *")
+    return true;
+  return false;
+}
+
+/** Describe a trigger for user-facing messages */
+function describeTrigger(trigger: Trigger): string {
+  if (trigger.type === "schedule") {
+    if (trigger.cron === "0 * * * *") return "hourly";
+    if (trigger.cron === "0 0 * * *") return "daily";
+    return `schedule(${trigger.cron})`;
+  }
+  return trigger.type;
 }
 
 /**
@@ -166,7 +190,33 @@ export interface PreviewOptions {
  * collects PlannedActions and ValueDeltas, and assembles a Receipt.
  */
 export async function preview(options: PreviewOptions): Promise<PreviewResult> {
-  const { spell, vault, chain, params = {}, persistentState = {} } = options;
+  const { spell: originalSpell, vault, chain, params = {}, persistentState = {} } = options;
+
+  // Apply trigger filter: narrow steps to only those from the matched trigger handler
+  let spell = originalSpell;
+  let triggerOverride: ExecutionContext["trigger"] | undefined = options.trigger;
+
+  if (options.triggerFilter && originalSpell.triggerStepMap) {
+    const anyTrigger = originalSpell.triggers.find((t) => t.type === "any");
+    if (anyTrigger && anyTrigger.type === "any") {
+      const filter = options.triggerFilter as string;
+      const matchedIndex = anyTrigger.triggers.findIndex((t) => matchesTriggerFilter(t, filter));
+      if (matchedIndex === -1) {
+        const available = anyTrigger.triggers.map(describeTrigger).join(", ");
+        throw new Error(
+          `Unknown trigger "${options.triggerFilter}". Available triggers: ${available}`
+        );
+      }
+      const allowedStepIds = new Set(originalSpell.triggerStepMap[matchedIndex] ?? []);
+      spell = {
+        ...originalSpell,
+        steps: originalSpell.steps.filter((s) => allowedStepIds.has(s.id)),
+      };
+      // Set trigger context to the matched sub-trigger instead of "any"
+      const matchedTrigger = anyTrigger.triggers[matchedIndex];
+      triggerOverride = { type: matchedTrigger.type, source: matchedTrigger.type };
+    }
+  }
 
   // Always simulate during preview
   const actionExecution: ActionExecutionOptions = { mode: "simulate" };
@@ -194,7 +244,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
     vault,
     chain,
     runId: options.runId,
-    trigger: options.trigger,
+    trigger: triggerOverride,
     params,
     persistentState,
     queryProvider: options.queryProvider,
@@ -753,6 +803,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     warningCallback: options.warningCallback,
     crossChain: options.crossChain,
     queryProvider: options.queryProvider,
+    triggerFilter: options.triggerFilter,
   });
 
   if (!previewResult.success || !previewResult.receipt) {
