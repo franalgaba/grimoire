@@ -135,6 +135,16 @@ Use `references/cli-quick-reference.md` for concise command signatures and safet
 - `simulate` supports explicit `--rpc-url`, with precedence: `--rpc-url` -> `RPC_URL_<chainId>` -> `RPC_URL`.
 - Phase 1 cross-chain execution uses two-spell orchestration (`--destination-spell`) with one logical run id and resume support.
 
+## Query Functions (price / balance)
+
+**Always prefer `price()` and `balance()` over advisory for data fetching.** These are deterministic, fast, and don't require LLM calls.
+
+- `price(BASE, QUOTE)` — live token price via query provider (requires Alchemy RPC URL)
+- `balance(ASSET)` — on-chain token balance via RPC (any RPC URL)
+- Never use an advisory (`advise`) just to fetch a price, balance, or other structured data
+
+Use advisory only when the task requires LLM judgment, reasoning, or interpretation.
+
 ## Advisory Operating Rules
 
 - Advisory must be explicit statement form: `x = advise advisor: "prompt" { ... }`.

@@ -303,6 +303,33 @@ Expression forms:
 - function calls (`min`, `max`, `sum`, `avg`, `to_number`, `to_bigint`, etc.)
 - query functions: `price(base, quote, source?)`, `balance(asset, address?)`
 
+### Query Functions vs Advisory
+
+**Always prefer `price()` and `balance()` over advisory calls for data fetching.**
+
+- `price(WBTC, USDC)` — returns a live price from the query provider (Alchemy API). Deterministic, fast, no LLM cost.
+- `balance(USDC)` — returns on-chain token balance via RPC. No LLM needed.
+- `balance(USDC, 0xaddr)` — balance of a specific address.
+- `price(ETH, USDC, "chainlink")` — with explicit source hint.
+
+Use advisory (`advise`) **only** when the task requires LLM judgment, reasoning, or interpretation — not for fetching prices, balances, or other structured data that query functions handle natively.
+
+**Anti-pattern (do NOT do this):**
+
+```spell
+# BAD: Using an LLM call just to fetch a price
+price_data = advise oracle: "Fetch BTC/USD price from API" { ... }
+```
+
+**Correct pattern:**
+
+```spell
+# GOOD: Direct query function
+btc_price = price(WBTC, USDC)
+```
+
+Requires `--rpc-url` with an Alchemy URL for `price()`; any RPC works for `balance()`.
+
 ## Constraint Clause Capabilities
 
 Inline:
@@ -323,11 +350,12 @@ Multiline:
 
 Trailing commas are accepted.
 
+**Commas are required** inside `with (...)` — parentheses suppress newlines, so newlines alone do not separate entries. This applies to all parenthesized contexts: `with (...)`, `emit foo(k=v, ...)`, function calls, and array literals `[...]`.
+
 ## Grammar/Formatting Behaviors
 
 - `#` begins a comment.
-- Newlines separate statements.
-- Newlines inside `()` and `[]` are suppressed by tokenizer.
+- **Delimiter rule:** `{}` blocks use newlines as separators. `()` and `[]` suppress newlines, so commas are required.
 - Braces `{}` are required for block structure.
 - Trailing commas are accepted in list-like contexts.
 - Multiline objects are supported.

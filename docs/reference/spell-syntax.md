@@ -403,6 +403,6 @@ Both forms accept trailing commas.
 ## Comments and Newlines
 
 - `#` starts a line comment.
-- Newlines separate statements.
-- Newlines inside `()` and `[]` are suppressed by tokenizer.
+- Newlines separate statements inside `{}` blocks.
+- Newlines inside `()` and `[]` are suppressed by tokenizer — commas are required as separators in these contexts (e.g. `with (...)`, `emit foo(...)`, array literals).
 - Braces `{}` are structural; blocks always use braces.

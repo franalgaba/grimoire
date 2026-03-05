@@ -29,6 +29,14 @@ spell Hello {
 
 Then incrementally add venues/actions/guards/advisory blocks.
 
+**Decision guide — query functions vs advisory:**
+
+- Need a price? Use `price(BASE, QUOTE)`. Do NOT use an advisory to fetch prices.
+- Need a balance? Use `balance(ASSET)` or `balance(ASSET, address)`. Do NOT use an advisory.
+- Need LLM judgment, reasoning, or interpretation? Use `advise`.
+
+Query functions are deterministic, fast, and free. Advisory calls invoke an LLM and should only be used when human-like reasoning is required.
+
 ## 3. Compile/Validate Loop
 
 Run:
