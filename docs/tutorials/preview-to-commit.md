@@ -75,6 +75,61 @@ Look for:
 - action submission/confirmation events
 - commit status
 
+## Alternative: Client-Side Signing With `buildTransactions()`
+
+When the signer is not available server-side (browser wallets, Privy SDK, multisig), use the `buildTransactions()` API instead of `commit()`.
+
+### Flow
+
+```ts
+import { compile, preview, buildTransactions, signReceipt } from "@grimoirelabs/core";
+import { adapters } from "@grimoirelabs/venues";
+
+// 1. Compile and preview (server-side)
+const compiled = compile(sourceText);
+const previewResult = await preview({
+  spell: compiled.ir,
+  vault: vaultAddress,
+  chain: 1,
+  adapters,
+});
+
+const receipt = previewResult.receipt;
+
+// 2. Sign the receipt for cross-process integrity
+const integrity = signReceipt(receipt, process.env.RECEIPT_SECRET);
+// Persist receipt + integrity, send to client
+
+// 3. Build unsigned transactions (can be same or different process)
+const buildResult = await buildTransactions({
+  receipt,
+  walletAddress: signerAddress,
+  adapters,
+  receiptSecret: process.env.RECEIPT_SECRET,
+  receiptIntegrity: integrity,
+});
+
+// 4. Sign and broadcast each transaction client-side
+for (const step of buildResult.transactions) {
+  for (const builtTx of step.builtTransactions) {
+    await wallet.sendTransaction(builtTx.tx);
+  }
+}
+```
+
+### When to use `buildTransactions()` vs `commit()`
+
+| Scenario | Use |
+|---|---|
+| Server holds private key | `commit()` |
+| Browser wallet / Privy SDK | `buildTransactions()` |
+| Multisig proposal builder | `buildTransactions()` |
+| Offchain-only venues (Hyperliquid, Polymarket) | `commit()` (offchain adapters have no signable calldata) |
+
+### Cross-process receipts
+
+When preview and build happen in different processes or requests, use `signReceipt()` at preview time and pass `receiptSecret` + `receiptIntegrity` to `buildTransactions()`. Without this, cross-process receipts are rejected to prevent tampering.
+
 ## Notes
 
 - If no key is available, `cast` falls back to simulation mode.

@@ -72,6 +72,68 @@ Validation and safety gates:
 - in-process preview receipt provenance checks
 - drift checks and optional max-age policy
 
+### `buildTransactions(options: BuildTransactionsOptions): Promise<BuildTransactionsResult>`
+
+Builds unsigned transaction calldata from a `ready` preview receipt, without committing it.
+
+Designed for client-side signing flows where a server previews and the client signs:
+
+```
+preview() → persist receipt → buildTransactions() → sign (client) → broadcast
+```
+
+Validation and safety gates:
+
+- receipt status, phase, and ID format checks
+- same-process tamper detection via issued-receipt registry
+- cross-process integrity verification via HMAC (see `signReceipt()` below)
+- already-committed receipt rejection
+- provider chain must match receipt chain
+- drift checks (same logic as `commit()`)
+
+Behavior differences from `commit()`:
+
+- does not require a `Wallet` — only needs `walletAddress` for calldata construction
+- does not mark the receipt as committed (calling `commit()` afterwards still works)
+- rejects offchain-only adapters (they produce no signable calldata; use `commit()` instead)
+- defers provider creation until an EVM action needs gas estimation
+- forwards `receipt.chainContext.vault` to adapter context for correct recipient routing
+
+Key options:
+
+- `receipt`: the preview receipt to build from
+- `walletAddress`: signing address for calldata construction
+- `provider?`: EVM provider (must match receipt chain if provided)
+- `adapters?`: venue adapters for action building
+- `receiptSecret?` + `receiptIntegrity?`: required for cross-process receipts (see below)
+- `driftPolicy?`, `driftValues?`, `resolveDriftValue?`: drift check configuration
+
+### `signReceipt(receipt: Receipt, secret: string): string`
+
+Computes an HMAC-SHA256 integrity hash over a receipt's tamper-critical fields.
+
+Call at preview time, persist the returned hex string alongside the receipt, and pass it as `receiptIntegrity` to `buildTransactions()` when the receipt crosses process boundaries.
+
+Fields covered by the hash: `id`, `spellId`, `chainContext`, `timestamp`, `status`, `plannedActions` (including each action's type, venue, amounts, and constraints).
+
+Cross-process flow:
+
+```ts
+// Server A: preview and sign
+const result = await preview({ spell, vault, chain, adapters });
+const integrity = signReceipt(result.receipt, process.env.RECEIPT_SECRET);
+// persist receipt + integrity, respond to client
+
+// Server B (or later request): build transactions
+const buildResult = await buildTransactions({
+  receipt: persistedReceipt,
+  walletAddress: signerAddress,
+  adapters,
+  receiptSecret: process.env.RECEIPT_SECRET,
+  receiptIntegrity: persistedIntegrity,
+});
+```
+
 ### `execute(options: ExecuteOptions): Promise<ExecutionResult>`
 
 Backward-compatible wrapper that also accepts an optional `queryProvider`:

@@ -3,6 +3,8 @@
  * Executes compiled SpellIR via the preview/commit model.
  */
 
+import { createHmac, timingSafeEqual } from "node:crypto";
+import type { Action } from "../types/actions.js";
 import type {
   ExecutionContext,
   ExecutionResult,
@@ -16,6 +18,7 @@ import type { QueryProvider } from "../types/query-provider.js";
 import type {
   AccountingSummary,
   AdvisoryResult,
+  BuildTransactionsResult,
   CommitResult,
   DriftCheckResult,
   DriftKey,
@@ -30,9 +33,10 @@ import type {
 } from "../types/receipt.js";
 import type { Step } from "../types/steps.js";
 import { createVenueRegistry } from "../venues/index.js";
-import type { VenueAdapter } from "../venues/types.js";
+import type { VenueAdapter, VenueBuildResult, VenueRegistry } from "../venues/types.js";
 import { createExecutor, type ExecutionMode } from "../wallet/executor.js";
 import { createProvider, type Provider } from "../wallet/provider.js";
+import { type BuiltTransaction, TransactionBuilder } from "../wallet/tx-builder.js";
 import type { Wallet } from "../wallet/types.js";
 import { CircuitBreakerManager } from "./circuit-breaker.js";
 import {
@@ -546,122 +550,34 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
     }
   }
 
-  const driftChecks: DriftCheckResult[] = [];
-  for (const driftKey of receipt.driftKeys) {
-    if (options.driftPolicy?.maxAge) {
-      const keyAgeSec = Math.max(0, Math.floor((Date.now() - driftKey.timestamp) / 1000));
-      if (keyAgeSec > options.driftPolicy.maxAge) {
-        const structuredError = createStructuredError(
-          "commit",
-          "DRIFT_KEY_STALE",
-          `Drift key '${driftKey.field}' is stale (${keyAgeSec}s > ${options.driftPolicy.maxAge}s)`,
-          {
-            constraint: "drift_key_freshness",
-            actual: keyAgeSec,
-            limit: options.driftPolicy.maxAge,
-            path: driftKey.field,
-            suggestion: "Run preview again to refresh drift keys.",
-          }
-        );
-        ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
-        return {
-          success: false,
-          receiptId: receipt.id,
-          transactions: [],
-          driftChecks,
-          finalState: receipt.finalState,
-          ledgerEvents: ledger.getEntries(),
-          error: structuredError,
-        };
-      }
-    }
+  const driftResult = await performDriftChecks(receipt.driftKeys, {
+    driftPolicy: options.driftPolicy,
+    driftValues: options.driftValues,
+    resolveDriftValue: options.resolveDriftValue,
+  });
 
-    let resolvedValue: { found: boolean; value: unknown };
-    try {
-      resolvedValue = await resolveCommitDriftValue(driftKey, options);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const structuredError = createStructuredError(
-        "commit",
-        "DRIFT_RESOLUTION_FAILED",
-        `Failed to resolve drift value for '${driftKey.field}': ${message}`,
-        {
-          constraint: "drift_keys",
-          path: driftKey.field,
-        }
-      );
-      ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
-      return {
-        success: false,
-        receiptId: receipt.id,
-        transactions: [],
-        driftChecks,
-        finalState: receipt.finalState,
-        ledgerEvents: ledger.getEntries(),
-        error: structuredError,
-      };
-    }
-    if (!resolvedValue.found && options.driftPolicy) {
-      const structuredError = createStructuredError(
-        "commit",
-        "DRIFT_VALUE_MISSING",
-        `Missing commit-time drift value for '${driftKey.field}'`,
-        {
-          constraint: "drift_keys",
-          path: driftKey.field,
-          suggestion:
-            "Provide driftValues for this key or configure resolveDriftValue to fetch commit-time values.",
-        }
-      );
-      ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
-      return {
-        success: false,
-        receiptId: receipt.id,
-        transactions: [],
-        driftChecks,
-        finalState: receipt.finalState,
-        ledgerEvents: ledger.getEntries(),
-        error: structuredError,
-      };
-    }
+  if (driftResult.error) {
+    ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+    return {
+      success: false,
+      receiptId: receipt.id,
+      transactions: [],
+      driftChecks: driftResult.driftChecks,
+      finalState: receipt.finalState,
+      ledgerEvents: ledger.getEntries(),
+      error: driftResult.error,
+    };
+  }
 
-    const commitValue = resolvedValue.found ? resolvedValue.value : driftKey.previewValue;
-    const driftResult = evaluateDriftKey(driftKey, commitValue, options.driftPolicy);
-    driftChecks.push(driftResult);
-
+  const driftChecks = driftResult.driftChecks;
+  for (const check of driftChecks) {
     ledger.emit({
       type: "drift_check",
-      field: driftKey.field,
-      passed: driftResult.passed,
-      previewValue: driftResult.previewValue,
-      commitValue: driftResult.commitValue,
+      field: check.field,
+      passed: check.passed,
+      previewValue: check.previewValue,
+      commitValue: check.commitValue,
     });
-
-    if (!driftResult.passed) {
-      const tolerance = resolveToleranceBps(driftKey, options.driftPolicy);
-      const structuredError = createStructuredError(
-        "commit",
-        "DRIFT_EXCEEDED",
-        `Drift exceeded for '${driftKey.field}'`,
-        {
-          constraint: "drift_policy",
-          actual: driftResult.driftBps,
-          limit: tolerance,
-          path: driftKey.field,
-          suggestion: "Run preview again or increase drift tolerance for this key class.",
-        }
-      );
-      ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
-      return {
-        success: false,
-        receiptId: receipt.id,
-        transactions: [],
-        driftChecks,
-        finalState: receipt.finalState,
-        ledgerEvents: ledger.getEntries(),
-        error: structuredError,
-      };
-    }
   }
 
   // Execute planned actions
@@ -767,6 +683,193 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
     driftChecks,
     finalState: receipt.finalState,
     ledgerEvents: ledger.getEntries(),
+  };
+}
+
+// =============================================================================
+// BUILD TRANSACTIONS
+// =============================================================================
+
+/**
+ * Options for building unsigned transactions from a preview receipt
+ */
+export interface BuildTransactionsOptions {
+  receipt: Receipt;
+  walletAddress: Address;
+  provider?: Provider;
+  rpcUrl?: string;
+  adapters?: VenueAdapter[];
+  driftPolicy?: DriftPolicy;
+  driftValues?: Record<string, unknown>;
+  resolveDriftValue?: (key: DriftKey) => Promise<unknown>;
+  progressCallback?: (message: string) => void;
+  /**
+   * Secret used to verify receipt integrity for cross-process receipts.
+   * Required when the receipt was not issued by this process (i.e. not in
+   * the in-memory issuedReceipts map). Use signReceipt() at preview time
+   * to generate the matching integrity hash.
+   */
+  receiptSecret?: string;
+  /** HMAC integrity hash produced by signReceipt(receipt, secret) */
+  receiptIntegrity?: string;
+}
+
+/**
+ * Build unsigned transactions from a preview receipt.
+ * Returns calldata for client-side signing (e.g. Privy SDK).
+ * Does NOT commit the receipt — commit() can still be called afterwards.
+ */
+export async function buildTransactions(
+  options: BuildTransactionsOptions
+): Promise<BuildTransactionsResult> {
+  const { receipt } = options;
+
+  // Validate receipt status
+  if (receipt.status !== "ready") {
+    return {
+      success: false,
+      receiptId: receipt.id,
+      transactions: [],
+      driftChecks: [],
+      error: createStructuredError(
+        "commit",
+        "RECEIPT_INVALID_STATUS",
+        `Receipt status is '${receipt.status}', expected 'ready'`
+      ),
+    };
+  }
+
+  // Validate receipt shape, integrity, and committed status
+  const validationError = validateBuildReceipt(receipt, {
+    receiptSecret: options.receiptSecret,
+    receiptIntegrity: options.receiptIntegrity,
+  });
+  if (validationError) {
+    return {
+      success: false,
+      receiptId: receipt.id,
+      transactions: [],
+      driftChecks: [],
+      error: validationError,
+    };
+  }
+
+  // Check receipt age
+  if (options.driftPolicy?.maxAge) {
+    const ageSec = (Date.now() - receipt.timestamp) / 1000;
+    if (ageSec > options.driftPolicy.maxAge) {
+      return {
+        success: false,
+        receiptId: receipt.id,
+        transactions: [],
+        driftChecks: [],
+        error: createStructuredError(
+          "commit",
+          "RECEIPT_EXPIRED",
+          `Receipt expired: age ${Math.round(ageSec)}s exceeds maxAge ${options.driftPolicy.maxAge}s`,
+          {
+            actual: Math.round(ageSec),
+            limit: options.driftPolicy.maxAge,
+            suggestion: "Run preview again to generate a fresh receipt.",
+          }
+        ),
+      };
+    }
+  }
+
+  // Drift checks
+  const driftResult = await performDriftChecks(receipt.driftKeys, {
+    driftPolicy: options.driftPolicy,
+    driftValues: options.driftValues,
+    resolveDriftValue: options.resolveDriftValue,
+  });
+
+  if (driftResult.error) {
+    return {
+      success: false,
+      receiptId: receipt.id,
+      transactions: [],
+      driftChecks: driftResult.driftChecks,
+      error: driftResult.error,
+    };
+  }
+
+  // Build transactions for each planned action.
+  // Defer provider creation until we actually need it for EVM gas estimation.
+  const { chainId } = receipt.chainContext;
+
+  // Reject mismatched provider early — adapter context must use the receipt's
+  // chain so calldata (router addresses, token addresses) matches the preview.
+  if (options.provider && options.provider.chainId !== chainId) {
+    return {
+      success: false,
+      receiptId: receipt.id,
+      transactions: [],
+      driftChecks: driftResult.driftChecks,
+      error: createStructuredError(
+        "commit",
+        "CHAIN_MISMATCH",
+        `Provider chain ${options.provider.chainId} does not match receipt chain ${chainId}. ` +
+          `Provide a provider for chain ${chainId} or omit it to auto-create one.`
+      ),
+    };
+  }
+
+  const registry = createVenueRegistry(options.adapters ?? []);
+  let lazyProvider: Provider | undefined = options.provider;
+
+  const getProvider = (): Provider => {
+    if (!lazyProvider) {
+      lazyProvider = createProvider(chainId, options.rpcUrl);
+    }
+    return lazyProvider;
+  };
+
+  const transactions: BuildTransactionsResult["transactions"] = [];
+
+  for (const planned of receipt.plannedActions) {
+    try {
+      options.progressCallback?.(`Building transactions for step '${planned.stepId}'...`);
+      const builtTxs = await buildActionTransactions(
+        planned.action,
+        chainId,
+        getProvider,
+        options.walletAddress,
+        receipt.chainContext.vault,
+        registry
+      );
+      transactions.push({
+        stepId: planned.stepId,
+        builtTransactions: builtTxs,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (planned.onFailure === "skip") {
+        options.progressCallback?.(
+          `Skipping step '${planned.stepId}' during transaction build: ${message}`
+        );
+        continue;
+      }
+
+      return {
+        success: false,
+        receiptId: receipt.id,
+        transactions,
+        driftChecks: driftResult.driftChecks,
+        error: createStructuredError(
+          "commit",
+          "BUILD_TRANSACTIONS_FAILED",
+          `Failed to build transactions for step '${planned.stepId}': ${message}`
+        ),
+      };
+    }
+  }
+
+  return {
+    success: true,
+    receiptId: receipt.id,
+    transactions,
+    driftChecks: driftResult.driftChecks,
   };
 }
 
@@ -1147,6 +1250,58 @@ function registerIssuedReceipt(receipt: Receipt): void {
   });
 }
 
+// =============================================================================
+// RECEIPT INTEGRITY (cross-process verification)
+// =============================================================================
+
+/**
+ * Deterministic serialization of the receipt fields that must not change
+ * between preview and buildTransactions.  Used as the HMAC payload.
+ */
+function canonicalizeReceiptFields(receipt: Receipt): string {
+  const critical = {
+    id: receipt.id,
+    spellId: receipt.spellId,
+    chainId: receipt.chainContext.chainId,
+    vault: receipt.chainContext.vault,
+    timestamp: receipt.timestamp,
+    status: receipt.status,
+    plannedActions: receipt.plannedActions.map((pa) => ({
+      stepId: pa.stepId,
+      venue: pa.venue,
+      action: pa.action,
+      onFailure: pa.onFailure,
+    })),
+  };
+  return JSON.stringify(critical, (_key, value) =>
+    typeof value === "bigint" ? `__bigint__${value.toString()}` : value
+  );
+}
+
+/**
+ * Sign a receipt for cross-process integrity verification.
+ * Call this at preview time, persist the returned hex string alongside
+ * the receipt, and pass it as `receiptIntegrity` to buildTransactions().
+ */
+export function signReceipt(receipt: Receipt, secret: string): string {
+  const payload = canonicalizeReceiptFields(receipt);
+  return createHmac("sha256", secret).update(payload).digest("hex");
+}
+
+/**
+ * Verify a receipt's HMAC integrity against the expected hash.
+ * Uses constant-time comparison to prevent timing attacks.
+ */
+function verifyReceiptIntegrity(receipt: Receipt, secret: string, integrity: string): boolean {
+  const expected = signReceipt(receipt, secret);
+  if (expected.length !== integrity.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(integrity, "hex"));
+  } catch {
+    return false;
+  }
+}
+
 function validateCommitReceipt(receipt: Receipt): StructuredError | undefined {
   if (receipt.phase !== "preview") {
     return createStructuredError(
@@ -1197,9 +1352,189 @@ function validateCommitReceipt(receipt: Receipt): StructuredError | undefined {
   return undefined;
 }
 
-async function resolveCommitDriftValue(
+/**
+ * Receipt validation for buildTransactions().
+ *
+ * Same-process receipts (in issuedReceipts) are verified via the in-memory
+ * tamper check, exactly like commit().
+ *
+ * Cross-process receipts (not in issuedReceipts) require an HMAC integrity
+ * proof produced by signReceipt().  Without this, a caller could fabricate
+ * or modify plannedActions and obtain signable calldata for actions that
+ * were never previewed.
+ *
+ * We also check committedReceipts to prevent building calldata for a
+ * receipt that has already been committed.
+ */
+function validateBuildReceipt(
+  receipt: Receipt,
+  integrity: { receiptSecret?: string; receiptIntegrity?: string }
+): StructuredError | undefined {
+  if (receipt.phase !== "preview") {
+    return createStructuredError(
+      "commit",
+      "RECEIPT_INVALID_PHASE",
+      `Receipt phase is '${receipt.phase}', expected 'preview'`
+    );
+  }
+
+  if (!receipt.id.startsWith("rcpt_")) {
+    return createStructuredError(
+      "commit",
+      "RECEIPT_INVALID_ID",
+      "Receipt ID must start with 'rcpt_'"
+    );
+  }
+
+  if (committedReceipts.has(receipt.id)) {
+    return createStructuredError(
+      "commit",
+      "RECEIPT_ALREADY_COMMITTED",
+      "Receipt has already been committed."
+    );
+  }
+
+  // Same-process: verify against in-memory provenance
+  const issuedReceipt = issuedReceipts.get(receipt.id);
+  if (issuedReceipt) {
+    if (
+      issuedReceipt.spellId !== receipt.spellId ||
+      issuedReceipt.chainId !== receipt.chainContext.chainId ||
+      issuedReceipt.vault !== receipt.chainContext.vault ||
+      issuedReceipt.timestamp !== receipt.timestamp
+    ) {
+      return createStructuredError(
+        "commit",
+        "PREVIEW_RECEIPT_TAMPERED",
+        "Receipt identity does not match the preview-generated artifact."
+      );
+    }
+    return undefined;
+  }
+
+  // Cross-process: require HMAC integrity proof
+  if (!integrity.receiptSecret || !integrity.receiptIntegrity) {
+    return createStructuredError(
+      "commit",
+      "RECEIPT_INTEGRITY_MISSING",
+      "Cross-process receipts require receiptSecret and receiptIntegrity for verification. " +
+        "Use signReceipt() at preview time to generate the integrity hash."
+    );
+  }
+
+  if (!verifyReceiptIntegrity(receipt, integrity.receiptSecret, integrity.receiptIntegrity)) {
+    return createStructuredError(
+      "commit",
+      "RECEIPT_INTEGRITY_FAILED",
+      "Receipt integrity verification failed. The receipt may have been modified."
+    );
+  }
+
+  return undefined;
+}
+
+/** Drift check options shared by commit() and buildTransactions() */
+interface DriftCheckOptions {
+  driftPolicy?: DriftPolicy;
+  driftValues?: Record<string, unknown>;
+  resolveDriftValue?: (key: DriftKey) => Promise<unknown>;
+}
+
+/** Run drift checks for a set of drift keys. Returns accumulated checks and optional error. */
+async function performDriftChecks(
+  driftKeys: DriftKey[],
+  options: DriftCheckOptions
+): Promise<{ driftChecks: DriftCheckResult[]; error?: StructuredError }> {
+  const driftChecks: DriftCheckResult[] = [];
+
+  for (const driftKey of driftKeys) {
+    if (options.driftPolicy?.maxAge) {
+      const keyAgeSec = Math.max(0, Math.floor((Date.now() - driftKey.timestamp) / 1000));
+      if (keyAgeSec > options.driftPolicy.maxAge) {
+        return {
+          driftChecks,
+          error: createStructuredError(
+            "commit",
+            "DRIFT_KEY_STALE",
+            `Drift key '${driftKey.field}' is stale (${keyAgeSec}s > ${options.driftPolicy.maxAge}s)`,
+            {
+              constraint: "drift_key_freshness",
+              actual: keyAgeSec,
+              limit: options.driftPolicy.maxAge,
+              path: driftKey.field,
+              suggestion: "Run preview again to refresh drift keys.",
+            }
+          ),
+        };
+      }
+    }
+
+    let resolvedValue: { found: boolean; value: unknown };
+    try {
+      resolvedValue = await resolveDriftValue(driftKey, options);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        driftChecks,
+        error: createStructuredError(
+          "commit",
+          "DRIFT_RESOLUTION_FAILED",
+          `Failed to resolve drift value for '${driftKey.field}': ${message}`,
+          {
+            constraint: "drift_keys",
+            path: driftKey.field,
+          }
+        ),
+      };
+    }
+
+    if (!resolvedValue.found && options.driftPolicy) {
+      return {
+        driftChecks,
+        error: createStructuredError(
+          "commit",
+          "DRIFT_VALUE_MISSING",
+          `Missing commit-time drift value for '${driftKey.field}'`,
+          {
+            constraint: "drift_keys",
+            path: driftKey.field,
+            suggestion:
+              "Provide driftValues for this key or configure resolveDriftValue to fetch commit-time values.",
+          }
+        ),
+      };
+    }
+
+    const commitValue = resolvedValue.found ? resolvedValue.value : driftKey.previewValue;
+    const driftResult = evaluateDriftKey(driftKey, commitValue, options.driftPolicy);
+    driftChecks.push(driftResult);
+
+    if (!driftResult.passed) {
+      const tolerance = resolveToleranceBps(driftKey, options.driftPolicy);
+      return {
+        driftChecks,
+        error: createStructuredError(
+          "commit",
+          "DRIFT_EXCEEDED",
+          `Drift exceeded for '${driftKey.field}'`,
+          {
+            constraint: "drift_policy",
+            actual: driftResult.driftBps,
+            limit: tolerance,
+            path: driftKey.field,
+            suggestion: "Run preview again or increase drift tolerance for this key class.",
+          }
+        ),
+      };
+    }
+  }
+
+  return { driftChecks };
+}
+
+async function resolveDriftValue(
   driftKey: DriftKey,
-  options: CommitOptions
+  options: DriftCheckOptions
 ): Promise<{ found: boolean; value: unknown }> {
   if (options.driftValues && Object.hasOwn(options.driftValues, driftKey.field)) {
     return { found: true, value: options.driftValues[driftKey.field] };
@@ -1213,6 +1548,107 @@ async function resolveCommitDriftValue(
   }
 
   return { found: false, value: undefined };
+}
+
+/**
+ * Build unsigned transactions for a single action.
+ * Mirrors Executor.buildAction() for EVM actions without a wallet, and
+ * rejects offchain adapters because they do not produce signable calldata.
+ *
+ * The provider is lazy so we never instantiate it for receipts that
+ * contain only offchain or zero planned actions.
+ *
+ * Always uses the receipt's chainId for adapter context (not provider.chainId)
+ * so calldata matches the previewed chain even if a mismatched provider
+ * sneaks through.
+ */
+async function buildActionTransactions(
+  action: Action,
+  chainId: number,
+  getProvider: () => Provider,
+  walletAddress: Address,
+  vault: Address,
+  registry: VenueRegistry
+): Promise<BuiltTransaction[]> {
+  const normalizeBuildResult = (result: VenueBuildResult): BuiltTransaction[] =>
+    Array.isArray(result) ? result : [result];
+
+  if (action.type === "custom") {
+    const adapter = registry.get(action.venue);
+    if (!adapter) {
+      throw new Error(
+        `Adapter '${action.venue}' is not registered for custom action '${action.op}'.`
+      );
+    }
+
+    if (!adapter.meta.supportedChains.includes(chainId)) {
+      throw new Error(
+        `Adapter '${adapter.meta.name}' does not support chain ${chainId} for custom action '${action.op}'.`
+      );
+    }
+
+    if (adapter.meta.executionType === "offchain") {
+      throw new Error(
+        `Adapter '${adapter.meta.name}' is offchain and does not produce signable transactions for custom action '${action.op}'. ` +
+          `Use commit() instead for offchain execution.`
+      );
+    }
+
+    const provider = getProvider();
+
+    if (!adapter.buildAction) {
+      throw new Error(`Adapter '${adapter.meta.name}' does not build custom EVM actions.`);
+    }
+
+    return normalizeBuildResult(
+      await adapter.buildAction(action, {
+        provider,
+        walletAddress,
+        vault,
+        chainId,
+        mode: "execute",
+      })
+    );
+  }
+
+  if ("venue" in action && action.venue) {
+    const adapter = registry.get(action.venue);
+    if (!adapter) {
+      throw new Error(`Adapter '${action.venue}' is not registered`);
+    }
+
+    if (!adapter.meta.supportedChains.includes(chainId)) {
+      throw new Error(`Adapter '${adapter.meta.name}' does not support chain ${chainId}.`);
+    }
+
+    if (adapter.meta.executionType === "offchain") {
+      throw new Error(
+        `Adapter '${adapter.meta.name}' is offchain and does not produce signable transactions. ` +
+          `Use commit() instead for offchain execution.`
+      );
+    }
+
+    const provider = getProvider();
+
+    if (!adapter.buildAction) {
+      throw new Error(`Adapter '${adapter.meta.name}' does not support EVM actions`);
+    }
+
+    return normalizeBuildResult(
+      await adapter.buildAction(action, {
+        provider,
+        walletAddress,
+        vault,
+        chainId,
+        mode: "execute",
+      })
+    );
+  }
+
+  // Built-in action types (transfer, approve, etc.)
+  const provider = getProvider();
+  const txBuilder = new TransactionBuilder(provider, walletAddress);
+  return [await txBuilder.buildAction(action)];
 }
 
 function evaluateDriftKey(

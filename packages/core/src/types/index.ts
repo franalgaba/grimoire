@@ -148,6 +148,7 @@ export type {
   AdvisoryResult,
   AdvisoryViolationDetail,
   AssetAccounting,
+  BuildTransactionsResult,
   CommitResult,
   ConstraintCheckResult,
   DriftCheckResult,

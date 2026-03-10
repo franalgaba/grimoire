@@ -39,12 +39,15 @@ export {
   evaluateAsync,
 } from "./expression-evaluator.js";
 export {
+  type BuildTransactionsOptions,
+  buildTransactions,
   type CommitOptions,
   commit,
   type ExecuteOptions,
   execute,
   type PreviewOptions,
   preview,
+  signReceipt,
 } from "./interpreter.js";
 export {
   runManagedSession,
