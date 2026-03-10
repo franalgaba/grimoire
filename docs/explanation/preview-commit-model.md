@@ -74,6 +74,25 @@ Commit output typically includes:
 - drift check results
 - final run/ledger state
 
+## Build Transactions: Client-Side Signing
+
+`buildTransactions()` sits between preview and commit for flows where signing happens outside the runtime (e.g. browser wallets, Privy SDK, multisig proposals).
+
+```
+preview() → buildTransactions() → sign (client) → broadcast
+```
+
+It reuses the same drift checks and adapter dispatch as commit, but:
+
+- produces unsigned calldata instead of submitting transactions
+- requires only a `walletAddress`, not a `Wallet` with signing capability
+- does not mark the receipt as committed (commit can still be called)
+- rejects offchain-only adapters (they have no signable calldata)
+
+This phase inherits the same safety gates: receipt validation, drift enforcement, chain matching. For cross-process flows (receipt produced on one server, calldata built on another), receipts carry an HMAC integrity hash via `signReceipt()` to prevent tampering.
+
+The vault from the preview receipt is forwarded to adapters, so calldata targets the correct recipient even when the signing address differs from the vault (e.g. delegated signer or smart account flows).
+
 ## `execute()` Convenience API
 
 `execute()` wraps the lifecycle with mode-aware behavior:

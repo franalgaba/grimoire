@@ -2,6 +2,7 @@
  * Receipt and Value-Flow types for the preview/commit execution model.
  */
 
+import type { BuiltTransaction } from "../wallet/tx-builder.js";
 import type { Action, ActionConstraintsResolved } from "./actions.js";
 import type { CrossChainHandoffReceiptEntry, CrossChainTrackReceiptEntry } from "./cross-chain.js";
 import type { ExecutionMetrics, LedgerEntry } from "./execution.js";
@@ -199,6 +200,18 @@ export interface CommitResult {
   driftChecks: DriftCheckResult[];
   finalState: Record<string, unknown>;
   ledgerEvents: LedgerEntry[];
+  error?: StructuredError;
+}
+
+/** Result of buildTransactions() */
+export interface BuildTransactionsResult {
+  success: boolean;
+  receiptId: string;
+  transactions: Array<{
+    stepId: string;
+    builtTransactions: BuiltTransaction[];
+  }>;
+  driftChecks: DriftCheckResult[];
   error?: StructuredError;
 }
 

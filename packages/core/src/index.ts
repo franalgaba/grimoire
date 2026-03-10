@@ -62,6 +62,7 @@ export type {
   AdvisoryHandlerInput,
   BreakerRecord,
   BreakerState,
+  BuildTransactionsOptions,
   CircuitBreakerCheckResult,
   CircuitBreakerTriggerResult,
   CommitOptions,
@@ -87,6 +88,7 @@ export type {
 } from "./runtime/index.js";
 // Runtime
 export {
+  buildTransactions,
   CircuitBreakerManager,
   commit,
   createContext,
@@ -105,6 +107,7 @@ export {
   runOneShotSession,
   runSession,
   SqliteStateStore,
+  signReceipt,
   toCrossChainReceipt,
 } from "./runtime/index.js";
 // Types
