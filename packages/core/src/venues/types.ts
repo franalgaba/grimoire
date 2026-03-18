@@ -104,3 +104,17 @@ export interface VenueRegistry {
   get: (name: string) => VenueAdapter | undefined;
   list: () => VenueAdapterMeta[];
 }
+
+/**
+ * Manifest describing a venue plugin — used by both built-in and external venues.
+ */
+export interface VenueManifest {
+  /** Canonical venue name, e.g. "aave", "gmx" */
+  name: string;
+  /** Optional aliases, e.g. ["aave-v3"] */
+  aliases?: string[];
+  /** Absolute path to the CLI entry point (.ts or .js) */
+  cli: string;
+  /** Absolute path to the adapter module (default export = VenueAdapter) */
+  adapter?: string;
+}

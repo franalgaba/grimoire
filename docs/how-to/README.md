@@ -26,3 +26,4 @@ Typical examples:
 - `docs/how-to/use-advisory-decisions.md`
 - `docs/how-to/use-state-persistence.md`
 - `docs/how-to/publish.md`
+- `docs/how-to/add-a-venue.md`

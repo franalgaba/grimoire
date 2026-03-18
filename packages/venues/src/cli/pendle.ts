@@ -1,95 +1,143 @@
 #!/usr/bin/env node
 
-import { createPendleAdapter } from "../pendle.js";
-import { getOption, type OutputFormat, parseArgs, printResult, requireOption } from "./utils.js";
+import { Cli, z } from "incur";
+import { createPendleAdapter } from "../adapters/pendle/index.js";
 
-const DEFAULT_BASE_URL = "https://api-v2.pendle.finance/core";
+const DEFAULT_BASE_URL = "https://api-v2.pendle.finance/core" as const;
 
-async function main() {
-  const { command, options } = parseArgs(process.argv.slice(2));
-
-  if (!command || command === "help" || options.help) {
-    printUsage();
-    return;
-  }
-
-  const format = (getOption(options, "format") ?? "auto") as OutputFormat;
-  const baseUrl = (
-    getOption(options, "base-url") ??
-    process.env.PENDLE_API_BASE_URL ??
-    DEFAULT_BASE_URL
-  ).replace(/\/$/, "");
-
-  switch (command) {
-    case "info": {
+const cli = Cli.create("grimoire-pendle", {
+  description: "Pendle venue metadata — markets, assets, chains, and aggregators",
+  sync: { suggestions: ["list pendle markets on Ethereum", "check supported pendle chains"] },
+})
+  .use(async (c, next) => {
+    const start = performance.now();
+    await next();
+    if (!c.agent) console.error(`Done in ${(performance.now() - start).toFixed(0)}ms`);
+  })
+  .command("info", {
+    description: "Show adapter metadata",
+    options: z.object({
+      baseUrl: z.string().default(DEFAULT_BASE_URL).describe("Pendle API base URL"),
+    }),
+    env: z.object({
+      PENDLE_API_BASE_URL: z.string().optional().describe("Override Pendle API base URL"),
+    }),
+    run(c) {
+      const baseUrl = resolveBaseUrl(c.options.baseUrl, c.env.PENDLE_API_BASE_URL);
       const adapter = createPendleAdapter({ baseUrl });
-      printResult(
-        {
-          ...adapter.meta,
-          baseUrl,
-        },
-        format
-      );
-      return;
-    }
-    case "chains": {
-      const data = await fetchJson<Record<string, unknown>>(baseUrl, "/v1/chains");
-      printResult(data, format);
-      return;
-    }
-    case "supported-aggregators": {
-      const chainId = Number.parseInt(requireOption(options, "chain"), 10);
-      const data = await fetchJson<Record<string, unknown>>(
-        baseUrl,
-        `/v1/sdk/${chainId}/supported-aggregators`
-      );
-      printResult(data, format);
-      return;
-    }
-    case "markets": {
+      return c.ok({ ...adapter.meta, baseUrl }, { cta: { commands: ["chains", "markets"] } });
+    },
+  })
+  .command("chains", {
+    description: "List supported chains",
+    options: z.object({
+      baseUrl: z.string().default(DEFAULT_BASE_URL).describe("Pendle API base URL"),
+    }),
+    env: z.object({
+      PENDLE_API_BASE_URL: z.string().optional().describe("Override Pendle API base URL"),
+    }),
+    async run(c) {
+      const baseUrl = resolveBaseUrl(c.options.baseUrl, c.env.PENDLE_API_BASE_URL);
+      const data = await fetchPendleJson(baseUrl, "/v1/chains");
+      return c.ok(data, { cta: { commands: ["markets --chain <id>"] } });
+    },
+  })
+  .command("supported-aggregators", {
+    description: "List supported aggregators for a chain",
+    alias: { chain: "c" },
+    options: z.object({
+      chain: z.coerce.number().describe("Chain ID"),
+      baseUrl: z.string().default(DEFAULT_BASE_URL).describe("Pendle API base URL"),
+    }),
+    env: z.object({
+      PENDLE_API_BASE_URL: z.string().optional().describe("Override Pendle API base URL"),
+    }),
+    async run(c) {
+      const baseUrl = resolveBaseUrl(c.options.baseUrl, c.env.PENDLE_API_BASE_URL);
+      return fetchPendleJson(baseUrl, `/v1/sdk/${c.options.chain}/supported-aggregators`);
+    },
+  })
+  .command("markets", {
+    description: "List markets, optionally filtered by chain and active status",
+    alias: { chain: "c" },
+    examples: [{ options: { chain: 1, active: true }, description: "Active markets on Ethereum" }],
+    options: z.object({
+      chain: z.coerce.number().optional().describe("Chain ID"),
+      active: z.boolean().optional().describe("Filter by active status"),
+      baseUrl: z.string().default(DEFAULT_BASE_URL).describe("Pendle API base URL"),
+    }),
+    env: z.object({
+      PENDLE_API_BASE_URL: z.string().optional().describe("Override Pendle API base URL"),
+    }),
+    async run(c) {
+      const baseUrl = resolveBaseUrl(c.options.baseUrl, c.env.PENDLE_API_BASE_URL);
       const params = new URLSearchParams();
-      const chain = getOption(options, "chain");
-      const active = getOption(options, "active");
-      if (chain) params.set("chainId", chain);
-      if (active) params.set("isActive", normalizeBooleanOption(active, "active"));
-      const path = `/v1/markets/all${params.size > 0 ? `?${params.toString()}` : ""}`;
-      const data = await fetchJson<Record<string, unknown>>(baseUrl, path);
-      printResult(data, format);
-      return;
-    }
-    case "assets": {
+      if (c.options.chain !== undefined) params.set("chainId", String(c.options.chain));
+      if (c.options.active !== undefined) params.set("isActive", String(c.options.active));
+      const query = params.size > 0 ? `?${params.toString()}` : "";
+      const data = await fetchPendleJson(baseUrl, `/v1/markets/all${query}`);
+      return c.ok(data, { cta: { commands: ["assets", "market-tokens"] } });
+    },
+  })
+  .command("assets", {
+    description: "List assets, optionally filtered by chain and type (PT, YT, LP, SY)",
+    alias: { chain: "c" },
+    examples: [{ options: { chain: 1, type: "PT" }, description: "PT assets on Ethereum" }],
+    options: z.object({
+      chain: z.coerce.number().optional().describe("Chain ID"),
+      type: z.enum(["PT", "YT", "LP", "SY"]).optional().describe("Asset type"),
+      baseUrl: z.string().default(DEFAULT_BASE_URL).describe("Pendle API base URL"),
+    }),
+    env: z.object({
+      PENDLE_API_BASE_URL: z.string().optional().describe("Override Pendle API base URL"),
+    }),
+    async run(c) {
+      const baseUrl = resolveBaseUrl(c.options.baseUrl, c.env.PENDLE_API_BASE_URL);
       const params = new URLSearchParams();
-      const chain = getOption(options, "chain");
-      const type = getOption(options, "type");
-      if (chain) params.set("chainId", chain);
-      if (type) params.set("type", normalizeAssetType(type));
-      const path = `/v1/assets/all${params.size > 0 ? `?${params.toString()}` : ""}`;
-      const data = await fetchJson<Record<string, unknown>>(baseUrl, path);
-      printResult(data, format);
-      return;
-    }
-    case "market-tokens": {
-      const chainId = Number.parseInt(requireOption(options, "chain"), 10);
-      const market = requireOption(options, "market");
-      const data = await fetchJson<Record<string, unknown>>(
+      if (c.options.chain !== undefined) params.set("chainId", String(c.options.chain));
+      if (c.options.type)
+        params.set("type", c.options.type === "LP" ? "PENDLE_LP" : c.options.type);
+      const query = params.size > 0 ? `?${params.toString()}` : "";
+      const data = await fetchPendleJson(baseUrl, `/v1/assets/all${query}`);
+      return c.ok(data, { cta: { commands: ["market-tokens"] } });
+    },
+  })
+  .command("market-tokens", {
+    description: "List tokens for a specific market",
+    alias: { chain: "c" },
+    examples: [
+      { options: { chain: 1, market: "0x..." }, description: "Tokens for a specific market" },
+    ],
+    options: z.object({
+      chain: z.coerce.number().describe("Chain ID"),
+      market: z.string().describe("Market address"),
+      baseUrl: z.string().default(DEFAULT_BASE_URL).describe("Pendle API base URL"),
+    }),
+    env: z.object({
+      PENDLE_API_BASE_URL: z.string().optional().describe("Override Pendle API base URL"),
+    }),
+    async run(c) {
+      const baseUrl = resolveBaseUrl(c.options.baseUrl, c.env.PENDLE_API_BASE_URL);
+      return fetchPendleJson(
         baseUrl,
-        `/v1/sdk/${chainId}/markets/${market}/tokens`
+        `/v1/sdk/${c.options.chain}/markets/${c.options.market}/tokens`
       );
-      printResult(data, format);
-      return;
-    }
-    default:
-      throw new Error(`Unknown command: ${command}`);
-  }
+    },
+  });
+
+cli.serve();
+
+// --- Helpers ---
+
+function resolveBaseUrl(optionValue: string, envValue?: string): string {
+  const raw = envValue ?? optionValue;
+  return raw.replace(/\/$/, "");
 }
 
-function printUsage() {
-  console.log(
-    "\nPendle CLI (grimoire-pendle)\n\nCommands:\n  info [--base-url <url>] [--format <auto|json|table>]\n  chains [--base-url <url>] [--format <auto|json|table>]\n  supported-aggregators --chain <id> [--base-url <url>] [--format <auto|json|table>]\n  markets [--chain <id>] [--active <true|false>] [--base-url <url>] [--format <auto|json|table>]\n  assets [--chain <id>] [--type <PT|YT|LP|SY>] [--base-url <url>] [--format <auto|json|table>]\n  market-tokens --chain <id> --market <address> [--base-url <url>] [--format <auto|json|table>]\n"
-  );
-}
-
-async function fetchJson<T>(baseUrl: string, path: string): Promise<T> {
+async function fetchPendleJson<T = Record<string, unknown>>(
+  baseUrl: string,
+  path: string
+): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`);
   if (!response.ok) {
     const text = await response.text();
@@ -99,25 +147,3 @@ async function fetchJson<T>(baseUrl: string, path: string): Promise<T> {
   }
   return (await response.json()) as T;
 }
-
-function normalizeBooleanOption(value: string, key: string): string {
-  const lower = value.trim().toLowerCase();
-  if (lower === "true" || lower === "false") return lower;
-  throw new Error(`Invalid --${key} value '${value}', expected true|false`);
-}
-
-function normalizeAssetType(value: string): string {
-  const upper = value.trim().toUpperCase();
-  if (upper === "PT" || upper === "YT" || upper === "SY" || upper === "PENDLE_LP") {
-    return upper;
-  }
-  if (upper === "LP") {
-    return "PENDLE_LP";
-  }
-  throw new Error(`Invalid --type value '${value}', expected PT|YT|LP|SY`);
-}
-
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});

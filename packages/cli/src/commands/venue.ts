@@ -1,112 +1,28 @@
 /**
  * Venue Command
  * Proxies venue metadata CLIs bundled in @grimoirelabs/venues
+ * and externally discovered grimoire-venue-* packages.
  */
 
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { createRequire } from "node:module";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import {
+  buildVenueCliMap,
+  discoverAllVenues,
+  normalizeAdapterName,
+} from "../lib/venue-discovery.js";
 import { venueDoctorCommand } from "./venue-doctor.js";
 
-const require = createRequire(import.meta.url);
-
-export const VENUE_CLI_MAP: Record<string, string> = {
-  aave: "aave",
-  "aave-v3": "aave",
-  uniswap: "uniswap",
-  "uniswap-v3": "uniswap",
-  "uniswap-v4": "uniswap",
-  "morpho-blue": "morpho-blue",
-  morpho: "morpho-blue",
-  hyperliquid: "hyperliquid",
-  pendle: "pendle",
-  polymarket: "polymarket",
-};
-
-const PRIMARY_ADAPTERS = [
-  { name: "aave", aliases: ["aave-v3"] },
-  { name: "uniswap", aliases: ["uniswap-v3", "uniswap-v4"] },
-  { name: "morpho-blue", aliases: ["morpho"] },
-  { name: "hyperliquid", aliases: [] },
-  { name: "pendle", aliases: [] },
-  { name: "polymarket", aliases: [] },
-];
-
 export function normalizeAdapter(adapter: string): string {
-  return adapter
-    .toLowerCase()
-    .replace(/^grimoire-/, "")
-    .replace(/_/g, "-");
+  return normalizeAdapterName(adapter);
 }
 
 export function resolveVenueCliPath(cliName: string): string {
-  const venuesRoot = resolveVenuesRoot();
-  const srcPath = path.join(venuesRoot, "src", "cli", `${cliName}.ts`);
-  if (isBunRuntime() && existsSync(srcPath)) {
-    return srcPath;
-  }
+  const manifests = discoverAllVenues();
+  const manifest = manifests.find((venue) => venue.name === cliName);
+  if (manifest) return manifest.cli;
 
-  const distPath = path.join(venuesRoot, "dist", "cli", `${cliName}.js`);
-  if (existsSync(distPath)) return distPath;
-
-  if (existsSync(srcPath)) {
-    return srcPath;
-  }
-
-  return distPath;
-}
-
-function resolveVenuesRoot(): string {
-  try {
-    const venuesEntry = require.resolve("@grimoirelabs/venues");
-    const venuesRoot = findPackageRootFromEntry(venuesEntry);
-    if (venuesRoot) return venuesRoot;
-  } catch {
-    // no-op; handled by fallbacks
-  }
-
-  try {
-    const venuesPkg = require.resolve("@grimoirelabs/venues/package.json");
-    return path.dirname(venuesPkg);
-  } catch {
-    // no-op; handled by workspace fallback
-  }
-
-  const workspaceRoot = findWorkspaceVenuesRoot();
-  if (workspaceRoot) return workspaceRoot;
-  throw new Error("Unable to resolve @grimoirelabs/venues. Is it installed?");
-}
-
-function findPackageRootFromEntry(entryPath: string): string | null {
-  let current = path.dirname(entryPath);
-  for (let i = 0; i < 6; i++) {
-    const pkgPath = path.join(current, "package.json");
-    const distCliPath = path.join(current, "dist", "cli");
-    if (existsSync(pkgPath) && existsSync(distCliPath)) {
-      return current;
-    }
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-
-  return null;
-}
-
-function findWorkspaceVenuesRoot(): string | null {
-  let current = path.dirname(fileURLToPath(import.meta.url));
-  for (let i = 0; i < 6; i++) {
-    const candidate = path.join(current, "packages", "venues", "package.json");
-    if (existsSync(candidate)) {
-      return path.dirname(candidate);
-    }
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  return null;
+  throw new Error(`Venue CLI "${cliName}" not found. Is @grimoirelabs/venues installed?`);
 }
 
 export async function venueCommand(adapter: string, args: string[] = []): Promise<void> {
@@ -115,7 +31,7 @@ export async function venueCommand(adapter: string, args: string[] = []): Promis
     return;
   }
 
-  const normalized = normalizeAdapter(adapter);
+  const normalized = normalizeAdapterName(adapter);
   if (normalized === "doctor") {
     try {
       const report = await venueDoctorCommand(args);
@@ -129,10 +45,12 @@ export async function venueCommand(adapter: string, args: string[] = []): Promis
     }
   }
 
-  const cliName = VENUE_CLI_MAP[normalized];
+  const manifests = discoverAllVenues();
+  const cliMap = buildVenueCliMap(manifests);
+  const cliName = cliMap[normalized];
 
   if (!cliName) {
-    const options = PRIMARY_ADAPTERS.map((adapter) => adapter.name).join(", ");
+    const options = manifests.map((venue) => venue.name).join(", ");
     console.error(`Unknown venue adapter "${adapter}". Available: ${options}`);
     console.error("Run `grimoire venue --help` or `grimoire venues` for a full list.");
     process.exit(1);
@@ -156,17 +74,15 @@ export async function venueCommand(adapter: string, args: string[] = []): Promis
 }
 
 function printUsage(): void {
-  const adapterLines = PRIMARY_ADAPTERS.map((adapter) => {
-    if (adapter.aliases.length === 0) return `  - ${adapter.name}`;
-    return `  - ${adapter.name} (aliases: ${adapter.aliases.join(", ")})`;
-  }).join("\n");
+  const manifests = discoverAllVenues();
+  const adapterLines = manifests
+    .map((venue) => {
+      if (!venue.aliases || venue.aliases.length === 0) return `  - ${venue.name}`;
+      return `  - ${venue.name} (aliases: ${venue.aliases.join(", ")})`;
+    })
+    .join("\n");
 
   console.log(
     `\nUsage:\n  grimoire venue <adapter> [args...]\n  grimoire venue doctor [--chain <id>] [--adapter <name>] [--rpc-url <url>] [--json]\n\nAdapters:\n${adapterLines}\n\nExamples:\n  grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell\n  grimoire venue uniswap tokens --chain 1 --symbol USDC\n  grimoire venue pendle chains\n  grimoire venue polymarket markets --format json\n  grimoire venue aave markets --chain 1\n  grimoire venue doctor --chain 1 --adapter uniswap\n`
   );
-}
-
-function isBunRuntime(): boolean {
-  const versions = process.versions as Record<string, string | undefined>;
-  return typeof versions.bun === "string";
 }

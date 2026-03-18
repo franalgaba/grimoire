@@ -1,102 +1,171 @@
 #!/usr/bin/env node
 
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
-import { getOption, type OutputFormat, parseArgs, printResult, requireOption } from "./utils.js";
+import { Cli, z } from "incur";
 
-async function main() {
-  const { command, options } = parseArgs(process.argv.slice(2));
-
-  if (!command || command === "help" || options.help) {
-    printUsage();
-    return;
-  }
-
-  const transport = new HttpTransport();
-  const info = new InfoClient({ transport });
-  const format = getOption(options, "format") ?? "auto";
-
-  switch (command) {
-    case "mids": {
-      const result = await info.allMids();
-      if (format === "spell") {
-        printMidsSpellSnapshot(result);
-        return;
-      }
-      printResult(result, format as OutputFormat);
-      return;
-    }
-    case "l2-book": {
-      const coin = requireOption(options, "coin");
-      const result = await info.l2Book({ coin });
-      if (format === "spell") {
-        printL2BookSpellSnapshot(result, { coin });
-        return;
-      }
-      printResult(result, format as OutputFormat);
-      return;
-    }
-    case "open-orders": {
-      const user = requireOption(options, "user");
-      const result = await info.openOrders({ user });
-      if (format === "spell") {
-        printOpenOrdersSpellSnapshot(result, { user });
-        return;
-      }
-      printResult(result, format as OutputFormat);
-      return;
-    }
-    case "meta": {
-      const result = await info.meta();
-      if (format === "spell") {
-        printMetaSpellSnapshot(result);
-        return;
-      }
-      printResult(result, format as OutputFormat);
-      return;
-    }
-    case "spot-meta": {
-      const result = await info.spotMeta();
-      if (format === "spell") {
-        printSpotMetaSpellSnapshot(result);
-        return;
-      }
-      printResult(result, format as OutputFormat);
-      return;
-    }
-    case "withdraw": {
-      const amount = requireOption(options, "amount");
-      const keystorePath = requireOption(options, "keystore");
-      const passwordEnv = getOption(options, "password-env") ?? "KEYSTORE_PASSWORD";
-      const password = process.env[passwordEnv];
-      if (!password) throw new Error(`${passwordEnv} not set`);
+const cli = Cli.create("grimoire-hyperliquid", {
+  description: "Hyperliquid futures and spot data — mids, order books, meta, and withdrawals",
+  sync: { suggestions: ["get current mid prices", "check ETH order book depth"] },
+})
+  .use(async (c, next) => {
+    const start = performance.now();
+    await next();
+    if (!c.agent) console.error(`Done in ${(performance.now() - start).toFixed(0)}ms`);
+  })
+  .command("mids", {
+    description: "Get mid prices for all assets",
+    async run(c) {
+      const info = createInfoClient();
+      const data = await info.allMids();
+      return c.ok(data, { cta: { commands: ["l2-book --coin ETH", "mids-snapshot"] } });
+    },
+  })
+  .command("mids-snapshot", {
+    description: "Generate spell params snapshot for mid prices",
+    output: z.string(),
+    outputPolicy: "agent-only" as const,
+    async run() {
+      const info = createInfoClient();
+      const mids = await info.allMids();
+      return buildMidsSnapshot(mids);
+    },
+  })
+  .command("l2-book", {
+    description: "Get L2 order book for a coin",
+    examples: [{ options: { coin: "ETH" }, description: "ETH order book" }],
+    options: z.object({
+      coin: z.string().describe("Coin symbol (e.g. ETH, BTC)"),
+    }),
+    async run(c) {
+      const info = createInfoClient();
+      const data = await info.l2Book({ coin: c.options.coin });
+      return c.ok(data, { cta: { commands: ["open-orders --user <addr>"] } });
+    },
+  })
+  .command("l2-book-snapshot", {
+    description: "Generate spell params snapshot for L2 order book",
+    outputPolicy: "agent-only" as const,
+    options: z.object({
+      coin: z.string().describe("Coin symbol (e.g. ETH, BTC)"),
+    }),
+    output: z.string(),
+    async run(c) {
+      const info = createInfoClient();
+      const book = await info.l2Book({ coin: c.options.coin });
+      return buildL2BookSnapshot(book, { coin: c.options.coin });
+    },
+  })
+  .command("open-orders", {
+    description: "Get open orders for a user",
+    examples: [{ options: { user: "0x..." }, description: "Open orders for address" }],
+    options: z.object({
+      user: z.string().describe("User address"),
+    }),
+    async run(c) {
+      const info = createInfoClient();
+      return info.openOrders({ user: c.options.user });
+    },
+  })
+  .command("open-orders-snapshot", {
+    description: "Generate spell params snapshot for open orders",
+    outputPolicy: "agent-only" as const,
+    options: z.object({
+      user: z.string().describe("User address"),
+    }),
+    output: z.string(),
+    async run(c) {
+      const info = createInfoClient();
+      const orders = await info.openOrders({ user: c.options.user });
+      return buildOpenOrdersSnapshot(orders, { user: c.options.user });
+    },
+  })
+  .command("meta", {
+    description: "Get perpetual market metadata (universe)",
+    async run(c) {
+      const info = createInfoClient();
+      const data = await info.meta();
+      return c.ok(data, { cta: { commands: ["spot-meta", "mids"] } });
+    },
+  })
+  .command("meta-snapshot", {
+    description: "Generate spell params snapshot for perp metadata",
+    outputPolicy: "agent-only" as const,
+    output: z.string(),
+    async run() {
+      const info = createInfoClient();
+      const meta = await info.meta();
+      return buildMetaSnapshot(meta);
+    },
+  })
+  .command("spot-meta", {
+    description: "Get spot market metadata (tokens and universe)",
+    async run(c) {
+      const info = createInfoClient();
+      const data = await info.spotMeta();
+      return c.ok(data, { cta: { commands: ["mids"] } });
+    },
+  })
+  .command("spot-meta-snapshot", {
+    description: "Generate spell params snapshot for spot metadata",
+    outputPolicy: "agent-only" as const,
+    output: z.string(),
+    async run() {
+      const info = createInfoClient();
+      const meta = await info.spotMeta();
+      return buildSpotMetaSnapshot(meta);
+    },
+  })
+  .command("withdraw", {
+    description: "Withdraw USDC from HyperCore",
+    examples: [
+      { options: { amount: "100", keystore: "./keystore.json" }, description: "Withdraw 100 USDC" },
+    ],
+    options: z.object({
+      amount: z.string().describe("Amount of USDC to withdraw"),
+      keystore: z.string().describe("Path to keystore JSON file"),
+      passwordEnv: z
+        .string()
+        .default("KEYSTORE_PASSWORD")
+        .describe("Env var name for keystore password"),
+      destination: z
+        .string()
+        .optional()
+        .describe("Destination address (defaults to keystore address)"),
+    }),
+    async run(c) {
+      const password = process.env[c.options.passwordEnv];
+      if (!password) throw new Error(`${c.options.passwordEnv} not set`);
 
       const { loadPrivateKey } = await import("@grimoirelabs/core");
       const { readFileSync } = await import("node:fs");
       const { privateKeyToAccount } = await import("viem/accounts");
 
-      const keystoreJson = readFileSync(keystorePath, "utf-8");
+      const keystoreJson = readFileSync(c.options.keystore, "utf-8");
       const rawKey = loadPrivateKey({ type: "keystore", source: keystoreJson, password });
       const account = privateKeyToAccount(rawKey);
-      const destination = (getOption(options, "destination") ?? account.address) as `0x${string}`;
+      const destination = (c.options.destination ?? account.address) as `0x${string}`;
 
+      const transport = new HttpTransport();
       const exchange = new ExchangeClient({ transport, wallet: account });
-      const result = await exchange.withdraw3({ destination, amount });
+      const result = await exchange.withdraw3({ destination, amount: c.options.amount });
 
-      console.log(`Withdrew ${amount} USDC from HyperCore`);
-      console.log(`  Destination: ${destination}`);
-      printResult(result, format as OutputFormat);
-      return;
-    }
-    default:
-      throw new Error(`Unknown command: ${command}`);
-  }
+      return {
+        ...result,
+        withdrew: c.options.amount,
+        destination,
+      };
+    },
+  });
+
+cli.serve();
+
+// --- Client factory ---
+
+function createInfoClient(): InfoClient {
+  return new InfoClient({ transport: new HttpTransport() });
 }
 
-function printUsage() {
-  console.log(
-    "\nHyperliquid CLI (grimoire-hyperliquid)\n\nCommands:\n  mids [--format <json|table|spell>]\n  l2-book --coin <symbol> [--format <json|table|spell>]\n  open-orders --user <address> [--format <json|table|spell>]\n  meta [--format <json|table|spell>]\n  spot-meta [--format <json|table|spell>]\n  withdraw --amount <usdc> --keystore <path> [--password-env <var>] [--destination <addr>] [--format <json|table>]\n"
-  );
-}
+// --- Types ---
 
 type MidsResponse = Record<string, string>;
 
@@ -160,7 +229,13 @@ type SpotMetaResponse = {
   tokens: SpotToken[];
 };
 
+// --- Snapshot builders (exported for tests) ---
+
 export function printMidsSpellSnapshot(mids: MidsResponse): void {
+  console.log(buildMidsSnapshot(mids));
+}
+
+function buildMidsSnapshot(mids: MidsResponse): string {
   const entries = Object.entries(mids).sort(([a], [b]) => a.localeCompare(b));
   const assets = entries.map(([asset]) => asset);
   const prices = entries.map(([, price]) => toNumber(price));
@@ -168,10 +243,14 @@ export function printMidsSpellSnapshot(mids: MidsResponse): void {
   const lines = createSnapshotLines(["grimoire venue hyperliquid mids"]);
   pushArray(lines, "mid_assets", assets, formatString);
   pushArray(lines, "mid_prices", prices, formatNumber);
-  console.log(lines.join("\n"));
+  return lines.join("\n");
 }
 
 export function printL2BookSpellSnapshot(book: L2BookResponse, options: { coin: string }): void {
+  console.log(buildL2BookSnapshot(book, options));
+}
+
+function buildL2BookSnapshot(book: L2BookResponse, options: { coin: string }): string {
   const bids = book?.levels?.[0] ?? [];
   const asks = book?.levels?.[1] ?? [];
   const lines = createSnapshotLines([
@@ -185,44 +264,48 @@ export function printL2BookSpellSnapshot(book: L2BookResponse, options: { coin: 
   pushArray(
     lines,
     "l2_bids_px",
-    bids.map((level) => toNumber(level.px)),
+    bids.map((l) => toNumber(l.px)),
     formatNumber
   );
   pushArray(
     lines,
     "l2_bids_sz",
-    bids.map((level) => toNumber(level.sz)),
+    bids.map((l) => toNumber(l.sz)),
     formatNumber
   );
   pushArray(
     lines,
     "l2_bids_n",
-    bids.map((level) => level.n),
+    bids.map((l) => l.n),
     formatNumber
   );
   pushArray(
     lines,
     "l2_asks_px",
-    asks.map((level) => toNumber(level.px)),
+    asks.map((l) => toNumber(l.px)),
     formatNumber
   );
   pushArray(
     lines,
     "l2_asks_sz",
-    asks.map((level) => toNumber(level.sz)),
+    asks.map((l) => toNumber(l.sz)),
     formatNumber
   );
   pushArray(
     lines,
     "l2_asks_n",
-    asks.map((level) => level.n),
+    asks.map((l) => l.n),
     formatNumber
   );
 
-  console.log(lines.join("\n"));
+  return lines.join("\n");
 }
 
 export function printOpenOrdersSpellSnapshot(orders: OpenOrder[], options: { user: string }): void {
+  console.log(buildOpenOrdersSnapshot(orders, options));
+}
+
+function buildOpenOrdersSnapshot(orders: OpenOrder[], options: { user: string }): string {
   const lines = createSnapshotLines([
     "grimoire venue hyperliquid open-orders",
     `--user ${options.user}`,
@@ -231,118 +314,126 @@ export function printOpenOrdersSpellSnapshot(orders: OpenOrder[], options: { use
   pushArray(
     lines,
     "open_order_coins",
-    orders.map((order) => order.coin),
+    orders.map((o) => o.coin),
     formatString
   );
   pushArray(
     lines,
     "open_order_sides",
-    orders.map((order) => order.side),
+    orders.map((o) => o.side),
     formatString
   );
   pushArray(
     lines,
     "open_order_limit_px",
-    orders.map((order) => toNumber(order.limitPx)),
+    orders.map((o) => toNumber(o.limitPx)),
     formatNumber
   );
   pushArray(
     lines,
     "open_order_sizes",
-    orders.map((order) => toNumber(order.sz)),
+    orders.map((o) => toNumber(o.sz)),
     formatNumber
   );
   pushArray(
     lines,
     "open_order_ids",
-    orders.map((order) => order.oid),
+    orders.map((o) => o.oid),
     formatNumber
   );
   pushArray(
     lines,
     "open_order_timestamps",
-    orders.map((order) => order.timestamp),
+    orders.map((o) => o.timestamp),
     formatNumber
   );
   pushArray(
     lines,
     "open_order_orig_sizes",
-    orders.map((order) => toNumber(order.origSz)),
+    orders.map((o) => toNumber(o.origSz)),
     formatNumber
   );
   pushArray(
     lines,
     "open_order_reduce_only",
-    orders.map((order) => Boolean(order.reduceOnly)),
+    orders.map((o) => Boolean(o.reduceOnly)),
     formatBoolean
   );
   pushArray(
     lines,
     "open_order_cloids",
-    orders.map((order) => order.cloid ?? ""),
+    orders.map((o) => o.cloid ?? ""),
     formatString
   );
 
-  console.log(lines.join("\n"));
+  return lines.join("\n");
 }
 
 export function printMetaSpellSnapshot(meta: MetaResponse): void {
+  console.log(buildMetaSnapshot(meta));
+}
+
+function buildMetaSnapshot(meta: MetaResponse): string {
   const universe = meta.universe ?? [];
   const lines = createSnapshotLines(["grimoire venue hyperliquid meta"]);
 
   pushArray(
     lines,
     "perp_universe_names",
-    universe.map((item) => item.name),
+    universe.map((i) => i.name),
     formatString
   );
   pushArray(
     lines,
     "perp_universe_sz_decimals",
-    universe.map((item) => item.szDecimals),
+    universe.map((i) => i.szDecimals),
     formatNumber
   );
   pushArray(
     lines,
     "perp_universe_max_leverage",
-    universe.map((item) => item.maxLeverage),
+    universe.map((i) => i.maxLeverage),
     formatNumber
   );
   pushArray(
     lines,
     "perp_universe_margin_table_id",
-    universe.map((item) => item.marginTableId),
+    universe.map((i) => i.marginTableId),
     formatNumber
   );
   pushArray(
     lines,
     "perp_universe_only_isolated",
-    universe.map((item) => Boolean(item.onlyIsolated)),
+    universe.map((i) => Boolean(i.onlyIsolated)),
     formatBoolean
   );
   pushArray(
     lines,
     "perp_universe_is_delisted",
-    universe.map((item) => Boolean(item.isDelisted)),
+    universe.map((i) => Boolean(i.isDelisted)),
     formatBoolean
   );
   pushArray(
     lines,
     "perp_universe_margin_mode",
-    universe.map((item) => item.marginMode ?? ""),
+    universe.map((i) => i.marginMode ?? ""),
     formatString
   );
   pushArray(
     lines,
     "perp_universe_growth_mode",
-    universe.map((item) => item.growthMode ?? ""),
+    universe.map((i) => i.growthMode ?? ""),
     formatString
   );
 
-  console.log(lines.join("\n"));
+  return lines.join("\n");
 }
 
 export function printSpotMetaSpellSnapshot(meta: SpotMetaResponse): void {
+  console.log(buildSpotMetaSnapshot(meta));
+}
+
+function buildSpotMetaSnapshot(meta: SpotMetaResponse): string {
   const tokens = meta.tokens ?? [];
   const universe = meta.universe ?? [];
   const lines = createSnapshotLines(["grimoire venue hyperliquid spot-meta"]);
@@ -350,75 +441,72 @@ export function printSpotMetaSpellSnapshot(meta: SpotMetaResponse): void {
   pushArray(
     lines,
     "spot_token_names",
-    tokens.map((token) => token.name),
+    tokens.map((t) => t.name),
     formatString
   );
   pushArray(
     lines,
     "spot_token_indices",
-    tokens.map((token) => token.index),
+    tokens.map((t) => t.index),
     formatNumber
   );
   pushArray(
     lines,
     "spot_token_ids",
-    tokens.map((token) => token.tokenId),
+    tokens.map((t) => t.tokenId),
     formatString
   );
   pushArray(
     lines,
     "spot_token_addresses",
-    tokens.map((token) => token.evmContract?.address ?? ""),
+    tokens.map((t) => t.evmContract?.address ?? ""),
     formatString
   );
   pushArray(
     lines,
     "spot_token_sz_decimals",
-    tokens.map((token) => token.szDecimals),
+    tokens.map((t) => t.szDecimals),
     formatNumber
   );
   pushArray(
     lines,
     "spot_token_wei_decimals",
-    tokens.map((token) => token.weiDecimals),
+    tokens.map((t) => t.weiDecimals),
     formatNumber
   );
   pushArray(
     lines,
     "spot_token_is_canonical",
-    tokens.map((token) => Boolean(token.isCanonical)),
+    tokens.map((t) => Boolean(t.isCanonical)),
     formatBoolean
   );
   pushArray(
     lines,
     "spot_universe_names",
-    universe.map((item) => item.name),
+    universe.map((i) => i.name),
     formatString
   );
   pushArray(
     lines,
     "spot_universe_indices",
-    universe.map((item) => item.index),
+    universe.map((i) => i.index),
     formatNumber
   );
   pushArray(
     lines,
     "spot_universe_is_canonical",
-    universe.map((item) => item.isCanonical),
+    universe.map((i) => i.isCanonical),
     formatBoolean
   );
 
-  console.log(lines.join("\n"));
+  return lines.join("\n");
 }
+
+// --- Snapshot utilities ---
 
 function createSnapshotLines(args: string[]): string[] {
   const snapshotAt = new Date().toISOString();
-  const snapshotSource = args.join(" ");
-  const lines: string[] = [];
-  lines.push("params:");
-  lines.push(`  snapshot_at: "${snapshotAt}"`);
-  lines.push(`  snapshot_source: "${snapshotSource}"`);
-  return lines;
+  return ["params:", `  snapshot_at: "${snapshotAt}"`, `  snapshot_source: "${args.join(" ")}"`];
 }
 
 function pushArray<T>(
@@ -452,8 +540,3 @@ function toNumber(value: string | number): number {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
-
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});

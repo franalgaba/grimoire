@@ -1,28 +1,44 @@
 import type { VenueAdapter } from "@grimoirelabs/core";
 
+export { discoverBuiltinVenues } from "./shared/discovery.js";
 export {
   type AlchemyQueryProviderConfig,
   createAlchemyQueryProvider,
   extractAlchemyKey,
-} from "./query-provider.js";
+} from "./shared/query-provider.js";
+export {
+  registerToken,
+  resolveBridgedTokenAddress,
+  type TokenRecord,
+  tryResolveTokenByAddress,
+} from "./shared/token-registry.js";
 
-import { aaveV3Adapter, createAaveV3Adapter } from "./aave-v3.js";
-import { acrossAdapter, createAcrossAdapter } from "./across.js";
-import { createHyperliquidAdapter, hyperliquidAdapter } from "./hyperliquid.js";
+import { aaveV3Adapter, createAaveV3Adapter } from "./adapters/aave-v3.js";
+import { acrossAdapter, createAcrossAdapter } from "./adapters/across.js";
+import { createHyperliquidAdapter, hyperliquidAdapter } from "./adapters/hyperliquid.js";
 import {
   createMorphoBlueAdapter,
   getMorphoBlueMarketId,
+  isMorphoAction,
   MORPHO_BLUE_DEFAULT_MARKETS,
   morphoBlueAdapter,
-} from "./morpho-blue.js";
-import { createPendleAdapter, pendleAdapter } from "./pendle.js";
-import { createPolymarketAdapter, polymarketAdapter } from "./polymarket.js";
-import { createUniswapV3Adapter, defaultUniswapV3Routers, uniswapV3Adapter } from "./uniswap-v3.js";
+} from "./adapters/morpho-blue/index.js";
+import {
+  createPendleAdapter,
+  isSupportedPendleAction,
+  pendleAdapter,
+} from "./adapters/pendle/index.js";
+import { createPolymarketAdapter, polymarketAdapter } from "./adapters/polymarket/index.js";
+import {
+  createUniswapV3Adapter,
+  defaultUniswapV3Routers,
+  uniswapV3Adapter,
+} from "./adapters/uniswap-v3.js";
 import {
   createUniswapV4Adapter,
   DEFAULT_ROUTERS as defaultUniswapV4Routers,
   uniswapV4Adapter,
-} from "./uniswap-v4.js";
+} from "./adapters/uniswap-v4/index.js";
 
 export const adapters: VenueAdapter[] = [
   aaveV3Adapter,
@@ -54,6 +70,8 @@ export {
   createHyperliquidAdapter,
   pendleAdapter,
   createPendleAdapter,
+  isSupportedPendleAction,
   polymarketAdapter,
   createPolymarketAdapter,
+  isMorphoAction,
 };
