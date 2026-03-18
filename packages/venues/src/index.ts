@@ -6,6 +6,12 @@ export {
   createAlchemyQueryProvider,
   extractAlchemyKey,
 } from "./shared/query-provider.js";
+export {
+  registerToken,
+  resolveBridgedTokenAddress,
+  type TokenRecord,
+  tryResolveTokenByAddress,
+} from "./shared/token-registry.js";
 
 import { aaveV3Adapter, createAaveV3Adapter } from "./adapters/aave-v3.js";
 import { acrossAdapter, createAcrossAdapter } from "./adapters/across.js";

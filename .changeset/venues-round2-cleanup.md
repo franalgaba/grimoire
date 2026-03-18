@@ -10,3 +10,6 @@ Venues package round 2 cleanup: consolidate shared utilities and remove dead cod
 - Delete dead `compound-v3.ts` stub (never imported or exported)
 - Re-export `isMorphoAction` and `isSupportedPendleAction` from package index
 - Add unit tests for `shared/bigint.ts` and `shared/gas.ts`
+- Token registry improvements: add `BRIDGE_INDEX` from Uniswap token list `bridgeInfo` extensions, `REVERSE_INDEX` for address→token reverse lookup, and `registerToken()` for runtime registration
+- Export `TokenRecord` interface and new functions: `resolveBridgedTokenAddress`, `tryResolveTokenByAddress`, `registerToken`
+- Simplify Across adapter: remove hardcoded `DEFAULT_ASSETS` map; `resolveAssetAddress` now uses config → registry → bridge index → fallback chain; `assets` config is optional; add `supportedChains` config

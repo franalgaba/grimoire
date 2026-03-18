@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import type { Address } from "@grimoirelabs/core";
 
-interface TokenRecord {
+export interface TokenRecord {
   symbol: string;
   address: Address;
   decimals: number;
@@ -9,7 +9,15 @@ interface TokenRecord {
 
 const require = createRequire(import.meta.url);
 const tokenList = require("@uniswap/default-token-list") as {
-  tokens: Array<{ chainId: number; symbol: string; address: string; decimals: number }>;
+  tokens: Array<{
+    chainId: number;
+    symbol: string;
+    address: string;
+    decimals: number;
+    extensions?: {
+      bridgeInfo?: Record<string, { tokenAddress: string }>;
+    };
+  }>;
 };
 
 const SHARED_TOKENS: Record<number, Record<string, TokenRecord>> = {
@@ -85,23 +93,51 @@ const SHARED_TOKENS: Record<number, Record<string, TokenRecord>> = {
   },
 };
 
-const TOKEN_INDEX = new Map<string, TokenRecord>();
+// ---------------------------------------------------------------------------
+// Indexes
+// ---------------------------------------------------------------------------
 
+const TOKEN_INDEX = new Map<string, TokenRecord>();
+const BRIDGE_INDEX = new Map<string, Address>();
+const REVERSE_INDEX = new Map<string, TokenRecord>();
+
+// Populate from Uniswap default token list
 for (const token of tokenList.tokens) {
-  const key = makeKey(token.symbol, token.chainId);
-  TOKEN_INDEX.set(key, {
-    symbol: normalizeSymbol(token.symbol),
+  const symbol = normalizeSymbol(token.symbol);
+  const record: TokenRecord = {
+    symbol,
     address: token.address as Address,
     decimals: token.decimals,
-  });
+  };
+
+  TOKEN_INDEX.set(makeKey(symbol, token.chainId), record);
+  REVERSE_INDEX.set(makeReverseKey(token.address, token.chainId), record);
+
+  // Build bridge index from extensions.bridgeInfo
+  const bridgeInfo = token.extensions?.bridgeInfo;
+  if (bridgeInfo) {
+    for (const [toChainIdStr, info] of Object.entries(bridgeInfo)) {
+      const toChainId = Number.parseInt(toChainIdStr, 10);
+      BRIDGE_INDEX.set(
+        makeBridgeKey(symbol, token.chainId, toChainId),
+        info.tokenAddress as Address
+      );
+    }
+  }
 }
 
+// SHARED_TOKENS overlay — wins over Uniswap list
 for (const [chainIdText, chainTokens] of Object.entries(SHARED_TOKENS)) {
   const chainId = Number.parseInt(chainIdText, 10);
   for (const [symbol, token] of Object.entries(chainTokens)) {
     TOKEN_INDEX.set(makeKey(symbol, chainId), token);
+    REVERSE_INDEX.set(makeReverseKey(token.address, chainId), token);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 export interface ResolveTokenOptions {
   defaultDecimals?: number;
@@ -171,8 +207,57 @@ export function resolveTokenDecimals(
   return resolveToken(asset, chainId, options).decimals;
 }
 
+/**
+ * Resolve bridged token address using the Uniswap token list's bridgeInfo.
+ * Returns the address of `symbol` on `toChainId` when bridging from `fromChainId`.
+ */
+export function resolveBridgedTokenAddress(
+  symbol: string,
+  fromChainId: number,
+  toChainId: number
+): Address | undefined {
+  return BRIDGE_INDEX.get(makeBridgeKey(normalizeSymbol(symbol), fromChainId, toChainId));
+}
+
+/**
+ * Reverse lookup: find a token record by on-chain address + chainId.
+ * Case-insensitive on the address.
+ */
+export function tryResolveTokenByAddress(
+  address: string,
+  chainId: number
+): TokenRecord | undefined {
+  return REVERSE_INDEX.get(makeReverseKey(address, chainId));
+}
+
+/**
+ * Register a token at runtime. Additive-only: does NOT overwrite existing entries.
+ */
+export function registerToken(chainId: number, token: TokenRecord): void {
+  const key = makeKey(token.symbol, chainId);
+  if (!TOKEN_INDEX.has(key)) {
+    TOKEN_INDEX.set(key, token);
+  }
+  const revKey = makeReverseKey(token.address, chainId);
+  if (!REVERSE_INDEX.has(revKey)) {
+    REVERSE_INDEX.set(revKey, token);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function makeKey(symbol: string, chainId: number): string {
   return `${normalizeSymbol(symbol)}:${chainId}`;
+}
+
+function makeBridgeKey(symbol: string, fromChainId: number, toChainId: number): string {
+  return `${symbol}:${fromChainId}:${toChainId}`;
+}
+
+function makeReverseKey(address: string, chainId: number): string {
+  return `${address.toLowerCase()}:${chainId}`;
 }
 
 function normalizeSymbol(symbol: string): string {

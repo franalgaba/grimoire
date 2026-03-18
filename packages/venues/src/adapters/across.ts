@@ -7,27 +7,26 @@ import { applyBps } from "../shared/bps.js";
 import { assertSupportedConstraints, validateGasConstraints } from "../shared/constraints.js";
 import { buildApprovalIfNeeded } from "../shared/erc20.js";
 import { estimateGasIfSupported } from "../shared/gas.js";
-import { resolveTokenAddress } from "../shared/token-registry.js";
+import { resolveBridgedTokenAddress, resolveTokenAddress } from "../shared/token-registry.js";
 
 export interface AcrossAdapterConfig {
   integratorId?: `0x${string}`;
-  assets: Record<string, Record<number, Address>>;
+  assets?: Record<string, Record<number, Address>>;
+  supportedChains?: number[];
   apiUrl?: string;
   getQuote?: typeof getQuote;
   slippageBps?: number;
 }
 
 const DEFAULT_INTEGRATOR_ID = "0x0000" as const;
+const DEFAULT_SUPPORTED_CHAINS = [1, 10, 137, 8453, 42161];
 
-export function createAcrossAdapter(
-  config: AcrossAdapterConfig = { assets: {}, integratorId: DEFAULT_INTEGRATOR_ID }
-): VenueAdapter {
+export function createAcrossAdapter(config: AcrossAdapterConfig = {}): VenueAdapter {
   const getQuoteImpl = config.getQuote ?? getQuote;
   const integratorId = config.integratorId ?? DEFAULT_INTEGRATOR_ID;
+  const assets = config.assets ?? {};
+  const supportedChains = config.supportedChains ?? DEFAULT_SUPPORTED_CHAINS;
 
-  const supportedChains = Array.from(
-    new Set(Object.values(config.assets).flatMap((chains) => Object.keys(chains).map(Number)))
-  );
   const meta: VenueAdapter["meta"] = {
     name: "across",
     supportedChains,
@@ -65,12 +64,13 @@ export function createAcrossAdapter(
         throw new Error("Across adapter requires numeric toChain");
       }
       const destinationChainId = action.toChain;
-      const inputToken = resolveAssetAddress(action.asset, originChainId, config.assets);
+      const inputToken = resolveAssetAddress(action.asset, originChainId, assets);
       const outputToken = resolveAssetAddress(
         action.asset,
         destinationChainId,
-        config.assets,
-        inputToken
+        assets,
+        inputToken,
+        originChainId
       );
 
       const quote = await getQuoteImpl({
@@ -213,44 +213,55 @@ export function createAcrossAdapter(
   };
 }
 
-const DEFAULT_ASSETS: Record<string, Record<number, Address>> = {
-  USDC: {
-    1: resolveTokenAddress("USDC", 1),
-    8453: resolveTokenAddress("USDC", 8453),
-    10: resolveTokenAddress("USDC", 10),
-    42161: resolveTokenAddress("USDC", 42161),
-    1337: "0x6d1e7cde53a9467b783991afd8af56d4a99b3a56" as Address,
-  },
-  WETH: {
-    1: resolveTokenAddress("WETH", 1),
-    8453: resolveTokenAddress("WETH", 8453),
-    10: resolveTokenAddress("WETH", 10),
-    42161: resolveTokenAddress("WETH", 42161),
-  },
-};
-
 export const acrossAdapter = createAcrossAdapter({
   integratorId: DEFAULT_INTEGRATOR_ID,
-  assets: DEFAULT_ASSETS,
+  assets: {
+    USDC: {
+      1337: "0x6d1e7cde53a9467b783991afd8af56d4a99b3a56" as Address,
+    },
+  },
+  supportedChains: [...DEFAULT_SUPPORTED_CHAINS, 1337],
 });
 
 function resolveAssetAddress(
   asset: string,
   chainId: number,
   assets: Record<string, Record<number, Address>>,
-  fallback?: Address
+  fallback?: Address,
+  originChainId?: number
 ): Address {
+  // 1. Direct address passthrough
   if (asset.startsWith("0x") && asset.length === 42) {
     return asset as Address;
   }
 
-  const assetMap = assets[asset];
-  const resolved = assetMap?.[chainId] ?? fallback;
-  if (!resolved) {
-    throw new Error(`No Across asset mapping for ${asset} on chain ${chainId}`);
+  // 2. Config overrides (test chains, user overrides)
+  const configAddr = assets[asset]?.[chainId];
+  if (configAddr) {
+    return configAddr;
   }
 
-  return resolved;
+  // 3. Token registry (SHARED_TOKENS + Uniswap list)
+  try {
+    return resolveTokenAddress(asset, chainId);
+  } catch {
+    // Not in registry — try bridge index
+  }
+
+  // 4. Bridge index (cross-chain equivalents from bridgeInfo)
+  if (originChainId !== undefined) {
+    const bridged = resolveBridgedTokenAddress(asset, originChainId, chainId);
+    if (bridged) {
+      return bridged;
+    }
+  }
+
+  // 5. Explicit fallback (input token address used for output token)
+  if (fallback) {
+    return fallback;
+  }
+
+  throw new Error(`No Across asset mapping for ${asset} on chain ${chainId}`);
 }
 
 async function resolveAcrossHandoffStatus(
