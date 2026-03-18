@@ -3,15 +3,16 @@
  * Lists available adapters and supported chains
  */
 
-import { adapters } from "@grimoirelabs/venues";
 import chalk from "chalk";
+import { loadAllAdapters } from "../lib/venue-discovery.js";
 
 interface VenuesOptions {
   json?: boolean;
 }
 
 export async function venuesCommand(options: VenuesOptions): Promise<void> {
-  const metas = adapters
+  const allAdapters = await loadAllAdapters();
+  const metas = allAdapters
     .map((adapter) => adapter.meta)
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -47,6 +48,10 @@ export async function venuesCommand(options: VenuesOptions): Promise<void> {
     meta.description ?? "",
   ]);
 
+  printTable(headers, rows);
+}
+
+function printTable(headers: string[], rows: string[][]): void {
   const widths = headers.map((header, index) =>
     Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0))
   );

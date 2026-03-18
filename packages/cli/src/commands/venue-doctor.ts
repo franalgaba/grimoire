@@ -11,6 +11,7 @@ import {
 } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import { parseAbi } from "viem";
+import { loadAllAdapters, normalizeAdapterName } from "../lib/venue-discovery.js";
 
 type DoctorStatus = "pass" | "fail" | "skip";
 
@@ -308,6 +309,14 @@ export async function venueDoctorCommand(
     };
   }
 
+  // Include external adapters when no explicit deps.adapters provided
+  if (!deps.adapters) {
+    const allAdapters = await loadAllAdapters();
+    if (allAdapters.length > bundledAdapters.length) {
+      deps = { ...deps, adapters: allAdapters };
+    }
+  }
+
   const report = await runVenueDoctor(parsed, deps);
   if (parsed.json) {
     console.log(
@@ -445,12 +454,13 @@ async function collectMorphoBorrowReadiness(input: {
   }
 
   const walletAddress = readDoctorWalletAddress(input.env);
+  const marketOnchainId = getMorphoBlueMarketId(market);
   const base: MorphoBorrowReadinessReport = {
     status: "not_ready",
     borrowReady: false,
     walletAddress,
     marketId: market.id,
-    marketOnchainId: getMorphoBlueMarketId(market),
+    marketOnchainId,
     morphoAddress: MORPHO_BLUE_ADDRESS,
     loanToken: market.loanToken,
     collateralToken: market.collateralToken,
@@ -496,7 +506,7 @@ async function collectMorphoBorrowReadiness(input: {
         address: MORPHO_BLUE_ADDRESS,
         abi: MORPHO_ABI,
         functionName: "position",
-        args: [getMorphoBlueMarketId(market), walletAddress],
+        args: [marketOnchainId, walletAddress],
       }),
     ]);
 
@@ -605,22 +615,14 @@ function selectAdapters(
 ): VenueAdapter["meta"][] {
   if (!adapterFilter) return metas;
 
-  const normalized = normalizeAdapterFilter(adapterFilter);
+  const normalized = normalizeAdapterName(adapterFilter);
   const mapped = ADAPTER_FILTER_MAP[normalized];
   const targetNames = new Set(mapped ?? [normalized.replace(/-/g, "_")]);
 
   return metas.filter((meta) => {
-    const canonical = normalizeAdapterFilter(meta.name).replace(/-/g, "_");
+    const canonical = normalizeAdapterName(meta.name).replace(/-/g, "_");
     return targetNames.has(canonical);
   });
-}
-
-function normalizeAdapterFilter(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/^grimoire-/, "")
-    .replace(/_/g, "-");
 }
 
 function resolveRpcUrl(

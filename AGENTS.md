@@ -90,12 +90,16 @@ packages/
       builders/              # Fluent API for building spells
   venues/                    # Official adapters (SDK integrations)
     src/
-      aave-v3.ts
-      uniswap-v3.ts
-      uniswap-v4.ts
-      morpho-blue.ts
-      hyperliquid.ts
-      across.ts
+      adapters/              # Protocol-specific adapter implementations
+        aave-v3.ts
+        across.ts
+        hyperliquid.ts
+        morpho-blue/         # Multi-file adapter (adapter, markets, preflight)
+        pendle/              # Multi-file adapter (adapter, api, convert, helpers)
+        polymarket/          # Multi-file adapter (adapter, client, normalize)
+        uniswap-v3.ts
+        uniswap-v4/          # Multi-file adapter (adapter, encoding, constants, permit2)
+      shared/                # Cross-adapter utilities (bigint, bps, gas, erc20, constraints, token-registry)
       cli/                   # per-venue CLIs
   cli/                       # Grimoire CLI
   sdk/                       # (WIP) SDK for external integrations

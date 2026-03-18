@@ -2,125 +2,167 @@
 
 import { AaveClient, chainId, evmAddress } from "@aave/client";
 import { chains, health, market, markets, reserve } from "@aave/client/actions";
-import { getOption, type OutputFormat, parseArgs, printResult, requireOption } from "./utils.js";
+import { Cli, z } from "incur";
 
-async function main() {
-  const { command, options } = parseArgs(process.argv.slice(2));
+const DEFAULT_CHAIN_ID = 1;
 
-  if (!command || command === "help" || options.help) {
-    printUsage();
-    return;
-  }
-
-  const client = AaveClient.create();
-  const format = (getOption(options, "format") ?? "auto") as OutputFormat;
-
-  switch (command) {
-    case "health": {
-      const result = await unwrap(health(client));
-      printResult({ healthy: result }, format);
-      return;
-    }
-    case "chains": {
-      const result = await unwrap(chains(client));
-      printResult(result, format);
-      return;
-    }
-    case "markets": {
-      const chain = Number.parseInt(getOption(options, "chain") ?? "1", 10);
-      const user = getOption(options, "user");
-      const result = await unwrap(
+const cli = Cli.create("grimoire-aave", {
+  description: "Aave V3 market data — health, chains, markets, and reserves",
+  vars: z.object({ aaveClient: z.custom<ReturnType<typeof AaveClient.create>>() }),
+  sync: { suggestions: ["check aave protocol health", "list aave reserves for USDC on Ethereum"] },
+})
+  .use(async (c, next) => {
+    c.set("aaveClient", AaveClient.create());
+    const start = performance.now();
+    await next();
+    if (!c.agent) console.error(`Done in ${(performance.now() - start).toFixed(0)}ms`);
+  })
+  .command("health", {
+    description: "Check Aave protocol health",
+    output: z.object({ healthy: z.boolean() }),
+    async run(c) {
+      const client = c.var.aaveClient;
+      const result = await unwrapAaveResult(health(client));
+      return c.ok({ healthy: Boolean(result) }, { cta: { commands: ["chains"] } });
+    },
+  })
+  .command("chains", {
+    description: "List supported chains",
+    async run(c) {
+      const client = c.var.aaveClient;
+      const data = await unwrapAaveResult(chains(client));
+      return c.ok(data, { cta: { commands: ["markets --chain <id>"] } });
+    },
+  })
+  .command("markets", {
+    description: "List markets for a chain",
+    alias: { chain: "c" },
+    examples: [{ options: { chain: 1 }, description: "Markets on Ethereum" }],
+    options: z.object({
+      chain: z.coerce.number().default(DEFAULT_CHAIN_ID).describe("Chain ID"),
+      user: z.string().optional().describe("User address to include positions"),
+    }),
+    async run(c) {
+      const client = c.var.aaveClient;
+      const data = await unwrapAaveResult(
         markets(client, {
-          chainIds: [chainId(chain)],
-          user: user ? evmAddress(user) : undefined,
+          chainIds: [chainId(c.options.chain)],
+          user: c.options.user ? evmAddress(c.options.user) : undefined,
         })
       );
-      printResult(result, format);
-      return;
-    }
-    case "market": {
-      const chain = Number.parseInt(requireOption(options, "chain"), 10);
-      const address = requireOption(options, "address");
-      const user = getOption(options, "user");
-      const result = await unwrap(
+      return c.ok(data, { cta: { commands: ["market --chain <id> --address <addr>"] } });
+    },
+  })
+  .command("market", {
+    description: "Get details for a specific market",
+    alias: { chain: "c" },
+    options: z.object({
+      chain: z.coerce.number().describe("Chain ID"),
+      address: z.string().describe("Market address"),
+      user: z.string().optional().describe("User address to include positions"),
+    }),
+    async run(c) {
+      const client = c.var.aaveClient;
+      const data = await unwrapAaveResult(
         market(client, {
-          chainId: chainId(chain),
-          address: evmAddress(address),
-          user: user ? evmAddress(user) : undefined,
+          chainId: chainId(c.options.chain),
+          address: evmAddress(c.options.address),
+          user: c.options.user ? evmAddress(c.options.user) : undefined,
         })
       );
-      printResult(result, format);
-      return;
-    }
-    case "reserve": {
-      const chain = Number.parseInt(requireOption(options, "chain"), 10);
-      const marketAddress = requireOption(options, "market");
-      const token = requireOption(options, "token");
-      const result = await unwrap(
+      return c.ok(data, {
+        cta: { commands: ["reserve --chain <id> --market <addr> --token <addr>"] },
+      });
+    },
+  })
+  .command("reserve", {
+    description: "Get details for a specific reserve",
+    alias: { chain: "c" },
+    options: z.object({
+      chain: z.coerce.number().describe("Chain ID"),
+      market: z.string().describe("Market address"),
+      token: z.string().describe("Underlying token address"),
+    }),
+    async run(c) {
+      const client = c.var.aaveClient;
+      return unwrapAaveResult(
         reserve(client, {
-          chainId: chainId(chain),
-          market: evmAddress(marketAddress),
-          underlyingToken: evmAddress(token),
+          chainId: chainId(c.options.chain),
+          market: evmAddress(c.options.market),
+          underlyingToken: evmAddress(c.options.token),
         })
       );
-      printResult(result, format);
-      return;
-    }
-    case "reserves": {
-      const chain = Number.parseInt(getOption(options, "chain") ?? "1", 10);
-      let marketAddress = getOption(options, "market");
-      const asset = getOption(options, "asset");
-      const output = getOption(options, "format") ?? "auto";
+    },
+  })
+  .command("reserves", {
+    description: "List reserves for a market, optionally filtered by asset",
+    alias: { chain: "c", asset: "a" },
+    examples: [{ options: { chain: 1, asset: "USDC" }, description: "USDC reserves on Ethereum" }],
+    options: z.object({
+      chain: z.coerce.number().default(DEFAULT_CHAIN_ID).describe("Chain ID"),
+      market: z.string().optional().describe("Market address (auto-detected if omitted)"),
+      asset: z.string().optional().describe("Filter by symbol or address"),
+    }),
+    async run(c) {
+      const client = c.var.aaveClient;
+      const marketAddress = c.options.market ?? (await inferMarketAddress(client, c.options.chain));
 
-      if (!marketAddress) {
-        const marketsResult = await unwrap(
-          markets(client, {
-            chainIds: [chainId(chain)],
-          })
-        );
-        const firstMarket = pickMarketAddress(marketsResult);
-        if (!firstMarket) {
-          throw new Error("Missing --market and could not infer market address from markets");
-        }
-        marketAddress = firstMarket;
-      }
-
-      const result = await unwrap(
+      const result = await unwrapAaveResult(
         market(client, {
-          chainId: chainId(chain),
+          chainId: chainId(c.options.chain),
           address: evmAddress(marketAddress),
         })
       );
 
       let reserves = extractReserves(result);
 
-      if (asset) {
-        const needle = asset.toLowerCase();
-        reserves = reserves.filter((reserve) => matchReserveAsset(reserve, needle));
+      if (c.options.asset) {
+        const needle = c.options.asset.toLowerCase();
+        reserves = reserves.filter((r) => matchReserveAsset(r, needle));
       }
 
-      if (output === "spell") {
-        printReservesSpellSnapshot(reserves, {
-          chain,
-          marketAddress,
-          asset,
-        });
-        return;
+      return c.ok(reserves, { cta: { commands: ["reserves-snapshot"] } });
+    },
+  })
+  .command("reserves-snapshot", {
+    description: "Generate spell params snapshot for reserves",
+    alias: { chain: "c", asset: "a" },
+    outputPolicy: "agent-only" as const,
+    options: z.object({
+      chain: z.coerce.number().default(DEFAULT_CHAIN_ID).describe("Chain ID"),
+      market: z.string().optional().describe("Market address (auto-detected if omitted)"),
+      asset: z.string().optional().describe("Filter by symbol or address"),
+    }),
+    output: z.string(),
+    async run(c) {
+      const client = c.var.aaveClient;
+      const marketAddress = c.options.market ?? (await inferMarketAddress(client, c.options.chain));
+
+      const result = await unwrapAaveResult(
+        market(client, {
+          chainId: chainId(c.options.chain),
+          address: evmAddress(marketAddress),
+        })
+      );
+
+      let reserves = extractReserves(result);
+
+      if (c.options.asset) {
+        const needle = c.options.asset.toLowerCase();
+        reserves = reserves.filter((r) => matchReserveAsset(r, needle));
       }
 
-      printResult(reserves, output as OutputFormat);
-      return;
-    }
-    default:
-      throw new Error(`Unknown command: ${command}`);
-  }
-}
+      return buildReservesSnapshot(reserves, {
+        chain: c.options.chain,
+        marketAddress,
+        asset: c.options.asset,
+      });
+    },
+  });
 
-function printUsage() {
-  console.log(
-    "\nAave CLI (grimoire-aave)\n\nCommands:\n  health [--format <json|table>]\n  chains [--format <json|table>]\n  markets --chain <id> [--user <address>] [--format <json|table>]\n  market --chain <id> --address <market> [--user <address>] [--format <json|table>]\n  reserve --chain <id> --market <address> --token <address> [--format <json|table>]\n  reserves --chain <id> [--market <address>] [--asset <symbol|address>] [--format <json|table|spell>]\n"
-  );
-}
+cli.serve();
+
+// --- Aave result unwrapping ---
 
 type AaveResult<T> = {
   isErr?: () => boolean;
@@ -128,7 +170,9 @@ type AaveResult<T> = {
   value?: T;
 };
 
-async function unwrap<T>(result: Promise<AaveResult<T> | T> | AaveResult<T> | T): Promise<T> {
+async function unwrapAaveResult<T>(
+  result: Promise<AaveResult<T> | T> | AaveResult<T> | T
+): Promise<T> {
   const resolved = await result;
 
   if (resolved && typeof resolved === "object" && "isErr" in resolved) {
@@ -144,6 +188,20 @@ async function unwrap<T>(result: Promise<AaveResult<T> | T> | AaveResult<T> | T)
   return resolved as T;
 }
 
+// --- Market address inference ---
+
+async function inferMarketAddress(
+  client: ReturnType<typeof AaveClient.create>,
+  chain: number
+): Promise<string> {
+  const marketsResult = await unwrapAaveResult(markets(client, { chainIds: [chainId(chain)] }));
+  const address = pickMarketAddress(marketsResult);
+  if (!address) {
+    throw new Error("Missing --market and could not infer market address from markets");
+  }
+  return address;
+}
+
 type UnknownRecord = Record<string, unknown>;
 
 function pickMarketAddress(marketsResult: unknown): string | null {
@@ -152,12 +210,9 @@ function pickMarketAddress(marketsResult: unknown): string | null {
   }
   if (marketsResult && typeof marketsResult === "object") {
     const record = marketsResult as UnknownRecord;
-    const markets = record.markets;
-    if (Array.isArray(markets)) {
-      return extractAddress(markets[0]);
-    }
-    if (Array.isArray(record.data)) {
-      return extractAddress(record.data[0]);
+    const candidates = [record.markets, record.data];
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) return extractAddress(candidate[0]);
     }
   }
   return null;
@@ -175,6 +230,8 @@ function extractAddress(value: unknown): string | null {
   return null;
 }
 
+// --- Reserve extraction and matching ---
+
 function extractReserves(result: unknown): UnknownRecord[] {
   if (Array.isArray(result)) {
     return result.filter((item) => item && typeof item === "object") as UnknownRecord[];
@@ -191,15 +248,21 @@ function extractReserves(result: unknown): UnknownRecord[] {
   return [];
 }
 
-function matchReserveAsset(reserve: UnknownRecord, needle: string): boolean {
-  const symbol = typeof reserve.symbol === "string" ? reserve.symbol.toLowerCase() : "";
+function matchReserveAsset(reserveRecord: UnknownRecord, needle: string): boolean {
+  const symbol = typeof reserveRecord.symbol === "string" ? reserveRecord.symbol.toLowerCase() : "";
   const underlying =
-    typeof reserve.underlyingToken === "string" ? reserve.underlyingToken.toLowerCase() : "";
+    typeof reserveRecord.underlyingToken === "string"
+      ? reserveRecord.underlyingToken.toLowerCase()
+      : "";
   const address =
-    typeof reserve.underlyingAsset === "string" ? reserve.underlyingAsset.toLowerCase() : "";
-  const id = typeof reserve.id === "string" ? reserve.id.toLowerCase() : "";
+    typeof reserveRecord.underlyingAsset === "string"
+      ? reserveRecord.underlyingAsset.toLowerCase()
+      : "";
+  const id = typeof reserveRecord.id === "string" ? reserveRecord.id.toLowerCase() : "";
   return [symbol, underlying, address, id].some((value) => value === needle);
 }
+
+// --- Spell snapshot ---
 
 type ReserveSnapshotOptions = {
   chain: number;
@@ -207,39 +270,27 @@ type ReserveSnapshotOptions = {
   asset?: string;
 };
 
-function printReservesSpellSnapshot(
-  reserves: UnknownRecord[],
-  options: ReserveSnapshotOptions
-): void {
+function buildReservesSnapshot(reserves: UnknownRecord[], options: ReserveSnapshotOptions): string {
   const snapshotAt = new Date().toISOString();
   const args: string[] = ["grimoire venue aave reserves", `--chain ${options.chain}`];
 
-  if (options.marketAddress) {
-    args.push(`--market ${options.marketAddress}`);
-  }
-  if (options.asset) {
-    args.push(`--asset ${options.asset}`);
-  }
+  if (options.marketAddress) args.push(`--market ${options.marketAddress}`);
+  if (options.asset) args.push(`--asset ${options.asset}`);
 
   const snapshotSource = args.join(" ");
 
-  const symbols = reserves.map((reserve) => getStringField(reserve, ["symbol", "assetSymbol"]));
-  const addresses = reserves.map((reserve) =>
-    getStringField(reserve, ["underlyingAsset", "underlyingToken", "address", "tokenAddress", "id"])
+  const symbols = reserves.map((r) => getStringField(r, ["symbol", "assetSymbol"]));
+  const addresses = reserves.map((r) =>
+    getStringField(r, ["underlyingAsset", "underlyingToken", "address", "tokenAddress", "id"])
   );
-  const supplyRates = reserves.map((reserve) =>
-    getNumberField(reserve, ["liquidityRate", "supplyAPY", "supplyRate", "depositRate"])
+  const supplyRates = reserves.map((r) =>
+    getNumberField(r, ["liquidityRate", "supplyAPY", "supplyRate", "depositRate"])
   );
-  const borrowRates = reserves.map((reserve) =>
-    getNumberField(reserve, ["variableBorrowRate", "borrowRate", "borrowAPY"])
+  const borrowRates = reserves.map((r) =>
+    getNumberField(r, ["variableBorrowRate", "borrowRate", "borrowAPY"])
   );
-  const totalLiquidity = reserves.map((reserve) =>
-    getNumberField(reserve, [
-      "totalLiquidity",
-      "availableLiquidity",
-      "totalSupply",
-      "totalDeposits",
-    ])
+  const totalLiquidity = reserves.map((r) =>
+    getNumberField(r, ["totalLiquidity", "availableLiquidity", "totalSupply", "totalDeposits"])
   );
 
   const lines: string[] = [];
@@ -247,45 +298,27 @@ function printReservesSpellSnapshot(
   lines.push(`  snapshot_at: "${snapshotAt}"`);
   lines.push(`  snapshot_source: "${snapshotSource}"`);
 
-  lines.push("  reserve_symbols: [");
-  for (const symbol of symbols) {
-    lines.push(`    "${symbol}",`);
+  pushArrayLines(lines, "reserve_symbols", symbols, (v) => `"${v}"`);
+  pushArrayLines(lines, "reserve_addresses", addresses, (v) => `"${v}"`);
+  pushArrayLines(lines, "reserve_supply_rates", supplyRates, String);
+  pushArrayLines(lines, "reserve_borrow_rates", borrowRates, String);
+  pushArrayLines(lines, "reserve_total_liquidity", totalLiquidity, String);
+
+  return lines.join("\n");
+}
+
+function pushArrayLines<T>(lines: string[], key: string, values: T[], fmt: (v: T) => string): void {
+  lines.push(`  ${key}: [`);
+  for (const value of values) {
+    lines.push(`    ${fmt(value)},`);
   }
   lines.push("  ]");
-
-  lines.push("  reserve_addresses: [");
-  for (const address of addresses) {
-    lines.push(`    "${address}",`);
-  }
-  lines.push("  ]");
-
-  lines.push("  reserve_supply_rates: [");
-  for (const rate of supplyRates) {
-    lines.push(`    ${rate},`);
-  }
-  lines.push("  ]");
-
-  lines.push("  reserve_borrow_rates: [");
-  for (const rate of borrowRates) {
-    lines.push(`    ${rate},`);
-  }
-  lines.push("  ]");
-
-  lines.push("  reserve_total_liquidity: [");
-  for (const total of totalLiquidity) {
-    lines.push(`    ${total},`);
-  }
-  lines.push("  ]");
-
-  console.log(lines.join("\n"));
 }
 
 function getStringField(record: UnknownRecord, keys: string[]): string {
   for (const key of keys) {
     const value = record[key];
-    if (typeof value === "string" && value.length > 0) {
-      return value;
-    }
+    if (typeof value === "string" && value.length > 0) return value;
   }
   return "";
 }
@@ -293,20 +326,11 @@ function getStringField(record: UnknownRecord, keys: string[]): string {
 function getNumberField(record: UnknownRecord, keys: string[]): number {
   for (const key of keys) {
     const value = record[key];
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
+    if (typeof value === "number" && Number.isFinite(value)) return value;
     if (typeof value === "string") {
       const parsed = Number.parseFloat(value);
-      if (!Number.isNaN(parsed)) {
-        return parsed;
-      }
+      if (!Number.isNaN(parsed)) return parsed;
     }
   }
   return 0;
 }
-
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});

@@ -122,6 +122,7 @@ export type {
   VenueBuildMetadata,
   VenueBuildResult,
   VenueConstraint,
+  VenueManifest,
   VenueQuoteMetadata,
   VenueRegistry,
 } from "./venues/types.js";

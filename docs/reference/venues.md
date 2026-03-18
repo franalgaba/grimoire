@@ -255,16 +255,37 @@ const price   = await qp.queryPrice("ETH", "USDC");  // price via Alchemy API
 - All SDK/protocol integration belongs in `@grimoirelabs/venues`.
 - Adapters are injected at runtime via `execute({ adapters })`.
 
+## Venue Plugin Discovery
+
+Venues are discovered automatically via the `VenueManifest` contract:
+
+```ts
+interface VenueManifest {
+  name: string;        // e.g. "aave", "gmx"
+  aliases?: string[];  // e.g. ["aave-v3"]
+  cli: string;         // absolute path to CLI entry point
+  adapter?: string;    // absolute path to adapter module
+}
+```
+
+**Built-in venues** are discovered by scanning `packages/venues/src/cli/` (dev) or `dist/cli/` (prod). Adding a new CLI file and adapter automatically wires it into the system.
+
+**External venues** are discovered from `node_modules/grimoire-venue-*` and `@*/grimoire-venue-*` packages that include a `"grimoire"` field with `type: "venue"` in their `package.json`.
+
+See `docs/how-to/add-a-venue.md` for step-by-step contribution instructions.
+
 ## Venue CLI Proxies
 
-`grimoire venue <adapter> ...` proxies to per-venue CLIs currently for:
+`grimoire venue <adapter> ...` proxies to per-venue CLIs via the discovery system. Built-in venues:
 
-- Aave
-- Uniswap
-- Morpho Blue
+- Aave (aliases: aave-v3)
+- Uniswap (aliases: uniswap-v3, uniswap-v4)
+- Morpho Blue (aliases: morpho)
 - Hyperliquid
 - Pendle
 - Polymarket
+
+External `grimoire-venue-*` packages are also discovered and routed automatically.
 
 `grimoire venue doctor ...` runs cross-adapter diagnostics from the main CLI without calling a per-venue binary.
 

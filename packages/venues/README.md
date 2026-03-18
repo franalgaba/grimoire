@@ -5,8 +5,9 @@ Official Grimoire venue adapters bundle.
 ## Adapters
 
 - `aave_v3` (AaveKit TypeScript)
-- `morpho_blue` (Morpho Blue SDK)
 - `uniswap_v3` (Uniswap V3 SDK)
+- `uniswap_v4` (Uniswap V4 Universal Router)
+- `morpho_blue` (Morpho Blue SDK)
 - `hyperliquid` (Hyperliquid SDK, offchain)
 - `across` (Across Protocol bridge SDK)
 - `pendle` (Pendle Hosted SDK convert adapter)
