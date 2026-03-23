@@ -799,6 +799,8 @@ export class Transformer {
       exit_market: "exit_market",
       convert_lp_to_pt: "convert_lp_to_pt",
       pendle_swap: "pendle_swap",
+      vault_deposit: "vault_deposit",
+      vault_withdraw: "vault_withdraw",
       get_supply_rates: "query", // Query operations
       get_rates: "query",
     };
@@ -849,7 +851,20 @@ export class Transformer {
       "pendle_swap",
     ]);
 
-    if (
+    if (actionType === "vault_deposit" || actionType === "vault_withdraw") {
+      const assetArg = stmt.args[0];
+      const amountArg = stmt.args[1];
+      const vaultArg = stmt.args[2];
+      if (assetArg) {
+        action.asset = this.exprToString(assetArg);
+      }
+      if (amountArg) {
+        action.amount = this.exprToString(amountArg);
+      }
+      if (vaultArg) {
+        action.vault = this.exprToValue(vaultArg);
+      }
+    } else if (
       actionType === "lend" ||
       actionType === "withdraw" ||
       actionType === "repay" ||
@@ -1017,6 +1032,11 @@ export class Transformer {
     if (stmt.constraints) {
       const constraints: Record<string, unknown> = {};
       for (const { key, value } of stmt.constraints.constraints) {
+        // fee_tier is an action parameter, not a constraint — put it on the action
+        if (key === "fee_tier") {
+          action.fee_tier = this.exprToValue(value);
+          continue;
+        }
         const constraintKey =
           key === "slippage"
             ? "max_slippage"
@@ -1027,7 +1047,9 @@ export class Transformer {
                 : key;
         constraints[constraintKey] = this.exprToValue(value);
       }
-      step.constraints = constraints;
+      if (Object.keys(constraints).length > 0) {
+        step.constraints = constraints;
+      }
     }
 
     return [step];

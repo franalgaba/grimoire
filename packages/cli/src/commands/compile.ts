@@ -7,13 +7,14 @@ import { writeFile } from "node:fs/promises";
 import { compileFile } from "@grimoirelabs/core";
 import chalk from "chalk";
 import ora from "ora";
+import { stringifyJson } from "../lib/json.js";
 
 interface CompileOptions {
   output?: string;
   pretty?: boolean;
 }
 
-export async function compileCommand(spellPath: string, options: CompileOptions): Promise<void> {
+export async function compileCommand(spellPath: string, options: CompileOptions): Promise<unknown> {
   const spinner = ora(`Compiling ${spellPath}...`).start();
 
   try {
@@ -28,48 +29,43 @@ export async function compileCommand(spellPath: string, options: CompileOptions)
     if (!result.success || !result.ir) {
       spinner.fail(chalk.red("Compilation failed"));
       for (const error of result.errors) {
-        console.log(chalk.red(`  Error [${error.code}]: ${error.message}`));
+        console.error(chalk.red(`  Error [${error.code}]: ${error.message}`));
       }
-      process.exit(1);
+      throw new Error("Compilation failed");
     }
 
     spinner.succeed(chalk.green("Compilation successful"));
 
     // Output IR
     const irJson = options.pretty
-      ? JSON.stringify(result.ir, bigintReplacer, 2)
-      : JSON.stringify(result.ir, bigintReplacer);
+      ? stringifyJson(result.ir)
+      : JSON.stringify(result.ir, (_key, v) => (typeof v === "bigint" ? v.toString() : v));
 
     if (options.output) {
       await writeFile(options.output, irJson, "utf8");
-      console.log(chalk.dim(`IR written to ${options.output}`));
+      console.error(chalk.dim(`IR written to ${options.output}`));
     } else {
-      console.log();
-      console.log(irJson);
+      console.error();
+      console.error(irJson);
     }
 
     // Summary
-    console.log();
-    console.log(chalk.dim("Summary:"));
-    console.log(chalk.dim(`  Spell: ${result.ir.meta.name}`));
-    console.log(chalk.dim(`  Version: ${result.ir.version}`));
-    console.log(chalk.dim(`  Steps: ${result.ir.steps.length}`));
-    console.log(chalk.dim(`  Guards: ${result.ir.guards.length}`));
-    console.log(chalk.dim(`  Venues: ${result.ir.aliases.length}`));
-    console.log(chalk.dim(`  Assets: ${result.ir.assets.length}`));
-    console.log(chalk.dim(`  Params: ${result.ir.params.length}`));
-  } catch (error) {
-    spinner.fail(chalk.red(`Failed to compile: ${(error as Error).message}`));
-    process.exit(1);
-  }
-}
+    console.error();
+    console.error(chalk.dim("Summary:"));
+    console.error(chalk.dim(`  Spell: ${result.ir.meta.name}`));
+    console.error(chalk.dim(`  Version: ${result.ir.version}`));
+    console.error(chalk.dim(`  Steps: ${result.ir.steps.length}`));
+    console.error(chalk.dim(`  Guards: ${result.ir.guards.length}`));
+    console.error(chalk.dim(`  Venues: ${result.ir.aliases.length}`));
+    console.error(chalk.dim(`  Assets: ${result.ir.assets.length}`));
+    console.error(chalk.dim(`  Params: ${result.ir.params.length}`));
 
-/**
- * JSON replacer for bigint values
- */
-function bigintReplacer(_key: string, value: unknown): unknown {
-  if (typeof value === "bigint") {
-    return value.toString();
+    return result.ir as unknown;
+  } catch (error) {
+    if ((error as Error).message === "Compilation failed") {
+      throw error;
+    }
+    spinner.fail(chalk.red(`Failed to compile: ${(error as Error).message}`));
+    throw error;
   }
-  return value;
 }

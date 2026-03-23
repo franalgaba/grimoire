@@ -64,6 +64,7 @@ For agent execution/playbooks, use:
 - `skills/grimoire-aave/SKILL.md`
 - `skills/grimoire-uniswap/SKILL.md`
 - `skills/grimoire-morpho-blue/SKILL.md`
+- `skills/grimoire-across/SKILL.md`
 - `skills/grimoire-hyperliquid/SKILL.md`
 - `skills/grimoire-pendle/SKILL.md`
 - `skills/grimoire-polymarket/SKILL.md`

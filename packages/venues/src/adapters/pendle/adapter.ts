@@ -126,6 +126,11 @@ export function createPendleAdapter(config: PendleAdapterConfig = {}): VenueAdap
         ctx.onWarning?.(noRouteMessage);
         throw new Error(noRouteMessage);
       }
+      if (routes.length > 1) {
+        ctx.onWarning?.(
+          `Pendle returned ${routes.length} routes; using first (best) route. Review outputs to confirm expected behavior.`
+        );
+      }
       const route = routes[0];
       if (!route || !route.tx?.to || !route.tx?.data) {
         throw new Error("Pendle convert response did not return a usable tx route");

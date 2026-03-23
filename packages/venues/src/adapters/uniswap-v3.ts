@@ -56,7 +56,7 @@ const POOL_ABI: Abi = parseAbi([
 
 const WETH_ABI = parseAbi(["function deposit() payable"]);
 
-const DEFAULT_FEE = 3000;
+const _DEFAULT_FEE = 3000;
 const DEFAULT_DEADLINE_SECONDS = 1200;
 const DEFAULT_SLIPPAGE_BPS = 50;
 
@@ -102,7 +102,13 @@ export function createUniswapV3Adapter(
       const isNativeEth = action.assetIn?.toUpperCase() === "ETH";
       const tokenIn = resolveToken(action.assetIn, ctx.chainId);
       const tokenOut = resolveToken(action.assetOut, ctx.chainId);
-      const fee = (config.defaultFee ?? DEFAULT_FEE) as FeeAmount;
+
+      if (action.feeTier === undefined) {
+        throw new Error(
+          `Uniswap V3 swap requires explicit fee_tier. Use: with (fee_tier=3000) or with (fee_tier=500)`
+        );
+      }
+      const fee = action.feeTier as FeeAmount;
       const amount = toBigInt(action.amount, "Unsupported amount type for swap");
       const recipient = (ctx.vault ?? ctx.walletAddress) as string;
 

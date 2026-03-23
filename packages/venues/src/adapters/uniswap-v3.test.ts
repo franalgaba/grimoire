@@ -52,6 +52,7 @@ describe("Uniswap V3 adapter", () => {
         assetOut: "WETH",
         amount,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -63,6 +64,27 @@ describe("Uniswap V3 adapter", () => {
     expect(built[1]?.description).toContain("Uniswap V3 swap");
     expect(built[1]?.metadata?.quote?.expectedOut).toBeDefined();
     expect(built[1]?.metadata?.route?.poolAddress).toBeDefined();
+  });
+
+  test("rejects swap without explicit fee_tier", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const amount: Expression = { kind: "literal", value: 10n, type: "int" };
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "uniswap_v3",
+          assetIn: "USDC",
+          assetOut: "WETH",
+          amount,
+          mode: "exact_in",
+        },
+        ctx
+      )
+    ).rejects.toThrow("requires explicit fee_tier");
   });
 
   test("fails fast on unsupported constraints", async () => {
@@ -120,6 +142,7 @@ describe("Uniswap V3 adapter", () => {
         assetOut: "WETH",
         amount,
         mode: "exact_in",
+        feeTier: 3000,
       },
       richCtx
     );
@@ -163,6 +186,7 @@ describe("Uniswap V3 adapter", () => {
           assetOut: "WETH",
           amount,
           mode: "exact_in",
+          feeTier: 3000,
         },
         ctx
       )
@@ -181,6 +205,7 @@ describe("Uniswap V3 adapter", () => {
         assetOut: "WETH",
         amount: 10n as unknown as Expression,
         mode: "exact_out",
+        feeTier: 3000,
       },
       ctx
     );
@@ -204,6 +229,7 @@ describe("Uniswap V3 adapter", () => {
         assetOut: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
         amount: 10n as unknown as Expression,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -225,6 +251,7 @@ describe("Uniswap V3 adapter", () => {
           assetOut: "WETH",
           amount: 10n as unknown as Expression,
           mode: "exact_in",
+          feeTier: 3000,
         },
         ctx
       )
@@ -244,6 +271,7 @@ describe("Uniswap V3 adapter", () => {
         assetOut: "WETH",
         amount: 10 as unknown as Expression,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -259,6 +287,7 @@ describe("Uniswap V3 adapter", () => {
         assetOut: "WETH",
         amount: "10" as unknown as Expression,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -275,6 +304,7 @@ describe("Uniswap V3 adapter", () => {
           assetOut: "WETH",
           amount: { foo: true } as unknown as Expression,
           mode: "exact_in",
+          feeTier: 3000,
         },
         ctx
       )
@@ -293,6 +323,7 @@ describe("Uniswap V3 adapter", () => {
         assetOut: "WETH",
         amount: 1000000n as unknown as Expression,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -318,6 +349,7 @@ describe("Uniswap V3 adapter", () => {
         assetOut: "USDC",
         amount: amount as unknown as Expression,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );

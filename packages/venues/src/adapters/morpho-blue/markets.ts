@@ -86,12 +86,14 @@ export function resolveMarket(
       );
     }
 
-    if (matches.length > 0) {
-      options.onWarning?.(
-        `Morpho Blue action '${action.type}' is using implicit market selection. Set explicit market_id to avoid ambiguity.`
+    if (matches.length > 1) {
+      const candidateIds = matches.map((market) => market.id);
+      throw new Error(
+        `Morpho Blue action '${action.type}' matched ${matches.length} markets. Set explicit market_id to resolve ambiguity. Candidates: ${candidateIds.join(", ")}`
       );
-      const first = matches[0];
-      if (first) return first;
+    }
+    if (matches.length === 1) {
+      return matches[0]!;
     }
 
     throw new Error(
@@ -118,12 +120,14 @@ export function resolveMarket(
     );
   }
 
-  if (matches.length > 0) {
-    options.onWarning?.(
-      `Morpho Blue action '${action.type}' is using implicit market selection. Set explicit market_id to avoid ambiguity.`
+  if (matches.length > 1) {
+    const candidateIds = matches.map((market) => market.id);
+    throw new Error(
+      `Morpho Blue action '${action.type}' matched ${matches.length} markets. Set explicit market_id to resolve ambiguity. Candidates: ${candidateIds.join(", ")}`
     );
-    const first = matches[0];
-    if (first) return first;
+  }
+  if (matches.length === 1) {
+    return matches[0]!;
   }
 
   throw new Error(

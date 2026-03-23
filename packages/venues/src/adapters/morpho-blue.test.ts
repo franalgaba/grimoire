@@ -402,7 +402,7 @@ describe("Morpho Blue adapter", () => {
     expect(built[0]?.description).toContain("Morpho Blue borrow");
   });
 
-  test("picks first market when multiple match and no collateral specified", async () => {
+  test("rejects ambiguous market when multiple match and no collateral or market_id specified", async () => {
     const market2 = {
       ...market,
       id: "test2",
@@ -411,7 +411,23 @@ describe("Morpho Blue adapter", () => {
     const adapter = createMorphoBlueAdapter({ markets: [market, market2] });
     if (!adapter.buildAction) throw new Error("Missing buildAction");
 
-    // Multiple USDC markets, no collateral specified — picks first
+    // Multiple USDC markets, no collateral specified — must error
+    const action = {
+      type: "borrow",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount1,
+    } as unknown as Action;
+
+    await expect(adapter.buildAction(action, createCtx())).rejects.toThrow(
+      "Set explicit market_id to resolve ambiguity"
+    );
+  });
+
+  test("resolves single market implicitly without error", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
     const action = {
       type: "borrow",
       venue: "morpho_blue",
@@ -547,6 +563,67 @@ describe("Morpho Blue adapter", () => {
     const result = await adapter.buildAction(action, crossChainCtx);
     const built = Array.isArray(result) ? result : [result];
     expect(built[0]?.description).toContain("Morpho Blue borrow");
+  });
+
+  test("builds vault_deposit with approval and encoded calldata", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const vaultAddr = "0x0000000000000000000000000000000000000099" as Address;
+    const action = {
+      type: "vault_deposit",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount5,
+      vault: vaultAddr,
+    } as unknown as Action;
+
+    const result = await adapter.buildAction(action, createCtx());
+    const built = Array.isArray(result) ? result : [result];
+
+    // Approval + deposit
+    expect(built).toHaveLength(2);
+    expect(built[0]?.description).toContain("Approve USDC");
+    expect(built[1]?.description).toContain("MetaMorpho vault_deposit");
+    expect(built[1]?.tx.to).toBe(vaultAddr);
+    expect(built[1]?.tx.value).toBe(0n);
+  });
+
+  test("builds vault_withdraw without approval", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const vaultAddr = "0x0000000000000000000000000000000000000099" as Address;
+    const action = {
+      type: "vault_withdraw",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount5,
+      vault: vaultAddr,
+    } as unknown as Action;
+
+    const result = await adapter.buildAction(action, createCtx());
+    const built = Array.isArray(result) ? result : [result];
+
+    expect(built).toHaveLength(1);
+    expect(built[0]?.description).toContain("MetaMorpho vault_withdraw");
+    expect(built[0]?.tx.to).toBe(vaultAddr);
+  });
+
+  test("vault_deposit rejects missing vault address", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "vault_deposit",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount5,
+    } as unknown as Action;
+
+    await expect(adapter.buildAction(action, createCtx())).rejects.toThrow(
+      "requires an explicit vault address"
+    );
   });
 
   test("accepts explicit market_id in cross-chain mode via actionRef mapping", async () => {

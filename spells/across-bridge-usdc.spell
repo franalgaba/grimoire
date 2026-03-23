@@ -1,0 +1,22 @@
+# Bridge USDC from Ethereum to Base via Across Protocol
+
+spell AcrossBridgeUsdc {
+
+  version: "1.0.0"
+  description: "Bridge USDC from Ethereum (chain 1) to Base (chain 8453) via Across"
+
+  assets: [USDC]
+
+  params: {
+    amount: 1000000000
+  }
+
+  venues: {
+    across: @across
+  }
+
+  on manual: {
+    across.bridge(USDC, params.amount, 8453)
+    emit bridge_submitted(asset=USDC, amount=params.amount, to_chain=8453)
+  }
+}

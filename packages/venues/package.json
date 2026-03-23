@@ -9,6 +9,7 @@
     ".": "./dist/index.js"
   },
   "bin": {
+    "grimoire-across": "dist/cli/across.js",
     "grimoire-aave": "dist/cli/aave.js",
     "grimoire-uniswap": "dist/cli/uniswap.js",
     "grimoire-morpho-blue": "dist/cli/morpho-blue.js",

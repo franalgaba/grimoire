@@ -12,6 +12,7 @@ import type { VenueManifest } from "@grimoirelabs/core";
 /** Mapping from CLI filename (without extension) to known aliases. */
 const BUILTIN_ALIAS_MAP: Record<string, string[]> = {
   aave: ["aave-v3"],
+  across: ["across-protocol"],
   uniswap: ["uniswap-v3", "uniswap-v4"],
   "morpho-blue": ["morpho"],
 };
@@ -22,6 +23,7 @@ const BUILTIN_ALIAS_MAP: Record<string, string[]> = {
  */
 const CLI_TO_ADAPTER_MAP: Record<string, string[]> = {
   aave: ["aave-v3"],
+  across: ["across"],
   uniswap: ["uniswap-v3", "uniswap-v4"],
   "morpho-blue": ["morpho-blue"],
   hyperliquid: ["hyperliquid"],

@@ -699,7 +699,8 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
   const type = raw.type as string;
 
   switch (type) {
-    case "swap":
+    case "swap": {
+      const feeTierRaw = raw.fee_tier ?? raw.feeTier;
       return {
         type: "swap",
         venue: raw.venue as string,
@@ -707,7 +708,9 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
         assetOut: raw.asset_out as string,
         amount: parseExpressionSafe(raw.amount as string, errors),
         mode: (raw.mode as "exact_in" | "exact_out") ?? "exact_in",
+        feeTier: typeof feeTierRaw === "number" ? feeTierRaw : undefined,
       } as Action;
+    }
 
     case "lend":
       return {
@@ -762,6 +765,24 @@ function transformAction(raw: Record<string, unknown>, errors: CompilationError[
         asset: raw.asset as string,
         amount: parseExpressionSafe(raw.amount as string, errors),
         marketId: parseOptionalMarketId(raw.market_id ?? raw.marketId),
+      } as Action;
+
+    case "vault_deposit":
+      return {
+        type: "vault_deposit",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: parseExpressionSafe(raw.amount as string, errors),
+        vault: raw.vault as string,
+      } as Action;
+
+    case "vault_withdraw":
+      return {
+        type: "vault_withdraw",
+        venue: raw.venue as string,
+        asset: raw.asset as string,
+        amount: raw.amount === "max" ? "max" : parseExpressionSafe(raw.amount as string, errors),
+        vault: raw.vault as string,
       } as Action;
 
     case "stake":

@@ -175,9 +175,15 @@ grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --
 Run .grimoire/spells/runtime-quickstart/spell.spell in the Grimoire runtime with trigger manual. Use defaults and no side effects.
 `;
 
-export async function initCommand(options: InitOptions): Promise<void> {
+interface InitResult {
+  created: string[];
+  runtimeQuickstart: boolean;
+}
+
+export async function initCommand(options: InitOptions): Promise<InitResult> {
   const spinner = ora("Initializing Grimoire...").start();
   const baseDir = ".grimoire";
+  const created: string[] = [];
 
   try {
     const pathExists = async (path: string): Promise<boolean> => {
@@ -193,7 +199,7 @@ export async function initCommand(options: InitOptions): Promise<void> {
     if (await pathExists(baseDir)) {
       if (!options.force) {
         spinner.fail(chalk.red(`Directory ${baseDir} already exists. Use --force to overwrite.`));
-        process.exit(1);
+        throw new Error(`Directory ${baseDir} already exists. Use --force to overwrite.`);
       }
     }
 
@@ -204,9 +210,11 @@ export async function initCommand(options: InitOptions): Promise<void> {
 
     // Write config file
     await writeFile(join(baseDir, "config.yaml"), DEFAULT_CONFIG, "utf8");
+    created.push(`${baseDir}/config.yaml`);
 
     // Write default aliases
     await writeFile(join(baseDir, "aliases", "default.yaml"), DEFAULT_ALIASES, "utf8");
+    created.push(`${baseDir}/aliases/default.yaml`);
 
     if (options.runtimeQuickstart) {
       await mkdir(join(baseDir, "spells", "runtime-quickstart"), { recursive: true });
@@ -220,6 +228,8 @@ export async function initCommand(options: InitOptions): Promise<void> {
         RUNTIME_QUICKSTART_README,
         "utf8"
       );
+      created.push(`${baseDir}/spells/runtime-quickstart/spell.spell`);
+      created.push(`${baseDir}/spells/runtime-quickstart/README.md`);
     } else {
       // Write example spell
       await mkdir(join(baseDir, "spells", "example-swap"), { recursive: true });
@@ -228,49 +238,53 @@ export async function initCommand(options: InitOptions): Promise<void> {
         EXAMPLE_SPELL,
         "utf8"
       );
+      created.push(`${baseDir}/spells/example-swap/spell.spell`);
     }
 
     spinner.succeed(chalk.green("Grimoire initialized successfully!"));
 
-    console.log();
-    console.log(chalk.dim("Created:"));
-    console.log(chalk.dim(`  ${baseDir}/config.yaml`));
-    console.log(chalk.dim(`  ${baseDir}/aliases/default.yaml`));
-    if (options.runtimeQuickstart) {
-      console.log(chalk.dim(`  ${baseDir}/spells/runtime-quickstart/spell.spell`));
-      console.log(chalk.dim(`  ${baseDir}/spells/runtime-quickstart/README.md`));
-    } else {
-      console.log(chalk.dim(`  ${baseDir}/spells/example-swap/spell.spell`));
+    console.error();
+    console.error(chalk.dim("Created:"));
+    for (const file of created) {
+      console.error(chalk.dim(`  ${file}`));
     }
-    console.log();
-    console.log(chalk.cyan("Next steps:"));
+    console.error();
+    console.error(chalk.cyan("Next steps:"));
     if (options.runtimeQuickstart) {
-      console.log(
+      console.error(
         chalk.white(
           "  1. Run: grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell"
         )
       );
-      console.log(
+      console.error(
         chalk.white(
           "  2. Paste the params block into .grimoire/spells/runtime-quickstart/spell.spell"
         )
       );
-      console.log(
+      console.error(
         chalk.white(
           "  3. Run in embedded runtime: spells/runtime-quickstart/spell.spell (trigger manual, no side effects)"
         )
       );
     } else {
-      console.log(chalk.white("  1. Edit your spell in .grimoire/spells/example-swap/spell.spell"));
-      console.log(
+      console.error(
+        chalk.white("  1. Edit your spell in .grimoire/spells/example-swap/spell.spell")
+      );
+      console.error(
         chalk.white("  2. Run: grimoire validate .grimoire/spells/example-swap/spell.spell")
       );
-      console.log(
+      console.error(
         chalk.white("  3. Run: grimoire simulate .grimoire/spells/example-swap/spell.spell")
       );
     }
+
+    return { created, runtimeQuickstart: Boolean(options.runtimeQuickstart) };
   } catch (error) {
+    if (created.length === 0) {
+      // Error came from our own throw or spinner.fail
+      throw error;
+    }
     spinner.fail(chalk.red(`Failed to initialize: ${(error as Error).message}`));
-    process.exit(1);
+    throw error;
   }
 }

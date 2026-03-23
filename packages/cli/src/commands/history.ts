@@ -9,14 +9,13 @@ import chalk from "chalk";
 
 interface HistoryOptions {
   limit?: string;
-  json?: boolean;
   stateDir?: string;
 }
 
 export async function historyCommand(
   spellId: string | undefined,
   options: HistoryOptions
-): Promise<void> {
+): Promise<unknown> {
   const dbPath = options.stateDir ? join(options.stateDir, "grimoire.db") : undefined;
 
   const store = new SqliteStateStore({ dbPath });
@@ -27,113 +26,99 @@ export async function historyCommand(
       const spells = await store.listSpells();
 
       if (spells.length === 0) {
-        console.log(chalk.dim("No spell state found. Run a spell first."));
-        return;
+        console.error(chalk.dim("No spell state found. Run a spell first."));
+        return spells;
       }
 
-      if (options.json) {
-        console.log(JSON.stringify(spells, null, 2));
-        return;
-      }
-
-      console.log(chalk.cyan("Spells with saved state:"));
-      console.log();
+      const spellSummaries = [];
+      console.error(chalk.cyan("Spells with saved state:"));
+      console.error();
       for (const id of spells) {
         const runs = await store.getRuns(id, 1);
         const lastRun = runs[0];
         if (lastRun) {
           const status = lastRun.success ? chalk.green("ok") : chalk.red("fail");
-          console.log(`  ${chalk.white(id)}  ${status}  ${chalk.dim(lastRun.timestamp)}`);
+          console.error(`  ${chalk.white(id)}  ${status}  ${chalk.dim(lastRun.timestamp)}`);
         } else {
-          console.log(`  ${chalk.white(id)}  ${chalk.dim("(no runs)")}`);
+          console.error(`  ${chalk.white(id)}  ${chalk.dim("(no runs)")}`);
         }
-      }
-    } else {
-      // Show runs for specific spell
-      const limit = options.limit ? Number.parseInt(options.limit, 10) : 20;
-      const runs = await store.getRuns(spellId, limit);
-      const sessionLedger = await getSessionLedgerView(store, spellId, limit);
-      const sessionPnl = await getSessionPnlView(store, spellId, limit);
-
-      if (runs.length === 0) {
-        console.log(chalk.dim(`No runs found for spell "${spellId}".`));
-        return;
+        spellSummaries.push({ id, lastRun: lastRun ?? null });
       }
 
-      if (options.json) {
-        console.log(
-          JSON.stringify(
-            {
-              runs,
-              sessionLedger,
-              sessionPnl,
-            },
-            null,
-            2
-          )
-        );
-        return;
-      }
+      return spellSummaries;
+    }
 
-      console.log(chalk.cyan(`Run history for ${chalk.white(spellId)}:`));
-      console.log();
+    // Show runs for specific spell
+    const limit = options.limit ? Number.parseInt(options.limit, 10) : 20;
+    const runs = await store.getRuns(spellId, limit);
+    const sessionLedger = await getSessionLedgerView(store, spellId, limit);
+    const sessionPnl = await getSessionPnlView(store, spellId, limit);
 
-      for (const run of runs) {
-        const status = run.success ? chalk.green("ok  ") : chalk.red("FAIL");
-        const duration = chalk.dim(`${run.duration}ms`);
-        const steps = chalk.dim(`${run.metrics.stepsExecuted} steps`);
-        const actions = chalk.dim(`${run.metrics.actionsExecuted} actions`);
-        const errors = run.metrics.errors > 0 ? chalk.red(` ${run.metrics.errors} errors`) : "";
+    if (runs.length === 0) {
+      console.error(chalk.dim(`No runs found for spell "${spellId}".`));
+      return { runs, sessionLedger, sessionPnl };
+    }
 
-        console.log(
-          `  ${status}  ${chalk.dim(run.runId.slice(0, 8))}  ${chalk.dim(run.timestamp)}  ${duration}  ${steps}  ${actions}${errors}`
-        );
+    console.error(chalk.cyan(`Run history for ${chalk.white(spellId)}:`));
+    console.error();
 
-        if (run.error) {
-          console.log(`        ${chalk.red(run.error)}`);
-        }
+    for (const run of runs) {
+      const status = run.success ? chalk.green("ok  ") : chalk.red("FAIL");
+      const duration = chalk.dim(`${run.duration}ms`);
+      const steps = chalk.dim(`${run.metrics.stepsExecuted} steps`);
+      const actions = chalk.dim(`${run.metrics.actionsExecuted} actions`);
+      const errors = run.metrics.errors > 0 ? chalk.red(` ${run.metrics.errors} errors`) : "";
 
-        if (run.crossChain) {
-          const trackSummary = run.crossChain.tracks
-            .map((track) => `${track.trackId}:${track.status}`)
-            .join(", ");
-          const handoffSummary = run.crossChain.handoffs
-            .map((handoff) => `${handoff.handoffId}:${handoff.status}`)
-            .join(", ");
-          console.log(`        ${chalk.dim(`cross_chain tracks=[${trackSummary}]`)}`);
-          if (handoffSummary.length > 0) {
-            console.log(`        ${chalk.dim(`cross_chain handoffs=[${handoffSummary}]`)}`);
-          }
-        }
-      }
-
-      console.log();
-      console.log(chalk.cyan("Session ledger:"));
-      console.log(
-        `  runs=${sessionLedger.runs.total} success=${sessionLedger.runs.success} failed=${sessionLedger.runs.failed}`
+      console.error(
+        `  ${status}  ${chalk.dim(run.runId.slice(0, 8))}  ${chalk.dim(run.timestamp)}  ${duration}  ${steps}  ${actions}${errors}`
       );
-      if (sessionLedger.runs.latestRunAt) {
-        console.log(`  latest=${chalk.dim(sessionLedger.runs.latestRunAt)}`);
-      }
-      console.log(`  triggers=${formatCounts(sessionLedger.triggers)}`);
-      console.log(`  receipts=${formatCounts(sessionLedger.receipts)}`);
 
-      console.log();
-      console.log(chalk.cyan("Session P&L (ledger-derived):"));
-      console.log(
-        `  runs=${sessionPnl.runCount} deltas=${sessionPnl.deltaCount} accounting=${sessionPnl.accountingPassed ? "ok" : "failed"}`
-      );
-      console.log(`  net=${sessionPnl.totalNet} total_unaccounted=${sessionPnl.totalUnaccounted}`);
-      if (sessionPnl.assets.length === 0) {
-        console.log(`  ${chalk.dim("(no value deltas)")}`);
-      } else {
-        for (const asset of sessionPnl.assets) {
-          console.log(
-            `  ${asset.asset} net=${asset.net} credits=${asset.credits} debits=${asset.debits} fees=${asset.fees} losses=${asset.losses}`
-          );
+      if (run.error) {
+        console.error(`        ${chalk.red(run.error)}`);
+      }
+
+      if (run.crossChain) {
+        const trackSummary = run.crossChain.tracks
+          .map((track) => `${track.trackId}:${track.status}`)
+          .join(", ");
+        const handoffSummary = run.crossChain.handoffs
+          .map((handoff) => `${handoff.handoffId}:${handoff.status}`)
+          .join(", ");
+        console.error(`        ${chalk.dim(`cross_chain tracks=[${trackSummary}]`)}`);
+        if (handoffSummary.length > 0) {
+          console.error(`        ${chalk.dim(`cross_chain handoffs=[${handoffSummary}]`)}`);
         }
       }
     }
+
+    console.error();
+    console.error(chalk.cyan("Session ledger:"));
+    console.error(
+      `  runs=${sessionLedger.runs.total} success=${sessionLedger.runs.success} failed=${sessionLedger.runs.failed}`
+    );
+    if (sessionLedger.runs.latestRunAt) {
+      console.error(`  latest=${chalk.dim(sessionLedger.runs.latestRunAt)}`);
+    }
+    console.error(`  triggers=${formatCounts(sessionLedger.triggers)}`);
+    console.error(`  receipts=${formatCounts(sessionLedger.receipts)}`);
+
+    console.error();
+    console.error(chalk.cyan("Session P&L (ledger-derived):"));
+    console.error(
+      `  runs=${sessionPnl.runCount} deltas=${sessionPnl.deltaCount} accounting=${sessionPnl.accountingPassed ? "ok" : "failed"}`
+    );
+    console.error(`  net=${sessionPnl.totalNet} total_unaccounted=${sessionPnl.totalUnaccounted}`);
+    if (sessionPnl.assets.length === 0) {
+      console.error(`  ${chalk.dim("(no value deltas)")}`);
+    } else {
+      for (const asset of sessionPnl.assets) {
+        console.error(
+          `  ${asset.asset} net=${asset.net} credits=${asset.credits} debits=${asset.debits} fees=${asset.fees} losses=${asset.losses}`
+        );
+      }
+    }
+
+    return { runs, sessionLedger, sessionPnl };
   } finally {
     store.close();
   }

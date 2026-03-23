@@ -281,6 +281,7 @@ See `docs/how-to/add-a-venue.md` for step-by-step contribution instructions.
 - Aave (aliases: aave-v3)
 - Uniswap (aliases: uniswap-v3, uniswap-v4)
 - Morpho Blue (aliases: morpho)
+- Across (aliases: across-protocol)
 - Hyperliquid
 - Pendle
 - Polymarket
@@ -310,6 +311,7 @@ Per-venue CLIs support `--format <auto|json|table>` (plus `spell` for snapshot-c
 - `grimoire-aave`
 - `grimoire-uniswap`
 - `grimoire-morpho-blue`
+- `grimoire-across`
 - `grimoire-hyperliquid`
 - `grimoire-pendle`
 - `grimoire-polymarket`
@@ -347,6 +349,18 @@ Commands:
 - `vaults`
 
 `vaults` supports `--format spell` snapshot output.
+
+### `grimoire-across`
+
+Commands:
+
+- `info`
+- `chains`
+- `quote`
+- `status`
+- `routes`
+
+`quote` returns bridge quotes with fees, limits, and estimated fill time. `status` checks deposit progress by origin tx hash. `routes` lists available chain pairs for a given asset.
 
 ### `grimoire-hyperliquid`
 

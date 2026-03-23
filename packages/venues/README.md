@@ -66,6 +66,10 @@ grimoire-aave markets --chain 1
 grimoire-uniswap routers
 grimoire-morpho-blue addresses --chain 1
 
+grimoire-across chains
+grimoire-across quote --asset USDC --from 1 --to 8453 --amount 1000000000
+grimoire-across status --tx-hash 0x...
+
 grimoire-hyperliquid mids
 grimoire-hyperliquid l2-book --coin BTC
 

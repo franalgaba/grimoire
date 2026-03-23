@@ -6,20 +6,11 @@
 import chalk from "chalk";
 import { loadAllAdapters } from "../lib/venue-discovery.js";
 
-interface VenuesOptions {
-  json?: boolean;
-}
-
-export async function venuesCommand(options: VenuesOptions): Promise<void> {
+export async function venuesCommand(): Promise<unknown[]> {
   const allAdapters = await loadAllAdapters();
   const metas = allAdapters
     .map((adapter) => adapter.meta)
     .sort((a, b) => a.name.localeCompare(b.name));
-
-  if (options.json) {
-    console.log(JSON.stringify(metas, null, 2));
-    return;
-  }
 
   const headers = [
     "Name",
@@ -49,6 +40,8 @@ export async function venuesCommand(options: VenuesOptions): Promise<void> {
   ]);
 
   printTable(headers, rows);
+
+  return metas;
 }
 
 function printTable(headers: string[], rows: string[][]): void {
@@ -59,10 +52,10 @@ function printTable(headers: string[], rows: string[][]): void {
   const formatRow = (row: string[]): string =>
     row.map((cell, index) => cell.padEnd(widths[index] ?? 0)).join("  ");
 
-  console.log(chalk.bold(formatRow(headers)));
-  console.log(chalk.dim(widths.map((width) => "-".repeat(width)).join("  ")));
+  console.error(chalk.bold(formatRow(headers)));
+  console.error(chalk.dim(widths.map((width) => "-".repeat(width)).join("  ")));
   for (const row of rows) {
-    console.log(formatRow(row));
+    console.error(formatRow(row));
   }
 }
 
