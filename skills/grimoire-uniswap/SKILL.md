@@ -20,12 +20,27 @@ Recommended preflight:
 
 ## Commands
 
-- `grimoire venue uniswap info [--format <json|table>]`
-- `grimoire venue uniswap routers [--chain <id>] [--format <json|table>]`
-- `grimoire venue uniswap tokens [--chain <id>] [--symbol <sym>] [--address <addr>] [--source <url>] [--format <json|table|spell>]`
-- `grimoire venue uniswap pools --chain <id> --token0 <address|symbol> --token1 <address|symbol> [--fee <bps>] [--limit <n>] [--source <url>] [--format <json|table|spell>] [--endpoint <url>] [--graph-key <key>] [--subgraph-id <id>] [--rpc-url <url>] [--factory <address>]`
+- `grimoire venue uniswap info` — adapter metadata
+- `grimoire venue uniswap routers [--chain <id>]` — router addresses per chain
+- `grimoire venue uniswap tokens [--chain <id>] [--symbol <sym>] [--address <addr>] [--source <url>]` — token list lookup
+- `grimoire venue uniswap tokens-snapshot [--chain <id>] [--symbol <sym>] [--address <addr>] [--source <url>]` — generate spell `params:` block for tokens (agent-only)
+- `grimoire venue uniswap pools --token0 <address|symbol> --token1 <address|symbol> [--chain <id>] [--fee <bps>] [--limit <n>] [--source <url>] [--endpoint <url>] [--graph-key <key>] [--subgraph-id <id>] [--rpc-url <url>] [--factory <address>]` — find pools for a token pair
+- `grimoire venue uniswap pools-snapshot --token0 <address|symbol> --token1 <address|symbol> [--chain <id>] [--fee <bps>] [--limit <n>] [--source <url>] [--endpoint <url>] [--graph-key <key>] [--subgraph-id <id>] [--rpc-url <url>] [--factory <address>]` — generate spell `params:` block for pools (agent-only)
 
-If you provide `--rpc-url` (or `RPC_URL`) and omit `--endpoint`/`--graph-key`, pools uses onchain factory lookups instead of The Graph.
+## Pool Data Sources
+
+Pools can be fetched from The Graph (subgraph) or directly from on-chain factory contracts:
+
+- **Subgraph** (default when `GRAPH_API_KEY` is set): queries The Graph decentralized network. Built-in subgraph IDs for Ethereum, Optimism, Polygon, Base, Arbitrum.
+- **RPC** (fallback): if `--rpc-url` or `RPC_URL` is set and no graph key is available, pools uses on-chain factory lookups.
+- To force RPC mode: provide `--rpc-url` and omit `--graph-key`.
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `GRAPH_API_KEY` | The Graph API key for subgraph queries (get one at https://thegraph.com/studio/apikeys/) |
+| `RPC_URL` | Fallback RPC URL for on-chain pool lookups |
 
 ## Examples
 
@@ -36,10 +51,45 @@ grimoire venue uniswap routers --chain 1
 grimoire venue uniswap tokens --chain 1 --symbol USDC --format spell
 grimoire venue uniswap pools --chain 1 --token0 USDC --token1 WETH --fee 3000 --format spell
 grimoire venue uniswap pools --chain 8453 --token0 USDC --token1 WETH --fee 500 --rpc-url $RPC_URL --format table
-grimoire venue uniswap pools --chain 8453 --token0 USDC --token1 WETH --fee 500 --graph-key $GRAPH_API_KEY --subgraph-id <id> --format table
+grimoire venue uniswap pools --chain 8453 --token0 USDC --token1 WETH --fee 500 --graph-key $GRAPH_API_KEY --subgraph-id <id>
+grimoire venue uniswap tokens-snapshot --chain 1 --symbol USDC
+grimoire venue uniswap pools-snapshot --chain 1 --token0 USDC --token1 WETH --rpc-url $RPC_URL
 ```
 
-Use `--format spell` on `tokens` or `pools` to emit a `params:` snapshot block.
+Use `tokens-snapshot` or `pools-snapshot` to emit a `params:` block for spell inputs. These are agent-only commands (output suppressed in interactive mode).
+
+## Spell Constraints
+
+When writing swap actions in `.spell` files targeting Uniswap, use `with` clauses to set constraints:
+
+```spell
+uniswap_v3.swap(USDC, WETH, params.amount) with (
+  fee_tier=3000,
+  max_slippage=50,
+  min_output=900000000000000,
+  deadline=300,
+)
+```
+
+**`fee_tier` is required.** The adapter throws if `fee_tier` is not specified. It is an action parameter (not a constraint) and is extracted from the `with()` clause.
+
+Common fee tiers: `500` (0.05%), `3000` (0.3%), `10000` (1%).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `fee_tier` | integer (bps) | **Required.** Uniswap pool fee tier (e.g. `500`, `3000`, `10000`) |
+
+| Constraint | Type | Description |
+|-----------|------|-------------|
+| `max_slippage` | integer (bps) | Maximum slippage in basis points (e.g. `50` = 0.5%) |
+| `min_output` | integer (wei) | Minimum output amount floor |
+| `max_input` | integer (wei) | Maximum input amount cap |
+| `deadline` | integer (seconds) | Transaction deadline from now |
+| `require_quote` | boolean | Fail if on-chain quote fetch fails |
+| `require_simulation` | boolean | Fail if simulation unavailable |
+| `max_gas` | integer (wei) | Gas estimate cap |
+
+Always set both `max_slippage` and `min_output` for swaps to prevent unexpected losses.
 
 ## Supported Adapters
 

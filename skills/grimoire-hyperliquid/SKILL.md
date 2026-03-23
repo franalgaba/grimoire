@@ -23,12 +23,25 @@ Use `--format spell` for snapshot `params:` blocks.
 
 ## Commands
 
-- `grimoire venue hyperliquid mids [--format <json|table|spell>]`
-- `grimoire venue hyperliquid l2-book --coin <symbol> [--format <json|table|spell>]`
-- `grimoire venue hyperliquid open-orders --user <address> [--format <json|table|spell>]`
-- `grimoire venue hyperliquid meta [--format <json|table|spell>]`
-- `grimoire venue hyperliquid spot-meta [--format <json|table|spell>]`
-- `grimoire venue hyperliquid withdraw --amount <usdc> --keystore <path> [--password-env <name>] [--destination <addr>] [--format <json|table>]`
+Read-only data:
+
+- `grimoire venue hyperliquid mids` — mid prices for all perp assets
+- `grimoire venue hyperliquid l2-book --coin <symbol>` — L2 order book for a coin
+- `grimoire venue hyperliquid open-orders --user <address>` — open orders for an address
+- `grimoire venue hyperliquid meta` — perp market metadata (universe, margin tables)
+- `grimoire venue hyperliquid spot-meta` — spot market metadata (tokens, universe)
+
+Snapshot commands (agent-only, generate spell `params:` blocks):
+
+- `grimoire venue hyperliquid mids-snapshot`
+- `grimoire venue hyperliquid l2-book-snapshot --coin <symbol>`
+- `grimoire venue hyperliquid open-orders-snapshot --user <address>`
+- `grimoire venue hyperliquid meta-snapshot`
+- `grimoire venue hyperliquid spot-meta-snapshot`
+
+Stateful:
+
+- `grimoire venue hyperliquid withdraw --amount <usdc> --keystore <path> [--password-env <name>] [--destination <addr>]`
 
 ## Examples
 
@@ -39,7 +52,24 @@ grimoire venue hyperliquid l2-book --coin BTC
 grimoire venue hyperliquid l2-book --coin BTC --format spell
 grimoire venue hyperliquid open-orders --user 0x0000000000000000000000000000000000000000
 grimoire venue hyperliquid meta
+grimoire venue hyperliquid mids-snapshot
+grimoire venue hyperliquid l2-book-snapshot --coin BTC
+grimoire venue hyperliquid meta-snapshot
 ```
+
+Use `-snapshot` variants to emit `params:` blocks for spell inputs. These are agent-only (output suppressed in interactive mode).
+
+## Spell Actions
+
+Hyperliquid uses `custom` action type with `op: "order"` for order placement:
+
+```spell
+hyperliquid.custom(op="order", coin="ETH", price="3500", size="0.1", side="buy", order_type="Gtc")
+```
+
+The adapter does not support runtime constraints (`max_slippage`, etc.). Order parameters are validated at the adapter boundary.
+
+Supported TIF values: `Gtc`, `Ioc`, `Alo`, `FrontendMarket`.
 
 ## Notes
 

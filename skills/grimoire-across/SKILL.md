@@ -59,17 +59,24 @@ The `quote` command returns:
 - `fees.lpFee` / `fees.relayerGasFee` / `fees.relayerCapitalFee` / `fees.totalRelayFee`
 - `route.spokePoolAddress` — spoke pool contract used
 
-## Constraints
+## Spell Constraints
 
-The Across adapter supports these spell constraints:
+When writing bridge actions in `.spell` files targeting Across, use `with` clauses:
 
-| Constraint | Description |
-|-----------|-------------|
-| `max_slippage` | Maximum slippage in basis points (converted to min_output) |
-| `min_output` | Explicit minimum output amount floor |
-| `require_quote` | Fail if quote fetch fails |
-| `require_simulation` | Fail if simulation unavailable |
-| `max_gas` | Validate gas estimate against cap |
+```spell
+across.bridge(USDC, params.amount, 8453) with (
+  max_slippage=50,
+  require_quote=true,
+)
+```
+
+| Constraint | Type | Description |
+|-----------|------|-------------|
+| `max_slippage` | integer (bps) | Maximum slippage in basis points (converted to min_output) |
+| `min_output` | integer (wei) | Explicit minimum output amount floor |
+| `require_quote` | boolean | Fail if quote fetch fails |
+| `require_simulation` | boolean | Fail if simulation unavailable |
+| `max_gas` | integer (wei) | Validate gas estimate against cap |
 
 ## Notes
 

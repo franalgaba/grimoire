@@ -90,6 +90,25 @@ Venue CLI backend:
 - Install: `brew tap Polymarket/polymarket-cli && brew install polymarket`
 - Optional path override: `POLYMARKET_OFFICIAL_CLI=/custom/path/polymarket`
 
+## Spell Actions
+
+Polymarket uses `custom` action type with `op: "order"` for order placement:
+
+```spell
+polymarket.custom(
+  op="order",
+  token_id="TOKEN_ID",
+  price="0.55",
+  size="100",
+  side="BUY",
+  order_type="GTC",
+)
+```
+
+The adapter does not support runtime constraints (`max_slippage`, etc.). Order routing:
+- `GTC`/`GTD` → limit order (`createAndPostOrder`)
+- `FOK`/`FAK` → market order (`createAndPostMarketOrder`)
+
 ## Adapter Notes
 
 - Adapter name: `polymarket`

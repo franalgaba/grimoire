@@ -20,12 +20,13 @@ Recommended preflight:
 
 ## Commands
 
-- `grimoire venue aave health [--format <json|table>]`
-- `grimoire venue aave chains [--format <json|table>]`
-- `grimoire venue aave markets --chain <id> [--user <address>] [--format <json|table>]`
-- `grimoire venue aave market --chain <id> --address <market> [--user <address>] [--format <json|table>]`
-- `grimoire venue aave reserve --chain <id> --market <address> --token <address> [--format <json|table>]`
-- `grimoire venue aave reserves --chain <id> [--market <address>] [--asset <symbol|address>] [--format <json|table|spell>]`
+- `grimoire venue aave health` — check Aave protocol health
+- `grimoire venue aave chains` — list supported chains
+- `grimoire venue aave markets --chain <id> [--user <address>]` — list markets on a chain (optionally with user positions)
+- `grimoire venue aave market --chain <id> --address <market> [--user <address>]` — single market details
+- `grimoire venue aave reserve --chain <id> --market <address> --token <address>` — single reserve details
+- `grimoire venue aave reserves --chain <id> [--market <address>] [--asset <symbol|address>]` — list reserves with optional filters
+- `grimoire venue aave reserves-snapshot --chain <id> [--market <address>] [--asset <symbol|address>]` — generate spell `params:` block for reserves (agent-only)
 
 ## Examples
 
@@ -38,9 +39,10 @@ grimoire venue aave market --chain 1 --address 0x87870Bca3F3fD6335C3F4ce8392D693
 grimoire venue aave reserve --chain 1 --market 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2 --token 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
 grimoire venue aave reserves --chain 1 --asset USDC --format table
 grimoire venue aave reserves --chain 1 --asset USDC --format spell
+grimoire venue aave reserves-snapshot --chain 1 --asset USDC
 ```
 
-Use `--format spell` to emit a `params:` block for spell inputs.
+Use `reserves-snapshot` to emit a `params:` block for spell inputs. This is an agent-only command (output suppressed in interactive mode).
 
 ## Supported Chains
 
@@ -48,6 +50,17 @@ Use `--format spell` to emit a `params:` block for spell inputs.
 |-------|---------------|
 | Ethereum (1) | `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2` |
 | Base (8453) | `0xA238Dd80C259a72e81d7e4664a9801593F98d1c5` |
+
+## Spell Constraints
+
+Aave V3 actions do not currently support runtime constraints (`max_slippage`, `min_output`, etc.). The adapter handles approvals and amount conversion automatically.
+
+```spell
+aave_v3.lend(USDC, params.amount)
+aave_v3.withdraw(USDC, params.amount)
+aave_v3.borrow(USDC, params.amount)
+aave_v3.repay(USDC, params.amount)
+```
 
 ## Amount Format
 

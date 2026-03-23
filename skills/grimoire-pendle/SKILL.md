@@ -38,6 +38,28 @@ grimoire venue pendle assets --chain 8453 --type PT --format table
 grimoire venue pendle market-tokens --chain 8453 --market 0x... --format json
 ```
 
+## Spell Constraints
+
+When writing Pendle actions in `.spell` files, use `with` clauses:
+
+```spell
+pendle.swap(PT_TOKEN, SY_TOKEN, params.amount) with (
+  max_slippage=100,
+  require_quote=true,
+)
+```
+
+| Constraint | Type | Description |
+|-----------|------|-------------|
+| `max_slippage` | integer (bps) | Maximum slippage, validated as integer in `[0, 10000]`, converted to decimal for API |
+| `min_output` | integer (wei) | Minimum output amount floor |
+| `require_quote` | boolean | Fail if Pendle API quote fails |
+| `max_gas` | integer (wei) | Gas estimate cap |
+
+Pendle `swap` only supports `mode: exact_in`. `exact_out` is not supported.
+
+When the Pendle API returns multiple routes, the adapter selects the first (best) route and emits a warning via `onWarning`. This is logged in non-JSON CLI runs.
+
 ## Notes
 
 - Default API base URL is `https://api-v2.pendle.finance/core`.

@@ -29,9 +29,10 @@ APY semantics:
 
 ## Commands
 
-- `grimoire venue morpho-blue info [--format <json|table>]`
-- `grimoire venue morpho-blue addresses [--chain <id>] [--format <json|table>]`
-- `grimoire venue morpho-blue vaults [--chain <id>] [--asset <symbol>] [--min-tvl <usd>] [--min-apy <decimal>] [--min-net-apy <decimal>] [--sort <field>] [--order <asc|desc>] [--limit <n>] [--format <json|table|spell>]`
+- `grimoire venue morpho-blue info` — adapter metadata
+- `grimoire venue morpho-blue addresses [--chain <id>]` — contract addresses per chain
+- `grimoire venue morpho-blue vaults [--chain <id>] [--asset <symbol>] [--min-tvl <usd>] [--min-apy <decimal>] [--min-net-apy <decimal>] [--sort <netApy|apy|tvl|totalAssetsUsd|name>] [--order <asc|desc>] [--limit <n>]` — list and filter vaults
+- `grimoire venue morpho-blue vaults-snapshot [--chain <id>] [--asset <symbol>] [--min-tvl <usd>] [--min-apy <decimal>] [--min-net-apy <decimal>] [--sort <netApy|apy|tvl|totalAssetsUsd|name>] [--order <asc|desc>] [--limit <n>]` — generate spell `params:` block for vaults (agent-only)
 
 ## Examples
 
@@ -41,13 +42,40 @@ grimoire venue morpho-blue addresses --chain 1
 grimoire venue morpho-blue addresses --chain 8453
 grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format table
 grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
+grimoire venue morpho-blue vaults-snapshot --chain 8453 --asset USDC --min-tvl 5000000
 ```
+
+Use `vaults-snapshot` to emit a `params:` block for spell inputs. This is an agent-only command (output suppressed in interactive mode).
 
 Example provenance output fields to preserve:
 
 - `snapshot_at`
 - `snapshot_source`
 - `units` (for example `net_apy=decimal`, `net_apy_pct=percent`, `tvl_usd=usd`)
+
+## Spell Constraints
+
+Morpho Blue actions do not support runtime constraints (`max_slippage`, etc.). The adapter resolves markets by loan token and optional collateral.
+
+```spell
+morpho_blue.lend(USDC, params.amount)
+morpho_blue.withdraw(USDC, params.amount)
+morpho_blue.borrow(USDC, params.amount)
+morpho_blue.supply_collateral(cbBTC, params.amount)
+morpho_blue.withdraw_collateral(cbBTC, params.amount)
+```
+
+**Market resolution is strict.** When multiple markets match a loan token and no `market_id` is specified, the adapter throws an error listing candidate market IDs instead of silently picking one. Single-market resolution remains implicit.
+
+To target a specific market when ambiguous, specify `market_id` in the `with()` clause:
+
+```spell
+morpho_blue.lend(USDC, params.amount) with (
+  market_id="0x1234...abcd",
+)
+```
+
+Use `grimoire venue morpho-blue vaults` to discover available market IDs.
 
 ## Default Markets (Base)
 
