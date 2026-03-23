@@ -116,7 +116,7 @@ export const hyperliquidAdapter: VenueAdapter = {
 type HyperliquidOrderType =
   | {
       limit: {
-        tif: "Gtc" | "Ioc" | "Alo" | "FrontendMarket" | "LiquidationMarket";
+        tif: "Gtc" | "Ioc" | "Alo" | "FrontendMarket";
       };
     }
   | {
