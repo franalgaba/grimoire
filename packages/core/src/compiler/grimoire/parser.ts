@@ -455,7 +455,6 @@ export class Parser {
             if (key === "chain") {
               const val = this.expect("NUMBER").value;
               asset.chain = Number.parseInt(val, 10);
-              this.expectNewline();
             } else if (key === "address") {
               if (this.check("ADDRESS")) {
                 asset.address = this.advance().value;
@@ -467,14 +466,15 @@ export class Parser {
                   source: this.source,
                 });
               }
-              this.expectNewline();
             } else if (key === "decimals") {
               const val = this.expect("NUMBER").value;
               asset.decimals = Number.parseInt(val, 10);
-              this.expectNewline();
             } else {
               this.parseExpression();
-              this.expectNewline();
+            }
+            // Accept newline or upcoming RBRACE as field terminator
+            if (this.check("NEWLINE")) {
+              this.advance();
             }
           }
           this.expect("RBRACE");
