@@ -8,7 +8,6 @@ import { SqliteStateStore } from "@grimoirelabs/core";
 import chalk from "chalk";
 
 interface LogOptions {
-  json?: boolean;
   stateDir?: string;
 }
 
@@ -16,7 +15,7 @@ export async function logCommand(
   spellId: string,
   runId: string,
   options: LogOptions
-): Promise<void> {
+): Promise<unknown> {
   const dbPath = options.stateDir ? join(options.stateDir, "grimoire.db") : undefined;
 
   const store = new SqliteStateStore({ dbPath });
@@ -25,29 +24,24 @@ export async function logCommand(
     const entries = await store.loadLedger(spellId, runId);
 
     if (!entries) {
-      console.log(chalk.dim(`No ledger found for spell "${spellId}" run "${runId}".`));
+      console.error(chalk.dim(`No ledger found for spell "${spellId}" run "${runId}".`));
 
       // Suggest checking history
       const runs = await store.getRuns(spellId, 5);
       if (runs.length > 0) {
-        console.log();
-        console.log(chalk.dim("Recent runs:"));
+        console.error();
+        console.error(chalk.dim("Recent runs:"));
         for (const run of runs) {
-          console.log(chalk.dim(`  ${run.runId}`));
+          console.error(chalk.dim(`  ${run.runId}`));
         }
       }
-      return;
+      return entries;
     }
 
-    if (options.json) {
-      console.log(JSON.stringify(entries, null, 2));
-      return;
-    }
-
-    console.log(
+    console.error(
       chalk.cyan(`Ledger for ${chalk.white(spellId)} run ${chalk.white(runId.slice(0, 8))}:`)
     );
-    console.log();
+    console.error();
 
     for (const entry of entries) {
       const time = new Date(entry.timestamp).toISOString().split("T")[1]?.replace("Z", "");
@@ -133,8 +127,10 @@ export async function logCommand(
           details = chalk.dim(JSON.stringify(entry.event));
       }
 
-      console.log(`  ${chalk.dim(time)} ${eventType} ${details}`);
+      console.error(`  ${chalk.dim(time)} ${eventType} ${details}`);
     }
+
+    return entries;
   } finally {
     store.close();
   }

@@ -22,14 +22,14 @@ describe("venue command helpers", () => {
 
   it("prints usage for missing adapter", () => {
     const logs: string[] = [];
-    const originalLog = console.log;
-    console.log = (message?: unknown) => {
+    const originalError = console.error;
+    console.error = (message?: unknown) => {
       logs.push(String(message ?? ""));
     };
 
     venueCommand("" as unknown as string).catch(() => {});
 
-    console.log = originalLog;
+    console.error = originalError;
     const output = logs.join("\n");
     expect(output.includes("grimoire venue <adapter>")).toBe(true);
     expect(output.includes("Adapters:")).toBe(true);

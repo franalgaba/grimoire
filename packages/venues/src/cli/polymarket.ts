@@ -111,8 +111,20 @@ const cli = Cli.create("grimoire-polymarket", {
       offset: z.coerce.number().optional().describe("Starting offset for pagination"),
       cursor: z.string().optional().describe("Pagination cursor"),
     }),
-    async *run(c) {
-      const result = yield* streamSearchMarkets(c.options);
+    async run(c) {
+      const gen = streamSearchMarkets(c.options);
+      let step = gen.next();
+      while (!step.done) {
+        const progress = step.value;
+        if (!c.agent) {
+          process.stderr.write(
+            `\r  Scanned ${progress.scannedPages} pages, ${progress.matchesSoFar} matches…`
+          );
+        }
+        step = gen.next();
+      }
+      if (!c.agent) process.stderr.write("\n");
+      const result = step.value;
       const data = c.agent
         ? { totalMatches: result.totalMatches, markets: result.markets }
         : result;

@@ -50,6 +50,8 @@ type ActionBase =
   | RepayAction
   | SupplyCollateralAction
   | WithdrawCollateralAction
+  | VaultDepositAction
+  | VaultWithdrawAction
   | StakeAction
   | UnstakeAction
   | BridgeAction
@@ -85,6 +87,7 @@ export interface SwapAction {
   assetOut: AssetId;
   amount: ActionAmount;
   mode: "exact_in" | "exact_out";
+  feeTier?: number;
 }
 
 /** Lend/Supply to protocol */
@@ -140,6 +143,24 @@ export interface WithdrawCollateralAction {
   asset: AssetId;
   amount: ActionAmount;
   marketId?: string;
+}
+
+/** Deposit into an ERC4626 vault (e.g. MetaMorpho) */
+export interface VaultDepositAction {
+  type: "vault_deposit";
+  venue: string;
+  asset: AssetId;
+  amount: ActionAmount;
+  vault: Address; // Required — the vault contract address
+}
+
+/** Withdraw from an ERC4626 vault (e.g. MetaMorpho) */
+export interface VaultWithdrawAction {
+  type: "vault_withdraw";
+  venue: string;
+  asset: AssetId;
+  amount: ActionAmount | "max";
+  vault: Address; // Required — the vault contract address
 }
 
 /** Stake tokens */

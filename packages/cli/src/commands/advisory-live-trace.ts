@@ -13,7 +13,7 @@ const ADVISORY_TYPES = new Set([
 ]);
 
 export function createAdvisoryLiveTraceLogger(
-  log: (message: string) => void = console.log,
+  log: (message: string) => void = console.error,
   options: { verbose?: boolean } = {}
 ): (entry: LedgerEntry) => void {
   return (entry: LedgerEntry): void => {

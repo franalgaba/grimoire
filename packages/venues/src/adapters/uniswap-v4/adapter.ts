@@ -34,7 +34,7 @@ export interface UniswapV4AdapterConfig {
   slippageBps?: number;
 }
 
-const DEFAULT_FEE = 3000;
+const _DEFAULT_FEE = 3000;
 const DEFAULT_TICK_SPACING = 60;
 const DEFAULT_DEADLINE_SECONDS = 1200;
 const DEFAULT_SLIPPAGE_BPS = 50;
@@ -89,7 +89,12 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
         : resolveTokenAddress(action.assetOut, ctx.chainId);
 
       // Build PoolKey (currencies must be numerically sorted)
-      const fee = config.defaultFee ?? DEFAULT_FEE;
+      if (action.feeTier === undefined) {
+        throw new Error(
+          `Uniswap V4 swap requires explicit fee_tier. Use: with (fee_tier=3000) or with (fee_tier=500)`
+        );
+      }
+      const fee = action.feeTier;
       const tickSpacing = config.defaultTickSpacing ?? DEFAULT_TICK_SPACING;
       const [currency0, currency1] = sortCurrencies(currencyIn, currencyOut);
       const zeroForOne = currency0.toLowerCase() === currencyIn.toLowerCase();

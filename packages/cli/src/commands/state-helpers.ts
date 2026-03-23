@@ -10,6 +10,7 @@ import {
   type RunRecord,
   SqliteStateStore,
 } from "@grimoirelabs/core";
+import { isMissingNodeSqliteBackend } from "../lib/execution-helpers.js";
 
 interface StatePersistenceOptions {
   stateDir?: string;
@@ -75,13 +76,6 @@ export async function loadRunRecords(
   } finally {
     store.close();
   }
-}
-
-function isMissingNodeSqliteBackend(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return error.message.includes(
-    "SqliteStateStore requires bun:sqlite (Bun) or better-sqlite3 (Node)"
-  );
 }
 
 function toError(error: unknown): Error {

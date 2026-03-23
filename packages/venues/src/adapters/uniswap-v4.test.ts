@@ -53,6 +53,7 @@ describe("Uniswap V4 adapter", () => {
         assetOut: "USDC",
         amount: 1_000_000_000_000_000n as unknown as Expression, // 0.001 ETH
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -65,6 +66,27 @@ describe("Uniswap V4 adapter", () => {
     expect(built[0]?.tx.value).toBe(1_000_000_000_000_000n);
     expect(built[0]?.tx.data).toBeDefined();
     expect(built[0]?.metadata?.quote?.expectedOut).toBe(MOCK_QUOTE_OUT);
+  });
+
+  test("rejects swap without explicit fee_tier", async () => {
+    const adapter = createUniswapV4Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const amount: Expression = { kind: "literal", value: 10n, type: "int" };
+
+    await expect(
+      adapter.buildAction(
+        {
+          type: "swap",
+          venue: "uniswap_v4",
+          assetIn: "ETH",
+          assetOut: "USDC",
+          amount,
+          mode: "exact_in",
+        },
+        ctx
+      )
+    ).rejects.toThrow("requires explicit fee_tier");
   });
 
   test("fails fast on unsupported constraints", async () => {
@@ -106,6 +128,7 @@ describe("Uniswap V4 adapter", () => {
           assetOut: "USDC",
           amount: 1_000_000_000_000_000n as unknown as Expression,
           mode: "exact_in",
+          feeTier: 3000,
           constraints: {
             requireQuote: true,
           },
@@ -128,6 +151,7 @@ describe("Uniswap V4 adapter", () => {
           assetOut: "USDC",
           amount: 1_000_000_000_000_000n as unknown as Expression,
           mode: "exact_in",
+          feeTier: 3000,
           constraints: {
             maxGas: 100_000n,
           },
@@ -150,6 +174,7 @@ describe("Uniswap V4 adapter", () => {
           assetOut: "USDC",
           amount: 1_000_000_000_000_000n as unknown as Expression,
           mode: "exact_in",
+          feeTier: 3000,
           constraints: {
             requireSimulation: true,
           },
@@ -175,6 +200,7 @@ describe("Uniswap V4 adapter", () => {
         assetOut: "ETH",
         amount,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -224,6 +250,7 @@ describe("Uniswap V4 adapter", () => {
         assetOut: "ETH",
         amount,
         mode: "exact_in",
+        feeTier: 3000,
       },
       richCtx
     );
@@ -267,6 +294,7 @@ describe("Uniswap V4 adapter", () => {
           assetOut: "ETH",
           amount,
           mode: "exact_in",
+          feeTier: 3000,
         },
         ctx
       )
@@ -285,6 +313,7 @@ describe("Uniswap V4 adapter", () => {
         assetOut: "USDC",
         amount: 3_000_000_000n as unknown as Expression, // exact USDC out
         mode: "exact_out",
+        feeTier: 3000,
       },
       ctx
     );
@@ -309,6 +338,7 @@ describe("Uniswap V4 adapter", () => {
         assetOut: "ETH",
         amount: 1_000_000n as unknown as Expression,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -330,6 +360,7 @@ describe("Uniswap V4 adapter", () => {
           assetOut: "ETH",
           amount: 10n as unknown as Expression,
           mode: "exact_in",
+          feeTier: 3000,
         },
         ctx
       )
@@ -349,6 +380,7 @@ describe("Uniswap V4 adapter", () => {
         assetOut: "USDC",
         amount: 10n as unknown as Expression,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -363,6 +395,7 @@ describe("Uniswap V4 adapter", () => {
         assetOut: "USDC",
         amount: 10 as unknown as Expression,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -379,6 +412,7 @@ describe("Uniswap V4 adapter", () => {
         assetOut: "USDC",
         amount: "10" as unknown as Expression,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -396,6 +430,7 @@ describe("Uniswap V4 adapter", () => {
           assetOut: "USDC",
           amount: { foo: true } as unknown as Expression,
           mode: "exact_in",
+          feeTier: 3000,
         },
         ctx
       )
@@ -414,6 +449,7 @@ describe("Uniswap V4 adapter", () => {
         assetOut: "USDC",
         amount: 1_000_000_000_000_000_000n as unknown as Expression, // 1 ETH
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );
@@ -439,6 +475,7 @@ describe("Uniswap V4 adapter", () => {
         assetOut: "USDC",
         amount: 1000n as unknown as Expression,
         mode: "exact_in",
+        feeTier: 3000,
       },
       ctx
     );

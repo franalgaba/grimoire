@@ -1,10 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { ActionStep, SpellIR } from "@grimoirelabs/core";
 
-export function collectRepeatedOption(value: string, previous: string[] = []): string[] {
-  return [...previous, value];
-}
-
 export function toOptionList(value?: string | string[]): string[] {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];

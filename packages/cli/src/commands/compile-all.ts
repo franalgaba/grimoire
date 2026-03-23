@@ -10,7 +10,6 @@ import chalk from "chalk";
 
 interface CompileAllOptions {
   failFast?: boolean;
-  json?: boolean;
 }
 
 type CompileResultSummary = {
@@ -23,13 +22,12 @@ type CompileResultSummary = {
 export async function compileAllCommand(
   directory: string | undefined,
   options: CompileAllOptions
-): Promise<void> {
+): Promise<CompileResultSummary[]> {
   const targetDir = resolve(directory ?? "spells");
   const files = await collectSpellFiles(targetDir);
 
   if (files.length === 0) {
-    console.log(chalk.yellow(`No .spell files found in ${targetDir}`));
-    process.exit(1);
+    throw new Error(`No .spell files found in ${targetDir}`);
   }
 
   const results: CompileResultSummary[] = [];
@@ -54,22 +52,20 @@ export async function compileAllCommand(
 
     results.push(summary);
 
-    if (!options.json) {
-      if (summary.success) {
-        console.log(chalk.green(`✓ ${summary.file}`));
-      } else {
-        console.log(chalk.red(`✗ ${summary.file}`));
-      }
+    if (summary.success) {
+      console.error(chalk.green(`✓ ${summary.file}`));
+    } else {
+      console.error(chalk.red(`✗ ${summary.file}`));
+    }
 
-      for (const warning of summary.warnings) {
-        const lineInfo = warning.line !== undefined ? ` (line ${warning.line})` : "";
-        console.log(chalk.yellow(`  [${warning.code}] ${warning.message}${lineInfo}`));
-      }
+    for (const warning of summary.warnings) {
+      const lineInfo = warning.line !== undefined ? ` (line ${warning.line})` : "";
+      console.error(chalk.yellow(`  [${warning.code}] ${warning.message}${lineInfo}`));
+    }
 
-      for (const error of summary.errors) {
-        const lineInfo = error.line !== undefined ? ` (line ${error.line})` : "";
-        console.log(chalk.red(`  [${error.code}] ${error.message}${lineInfo}`));
-      }
+    for (const error of summary.errors) {
+      const lineInfo = error.line !== undefined ? ` (line ${error.line})` : "";
+      console.error(chalk.red(`  [${error.code}] ${error.message}${lineInfo}`));
     }
 
     if (!summary.success) {
@@ -80,13 +76,11 @@ export async function compileAllCommand(
     }
   }
 
-  if (options.json) {
-    console.log(JSON.stringify(results, null, 2));
+  if (hasErrors) {
+    throw new Error("One or more spells failed to compile");
   }
 
-  if (hasErrors) {
-    process.exit(1);
-  }
+  return results;
 }
 
 async function collectSpellFiles(directory: string): Promise<string[]> {

@@ -1,8 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
-import * as readline from "node:readline";
-import { Writable } from "node:stream";
 import {
   type Address,
   compileFile,
@@ -17,10 +14,11 @@ import {
 import { adapters, createHyperliquidAdapter } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
+import { parseRequiredNumber, sleep } from "../lib/execution-helpers.js";
+import { DEFAULT_KEYSTORE_PATH } from "../lib/keystore.js";
+import { promptPassword } from "../lib/prompts.js";
 import { createAdvisoryLiveTraceLogger } from "./advisory-live-trace.js";
 import { isCrossChainRunManifest, resolveRpcUrlForChain } from "./cross-chain-helpers.js";
-
-const DEFAULT_KEYSTORE_PATH = join(homedir(), ".grimoire", "keystore.json");
 
 interface ResumeOptions {
   watch?: boolean;
@@ -29,7 +27,7 @@ interface ResumeOptions {
   stateDir?: string;
 }
 
-export async function resumeCommand(runId: string, options: ResumeOptions): Promise<void> {
+export async function resumeCommand(runId: string, options: ResumeOptions) {
   const spinner = ora(`Resuming run ${runId}...`).start();
   const dbPath = options.stateDir ? join(options.stateDir, "grimoire.db") : undefined;
   const store = new SqliteStateStore({ dbPath });
@@ -38,14 +36,14 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
     const run = await store.getRunById(runId);
     if (!run) {
       spinner.fail(chalk.red(`Run '${runId}' not found.`));
-      process.exit(1);
+      throw new Error("Resume failed");
     }
 
     const manifestCandidate = (run.provenance as { cross_chain?: unknown } | undefined)
       ?.cross_chain;
     if (!isCrossChainRunManifest(manifestCandidate)) {
       spinner.fail(chalk.red(`Run '${runId}' is not a resumable cross-chain run.`));
-      process.exit(1);
+      throw new Error("Resume failed");
     }
     const manifest = manifestCandidate;
 
@@ -53,9 +51,9 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
     if (!destinationCompile.success || !destinationCompile.ir) {
       spinner.fail(chalk.red("Destination spell failed to compile during resume."));
       for (const error of destinationCompile.errors) {
-        console.log(chalk.red(`  [${error.code}] ${error.message}`));
+        console.error(chalk.red(`  [${error.code}] ${error.message}`));
       }
-      process.exit(1);
+      throw new Error("Resume failed");
     }
     const destinationSpell = destinationCompile.ir;
 
@@ -66,17 +64,21 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
 
     if (!destinationTrack || !handoff) {
       spinner.fail(chalk.red("Resume data is incomplete (missing destination track or handoff)."));
-      process.exit(1);
+      throw new Error("Resume failed");
     }
 
     if (destinationTrack.status === "completed") {
       spinner.succeed(chalk.green("Destination track is already completed."));
+      const result = {
+        success: true,
+        runId,
+        resumed: false as const,
+        status: "completed" as const,
+      };
       if (options.json) {
-        console.log(
-          JSON.stringify({ success: true, runId, resumed: false, status: "completed" }, null, 2)
-        );
+        console.error(JSON.stringify(result, null, 2));
       }
-      return;
+      return result;
     }
 
     const sourceRpcUrl =
@@ -93,7 +95,7 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
       });
     if (!sourceRpcUrl || !destinationRpcUrl) {
       spinner.fail(chalk.red("Missing RPC mapping in persisted run manifest."));
-      process.exit(1);
+      throw new Error("Resume failed");
     }
 
     const destinationProvider = createProvider(manifest.destination_chain_id, destinationRpcUrl);
@@ -121,22 +123,17 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
         spinner.succeed(
           chalk.yellow("Run is waiting for handoff settlement. Use --watch to continue.")
         );
+        const result = {
+          success: true,
+          runId,
+          resumed: false as const,
+          status: "waiting" as const,
+          handoff: handoff.status,
+        };
         if (options.json) {
-          console.log(
-            JSON.stringify(
-              {
-                success: true,
-                runId,
-                resumed: false,
-                status: "waiting",
-                handoff: handoff.status,
-              },
-              null,
-              2
-            )
-          );
+          console.error(JSON.stringify(result, null, 2));
         }
-        return;
+        return result;
       }
 
       const across = configuredAdapters.find((adapter) => adapter.meta.name === "across");
@@ -144,12 +141,12 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
         across?.bridgeLifecycle?.resolveHandoffStatus ?? across?.resolveHandoffStatus;
       if (!resolver) {
         spinner.fail(chalk.red("No handoff lifecycle resolver is available for resume."));
-        process.exit(1);
+        throw new Error("Resume failed");
       }
 
       spinner.text = "Polling handoff settlement...";
       const pollIntervalSec = options.pollIntervalSec
-        ? parseIntStrict(options.pollIntervalSec, "--poll-interval-sec")
+        ? parseRequiredNumber(options.pollIntervalSec, "--poll-interval-sec")
         : manifest.poll_interval_sec;
       const deadline = Date.now() + manifest.handoff_timeout_sec * 1000;
 
@@ -186,7 +183,7 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
           destinationTrack.updatedAt = new Date().toISOString();
           await store.upsertRunTrack(destinationTrack);
           spinner.fail(chalk.red(handoff.reason));
-          process.exit(1);
+          throw new Error("Resume failed");
         }
 
         await sleep(pollIntervalSec * 1000);
@@ -202,7 +199,7 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
         destinationTrack.updatedAt = new Date().toISOString();
         await store.upsertRunTrack(destinationTrack);
         spinner.fail(chalk.red(handoff.reason));
-        process.exit(1);
+        throw new Error("Resume failed");
       }
     }
 
@@ -226,7 +223,7 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
 
     const advisoryEventCallback = options.json
       ? undefined
-      : createAdvisoryLiveTraceLogger(console.log, { verbose: false });
+      : createAdvisoryLiveTraceLogger(console.error, { verbose: false });
     const destinationResult = await execute({
       spell: destinationSpell,
       runId,
@@ -247,7 +244,7 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
         role: "destination",
         morphoMarketIds: manifest.morpho_market_ids,
       },
-      warningCallback: (message) => console.log(chalk.yellow(`Warning: ${message}`)),
+      warningCallback: (message) => console.error(chalk.yellow(`Warning: ${message}`)),
     });
 
     await store.save(destinationSpell.id, destinationResult.finalState);
@@ -271,25 +268,23 @@ export async function resumeCommand(runId: string, options: ResumeOptions): Prom
         : chalk.red(`Destination execution failed: ${destinationResult.error}`)
     );
 
+    const result = {
+      success: destinationResult.success,
+      runId,
+      resumed: true as const,
+      receipt: destinationResult.receipt,
+      error: destinationResult.structuredError,
+    };
+
     if (options.json) {
-      console.log(
-        JSON.stringify(
-          {
-            success: destinationResult.success,
-            runId,
-            resumed: true,
-            receipt: destinationResult.receipt,
-            error: destinationResult.structuredError,
-          },
-          null,
-          2
-        )
-      );
+      console.error(JSON.stringify(result, null, 2));
     }
 
     if (!destinationResult.success) {
-      process.exit(1);
+      throw new Error("Resume failed");
     }
+
+    return result;
   } finally {
     store.close();
   }
@@ -310,7 +305,7 @@ async function resolveResumeKeyConfig(
         `Resume requires a wallet key. No key found in KEY_ENV and no default keystore at ${defaultKeystore}.`
       )
     );
-    process.exit(1);
+    throw new Error("Resume failed");
   }
 
   const envPassword = process.env.KEYSTORE_PASSWORD;
@@ -321,7 +316,7 @@ async function resolveResumeKeyConfig(
 
   if (!process.stdin.isTTY) {
     spinner.fail(chalk.red("Set KEYSTORE_PASSWORD for non-interactive resume."));
-    process.exit(1);
+    throw new Error("Resume failed");
   }
 
   spinner.stop();
@@ -329,40 +324,4 @@ async function resolveResumeKeyConfig(
   spinner.start("Resuming run...");
   const keystoreJson = readFileSync(defaultKeystore, "utf-8");
   return { type: "keystore", source: keystoreJson, password };
-}
-
-async function promptPassword(message: string): Promise<string> {
-  return new Promise((resolve) => {
-    process.stdout.write(message);
-
-    const silentOutput = new Writable({
-      write(_chunk, _encoding, cb) {
-        cb();
-      },
-    });
-
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: silentOutput,
-      terminal: true,
-    });
-
-    rl.question("", (answer) => {
-      rl.close();
-      process.stdout.write("\n");
-      resolve(answer);
-    });
-  });
-}
-
-function parseIntStrict(value: string, flag: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${flag} must be a positive integer`);
-  }
-  return parsed;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

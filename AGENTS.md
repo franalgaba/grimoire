@@ -372,6 +372,7 @@ For swaps, **always set both `max_slippage` and `min_output`** to prevent unexpe
   - `grimoire-aave`
   - `grimoire-uniswap`
   - `grimoire-morpho-blue`
+  - `grimoire-across`
   - `grimoire-hyperliquid`
   - `grimoire-pendle`
   - `grimoire-polymarket`
@@ -385,6 +386,7 @@ Skills live in `skills/` and provide LLM-consumable context:
 - `skills/grimoire-aave/` - Aave V3 venue CLI + amount format
 - `skills/grimoire-uniswap/` - Uniswap V3/V4 venue CLI
 - `skills/grimoire-morpho-blue/` - Morpho Blue venue CLI + default markets
+- `skills/grimoire-across/` - Across Protocol bridge quotes, routes, and deposit status
 - `skills/grimoire-hyperliquid/` - Hyperliquid venue CLI
 - `skills/grimoire-pendle/` - Pendle Hosted SDK metadata workflows
 - `skills/grimoire-polymarket/` - Polymarket CLOB custom action workflows

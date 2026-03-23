@@ -1,9 +1,10 @@
 import type { Action, Address, VenueAdapter } from "@grimoirelabs/core";
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { blueAbi, MetaMorphoAction } from "@morpho-org/blue-sdk-viem";
 import { encodeFunctionData } from "viem";
 import { assertSupportedConstraints } from "../../shared/constraints.js";
 import { buildApprovalIfNeeded } from "../../shared/erc20.js";
+import { resolveTokenAddress } from "../../shared/token-registry.js";
 import { buildMorphoMetadata, toBigInt } from "./helpers.js";
 import {
   MORPHO_BLUE_DEFAULT_MARKETS,
@@ -17,7 +18,16 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
   const meta: VenueAdapter["meta"] = {
     name: "morpho_blue",
     supportedChains: [1, 8453],
-    actions: ["lend", "withdraw", "borrow", "repay", "supply_collateral", "withdraw_collateral"],
+    actions: [
+      "lend",
+      "withdraw",
+      "borrow",
+      "repay",
+      "supply_collateral",
+      "withdraw_collateral",
+      "vault_deposit",
+      "vault_withdraw",
+    ],
     supportedConstraints: [],
     supportsQuote: false,
     supportsSimulation: false,
@@ -30,6 +40,14 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
     meta,
     async buildAction(action, ctx) {
       assertSupportedConstraints(meta, action);
+
+      // Handle vault_deposit / vault_withdraw (ERC4626 MetaMorpho vaults)
+      if (action.type === "vault_deposit" || action.type === "vault_withdraw") {
+        return buildVaultAction(
+          action as Extract<Action, { type: "vault_deposit" | "vault_withdraw" }>,
+          ctx
+        );
+      }
 
       if (!isMorphoAction(action)) {
         throw new Error(`Unsupported Morpho Blue action: ${action.type}`);
@@ -158,6 +176,81 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
 }
 
 export const morphoBlueAdapter = createMorphoBlueAdapter({ markets: MORPHO_BLUE_DEFAULT_MARKETS });
+
+async function buildVaultAction(
+  action: Extract<Action, { type: "vault_deposit" | "vault_withdraw" }>,
+  ctx: Parameters<NonNullable<VenueAdapter["buildAction"]>>[1]
+) {
+  if (!("vault" in action) || typeof action.vault !== "string" || !action.vault.startsWith("0x")) {
+    throw new Error("vault_deposit/vault_withdraw requires an explicit vault address");
+  }
+
+  const vaultAddress = action.vault as Address;
+  const amount = toBigInt(action.amount);
+  const receiver = (ctx.vault ?? ctx.walletAddress) as Address;
+
+  if (action.type === "vault_deposit") {
+    const assetAddress = resolveTokenAddress(action.asset, ctx.chainId, {
+      treatEthAsWrapped: true,
+    });
+
+    const approvalTxs = await buildApprovalIfNeeded({
+      ctx,
+      token: assetAddress,
+      spender: vaultAddress,
+      amount,
+      action,
+      description: `Approve ${action.asset} for MetaMorpho vault`,
+    });
+
+    const data = MetaMorphoAction.deposit(amount, receiver);
+
+    return [
+      ...approvalTxs,
+      {
+        tx: {
+          to: vaultAddress,
+          data,
+          value: 0n,
+        },
+        description: `MetaMorpho vault_deposit ${action.asset} into ${vaultAddress}`,
+        action,
+        metadata: {
+          quote: { expectedIn: amount },
+          route: {
+            vaultAddress,
+            asset: action.asset,
+            receiver,
+          },
+        },
+      },
+    ];
+  }
+
+  // vault_withdraw
+  const data = MetaMorphoAction.withdraw(amount, receiver, ctx.walletAddress as Address);
+
+  return [
+    {
+      tx: {
+        to: vaultAddress,
+        data,
+        value: 0n,
+      },
+      description: `MetaMorpho vault_withdraw ${action.asset} from ${vaultAddress}`,
+      action,
+      metadata: {
+        quote: { expectedOut: amount },
+        route: {
+          vaultAddress,
+          asset: action.asset,
+          receiver,
+          owner: ctx.walletAddress,
+        },
+      },
+    },
+  ];
+}
 
 export function isMorphoAction(action: Action): action is Extract<
   Action,
