@@ -106,6 +106,26 @@ describe("Parser", () => {
       expect(assetsSection?.items[0]?.decimals).toBe(6);
     });
 
+    test("parses inline single-line asset blocks", () => {
+      const source = `spell Test {
+  assets: {
+    USDC: { chain: 8453 }
+    cbBTC: { chain: 8453 }
+  }
+  on manual: {
+    x = 1
+  }
+}`;
+      const ast = parse(source);
+      const assetsSection = ast.sections.find((s): s is AssetsSection => s.kind === "assets");
+      expect(assetsSection).toBeDefined();
+      expect(assetsSection?.items.length).toBe(2);
+      expect(assetsSection?.items[0]?.symbol).toBe("USDC");
+      expect(assetsSection?.items[0]?.chain).toBe(8453);
+      expect(assetsSection?.items[1]?.symbol).toBe("cbBTC");
+      expect(assetsSection?.items[1]?.chain).toBe(8453);
+    });
+
     test("parses params section", () => {
       const source = `spell Test {
   version: "1.0.0"
