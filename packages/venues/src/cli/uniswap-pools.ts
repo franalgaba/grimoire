@@ -102,7 +102,10 @@ export async function fetchPoolsWithFallbackMeta(
 ): Promise<{ pools: PoolRow[]; usedRpc: boolean; resolvedFactory?: string }> {
   const token0Info = await resolveTokenInfo(options.token0, options.chain, options.source);
   const token1Info = await resolveTokenInfo(options.token1, options.chain, options.source);
-  const hasGraphConfig = Boolean(options.endpoint || graphKey || options.subgraphId);
+  const envGraphKey = graphKey ?? process.env.GRAPH_API_KEY;
+  const hasGraphConfig = Boolean(
+    options.endpoint || envGraphKey || options.subgraphId || V3_SUBGRAPH_IDS[options.chain]
+  );
 
   if (rpcUrl && !hasGraphConfig) {
     const resolvedFactory = options.factory ?? defaultUniswapV3Factories[options.chain];
@@ -204,22 +207,33 @@ function sortAddresses(a: string, b: string): [string, string] {
   return a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a];
 }
 
+/** V3 subgraph IDs on The Graph decentralized network (per chain). */
+const V3_SUBGRAPH_IDS: Record<number, string> = {
+  1: "5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV",
+  10: "Cghf4LfVqPiFw6fp6Y5X5Ubc8UpmUhSfJL82zwiBFLaj",
+  137: "3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCbhjm",
+  8453: "43Hwfi3dJSoGpyas9VwNoDAv55yjgGrPpNSmbQZArzMG",
+  42161: "FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aJM",
+};
+
 function resolvePoolsEndpoint(chainId: number, options: PoolsEndpointOptions): string {
   if (options.endpoint) return options.endpoint;
 
-  if (options.graphKey || options.subgraphId) {
-    if (!options.graphKey || !options.subgraphId) {
-      throw new Error("Both --graph-key and --subgraph-id are required to use The Graph gateway.");
-    }
-    return `https://gateway.thegraph.com/api/${options.graphKey}/subgraphs/id/${options.subgraphId}`;
+  const subgraphId = options.subgraphId ?? V3_SUBGRAPH_IDS[chainId];
+  const graphKey = options.graphKey ?? process.env.GRAPH_API_KEY;
+
+  if (subgraphId && graphKey) {
+    return `https://gateway.thegraph.com/api/${graphKey}/subgraphs/id/${subgraphId}`;
   }
 
-  if (chainId === 1) {
-    return "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3";
+  if (subgraphId && !graphKey) {
+    throw new Error(
+      `Subgraph available for chain ${chainId} but no API key. Set GRAPH_API_KEY or provide --graph-key (get one at https://thegraph.com/studio/apikeys/).`
+    );
   }
 
   throw new Error(
-    "Missing endpoint for this chain. Provide --endpoint or use --graph-key + --subgraph-id."
+    `No subgraph ID known for chain ${chainId}. Provide --endpoint, --subgraph-id + --graph-key, or use --rpc-url for on-chain pool lookup.`
   );
 }
 

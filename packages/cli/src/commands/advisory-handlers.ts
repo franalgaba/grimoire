@@ -88,7 +88,7 @@ export function createPiAdvisoryHandler(config: PiAdvisoryConfig): AdvisoryHandl
   const authPath = agentDir ? join(agentDir, "auth.json") : undefined;
   const modelsPath = agentDir ? join(agentDir, "models.json") : undefined;
 
-  const authStorage = AuthStorage.create(authPath);
+  const authStorage = new AuthStorage(authPath);
   const modelRegistry = new ModelRegistry(authStorage, modelsPath);
   const settingsManager = SettingsManager.create(cwd, agentDir);
   const mode = config.mode ?? "force";
