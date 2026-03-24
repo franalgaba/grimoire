@@ -60,6 +60,24 @@ Pendle `swap` only supports `mode: exact_in`. `exact_out` is not supported.
 
 When the Pendle API returns multiple routes, the adapter selects the first (best) route and emits a warning via `onWarning`. This is logged in non-JSON CLI runs.
 
+## PT/YT/SY Token Resolution
+
+Pendle PT, YT, and SY tokens (e.g. `PT_FXSAVE`, `YT_EETH`, `SY_WSTETH`) are **automatically resolved** via the Pendle API at build time. You can use these symbols directly in spells without providing explicit addresses:
+
+```spell
+pendle.swap(PT_FXSAVE, USDC, params.amount) with (max_slippage=100)
+```
+
+The adapter converts underscore-delimited names (e.g. `PT_FXSAVE`) to the Pendle API format and picks the best match. If multiple expiries exist, the first (nearest) is selected.
+
+To target a specific expiry or disambiguate, use the full 0x address instead:
+
+```spell
+pendle.swap(0xb1e926428ebec4421cce1ec6d9ff65d27f4b4bb6, USDC, params.amount)
+```
+
+Use `grimoire venue pendle assets --chain <id> --type PT` to discover available tokens and addresses.
+
 ## Notes
 
 - Default API base URL is `https://api-v2.pendle.finance/core`.

@@ -11,7 +11,7 @@ import {
   toBigIntIfPossible,
   toBigIntStrict,
 } from "./helpers.js";
-import type { PendleAdapterConfig } from "./types.js";
+import type { FetchFn, PendleAdapterConfig } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://api-v2.pendle.finance/core";
 const DEFAULT_SLIPPAGE_BPS = 50;
@@ -95,6 +95,15 @@ export function createPendleAdapter(config: PendleAdapterConfig = {}): VenueAdap
         throw new Error(`Pendle adapter does not support action '${action.type}'`);
       }
 
+      // Pre-resolve Pendle PT/YT/SY tokens that aren't in the shared registry
+      const resolvedConfig = await preResolvePendleTokens(
+        action,
+        ctx.chainId,
+        config,
+        baseUrl,
+        fetchFn
+      );
+
       const slippageBps = resolveSlippageBps(
         action.constraints?.maxSlippageBps,
         config.slippageBps,
@@ -103,7 +112,7 @@ export function createPendleAdapter(config: PendleAdapterConfig = {}): VenueAdap
       const request = toConvertRequest(
         action,
         ctx,
-        config,
+        resolvedConfig,
         slippageBps,
         SINGLE_INPUT_PENDLE_ACTIONS,
         MULTI_INPUT_PENDLE_ACTIONS
@@ -223,4 +232,116 @@ export function isSupportedPendleAction(action: Action): boolean {
     return true;
   }
   return action.type === "custom" && action.op === "convert";
+}
+
+const PENDLE_TOKEN_PREFIX = /^(PT|YT|SY)[_-]/i;
+
+/**
+ * Extract all asset symbols from an action that might need Pendle API resolution.
+ */
+function collectAssetSymbols(action: Action): string[] {
+  const symbols: string[] = [];
+  if ("asset" in action && typeof action.asset === "string") symbols.push(action.asset);
+  if ("assetIn" in action && typeof action.assetIn === "string") symbols.push(action.assetIn);
+  if ("assetOut" in action && typeof action.assetOut === "string") symbols.push(action.assetOut);
+  if ("outputs" in action && Array.isArray(action.outputs)) {
+    for (const o of action.outputs) {
+      if (typeof o === "string") symbols.push(o);
+    }
+  }
+  if ("inputs" in action && Array.isArray(action.inputs)) {
+    for (const i of action.inputs) {
+      if (i && typeof i === "object" && "asset" in i && typeof i.asset === "string") {
+        symbols.push(i.asset);
+      }
+    }
+  }
+  return symbols;
+}
+
+/**
+ * Pre-resolve Pendle PT/YT/SY token symbols via the Pendle API.
+ * Returns a config with resolved addresses injected into tokenMap.
+ */
+async function preResolvePendleTokens(
+  action: Action,
+  chainId: number,
+  config: PendleAdapterConfig,
+  baseUrl: string,
+  fetchFn: FetchFn
+): Promise<PendleAdapterConfig> {
+  const symbols = collectAssetSymbols(action);
+  const pendleSymbols = symbols.filter((s) => PENDLE_TOKEN_PREFIX.test(s) && !s.startsWith("0x"));
+
+  if (pendleSymbols.length === 0) return config;
+
+  // Check which symbols aren't already in tokenMap
+  const existing = config.tokenMap?.[chainId] ?? {};
+  const missing = pendleSymbols.filter(
+    (s) => !existing[s] && !existing[s.toUpperCase()] && !existing[s.toLowerCase()]
+  );
+
+  if (missing.length === 0) return config;
+
+  const resolved: Record<string, Address> = {};
+  for (const symbol of missing) {
+    const address = await searchPendleAsset(baseUrl, chainId, symbol, fetchFn);
+    if (address) {
+      resolved[symbol] = address;
+    }
+  }
+
+  if (Object.keys(resolved).length === 0) return config;
+
+  // Merge into a new config with resolved tokens
+  const mergedMap = { ...config.tokenMap };
+  mergedMap[chainId] = { ...existing, ...resolved };
+  return { ...config, tokenMap: mergedMap };
+}
+
+/**
+ * Search the Pendle API for a token by symbol prefix.
+ * Converts underscore-delimited symbols (PT_FXSAVE) to dash-delimited (PT-fxSAVE)
+ * and picks the first match.
+ */
+async function searchPendleAsset(
+  baseUrl: string,
+  chainId: number,
+  symbol: string,
+  fetchFn: FetchFn
+): Promise<Address | undefined> {
+  // Convert PT_FXSAVE → fxSAVE for search query
+  const query = symbol.replace(PENDLE_TOKEN_PREFIX, "");
+  // Extract type prefix for filtering (PT, YT, SY)
+  const typePrefix = symbol.match(PENDLE_TOKEN_PREFIX)?.[1]?.toUpperCase();
+
+  try {
+    const url = `${baseUrl}/v1/${chainId}/assets?q=${encodeURIComponent(query)}&limit=20`;
+    const response = await fetchFn(url);
+    if (!response.ok) return undefined;
+
+    const data = (await response.json()) as {
+      results?: Array<{ address: string; symbol: string; baseType?: string }>;
+    };
+    if (!data.results || data.results.length === 0) return undefined;
+
+    // Find best match: same type prefix (PT/YT/SY) and matching query
+    const match = data.results.find(
+      (r) =>
+        r.baseType === typePrefix &&
+        r.symbol
+          .replace(/-/g, "_")
+          .toUpperCase()
+          .startsWith(symbol.replace(/-/g, "_").toUpperCase())
+    );
+    if (match) return match.address as Address;
+
+    // Fallback: any result with matching type
+    const typeMatch = data.results.find((r) => r.baseType === typePrefix);
+    if (typeMatch) return typeMatch.address as Address;
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
