@@ -335,6 +335,58 @@ describe("Uniswap V3 adapter", () => {
     expect(swapTx?.description).toContain("pool:");
   });
 
+  test("does not throw when pool returns zero quote with min_output constraint", async () => {
+    // When expectedOut is 0 (zero liquidity / tiny amount), computeSlippageBpsFromMinOut
+    // would throw "Cannot compute slippage from zero expected output".
+    // The guard should fall through to defaultSlippageBps instead.
+    // Use a very small sqrtPriceX96 (but still within SDK bounds) so that
+    // price.quote() on a tiny input rounds down to 0.
+    const tinyPriceSlot0 = [
+      4295128739n, // MIN_SQRT_RATIO from Uniswap SDK (smallest valid)
+      -887272n, // MIN_TICK
+      0n,
+      0n,
+      0n,
+      0n,
+      true,
+    ] as const;
+
+    const zeroProvider = {
+      chainId: 1,
+      readContract: async (params: { functionName: string }) => {
+        if (params.functionName === "slot0") return tinyPriceSlot0;
+        if (params.functionName === "liquidity") return 1n; // minimal liquidity
+        return 0n;
+      },
+      getClient: () => ({
+        readContract: async () => 0n,
+      }),
+    } as unknown as Provider;
+
+    const zeroCtx: VenueAdapterContext = { ...ctx, provider: zeroProvider };
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const result = await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "uniswap_v3",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: 1n as unknown as Expression, // tiny amount → expectedOut = 0
+        mode: "exact_in",
+        feeTier: 3000,
+        constraints: { minOutput: 1n },
+      },
+      zeroCtx
+    );
+
+    const built = Array.isArray(result) ? result : [result];
+    // Should succeed with default slippage instead of throwing
+    expect(built[built.length - 1]?.description).toContain("Uniswap V3 swap");
+    expect(built[built.length - 1]?.metadata?.quote?.slippageBps).toBe(50); // default
+  });
+
   test("wraps ETH and approves WETH for native ETH input", async () => {
     const adapter = createUniswapV3Adapter();
     if (!adapter.buildAction) throw new Error("Missing buildAction");

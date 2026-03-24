@@ -16,9 +16,41 @@ export interface MorphoBlueAdapterConfig {
   markets: MorphoBlueMarketConfig[];
 }
 
-// Well-known Morpho Blue markets on Base (chain 8453).
+// Well-known Morpho Blue markets.
 // Fetched from the Morpho Blue API: https://blue-api.morpho.org/graphql
 export const MORPHO_BLUE_DEFAULT_MARKETS: MorphoBlueMarketConfig[] = [
+  // --- Ethereum (chain 1) ---
+  {
+    // cbBTC/USDC — largest USDC market on Ethereum (~$411M supply)
+    id: "cbbtc-usdc-1",
+    chainId: 1,
+    loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address, // USDC
+    collateralToken: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf" as Address, // cbBTC
+    oracle: "0xA6D6950c9F177F1De7f7757FB33539e3Ec60182a" as Address,
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC" as Address,
+    lltv: 860000000000000000n,
+  },
+  {
+    // WBTC/USDC — (~$95M supply)
+    id: "wbtc-usdc-1",
+    chainId: 1,
+    loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address, // USDC
+    collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599" as Address, // WBTC
+    oracle: "0xDddd770BADd886dF3864029e4B377B5F6a2B6b83" as Address,
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC" as Address,
+    lltv: 860000000000000000n,
+  },
+  {
+    // wstETH/WETH — largest WETH market (~$91M supply)
+    id: "wsteth-weth-1",
+    chainId: 1,
+    loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address, // WETH
+    collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0" as Address, // wstETH
+    oracle: "0xbD60A6770b27E084E8617335ddE769241B0e71D8" as Address,
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC" as Address,
+    lltv: 965000000000000000n,
+  },
+  // --- Base (chain 8453) ---
   {
     // cbBTC/USDC — largest USDC market on Base (~$1.26B supply)
     id: "cbbtc-usdc-86",
@@ -93,7 +125,8 @@ export function resolveMarket(
       );
     }
     if (matches.length === 1) {
-      return matches[0]!;
+      const [market] = matches;
+      return market as MorphoBlueMarketConfig;
     }
 
     throw new Error(
@@ -121,13 +154,23 @@ export function resolveMarket(
   }
 
   if (matches.length > 1) {
+    if (!collateral) {
+      // Auto-select first market and warn — better than failing for the "golden path"
+      const selected = matches[0] as MorphoBlueMarketConfig;
+      const candidateIds = matches.map((market) => market.id);
+      options.onWarning?.(
+        `Morpho Blue action '${action.type}' matched ${matches.length} markets (${candidateIds.join(", ")}). Auto-selected '${selected.id}'. Set explicit market_id to override.`
+      );
+      return selected;
+    }
     const candidateIds = matches.map((market) => market.id);
     throw new Error(
       `Morpho Blue action '${action.type}' matched ${matches.length} markets. Set explicit market_id to resolve ambiguity. Candidates: ${candidateIds.join(", ")}`
     );
   }
   if (matches.length === 1) {
-    return matches[0]!;
+    const [market] = matches;
+    return market as MorphoBlueMarketConfig;
   }
 
   throw new Error(

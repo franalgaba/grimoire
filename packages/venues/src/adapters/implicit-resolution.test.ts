@@ -70,7 +70,7 @@ const marketB = {
 
 describe("Implicit resolution elimination", () => {
   describe("Morpho Blue market ambiguity", () => {
-    test("throws listing candidates when 2+ markets match and no market_id", async () => {
+    test("auto-selects first market with warning when 2+ markets match and no market_id", async () => {
       const adapter = createMorphoBlueAdapter({ markets: [marketA, marketB] });
       if (!adapter.buildAction) throw new Error("Missing buildAction");
 
@@ -81,11 +81,10 @@ describe("Implicit resolution elimination", () => {
         amount,
       } as unknown as Action;
 
-      const error = await adapter.buildAction(action, createMorphoCtx()).catch((e) => e);
-      expect(error).toBeInstanceOf(Error);
-      expect(error.message).toContain("matched 2 markets");
-      expect(error.message).toContain("weth-usdc");
-      expect(error.message).toContain("dai-usdc");
+      // Should succeed by auto-selecting first market instead of throwing
+      const result = await adapter.buildAction(action, createMorphoCtx());
+      const built = Array.isArray(result) ? result : [result];
+      expect(built[built.length - 1]?.description).toContain("Morpho Blue lend");
     });
 
     test("resolves implicitly when exactly 1 market matches", async () => {
