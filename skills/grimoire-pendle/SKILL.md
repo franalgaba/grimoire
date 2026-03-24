@@ -38,6 +38,45 @@ grimoire venue pendle assets --chain 8453 --type PT --format table
 grimoire venue pendle market-tokens --chain 8453 --market 0x... --format json
 ```
 
+## Authoring Workflow
+
+Pendle requires a market-first approach. **Do NOT write a Pendle spell without first querying available markets.**
+
+1. **Query markets** for the target chain and underlying:
+   ```bash
+   grimoire venue pendle markets --chain 1 --active true --format json
+   ```
+
+2. **Pick a market** — note its address and expiry. Each market has specific PT/YT/SY tokens.
+
+3. **Query market tokens** to get the exact token addresses:
+   ```bash
+   grimoire venue pendle market-tokens --chain 1 --market 0x... --format json
+   ```
+
+4. **Write the spell** using token addresses from step 3:
+   ```spell
+   pendle.add_liquidity(0x<SY_address>, params.amount) with (max_slippage=100)
+   ```
+
+### Common mistakes
+
+- **`pendle.deposit(USDC, ...)`** — Pendle has no `deposit` action. Use `add_liquidity`, `mint_py`, `mint_sy`, or `swap`.
+- **Using token symbols without addresses** — PT/YT/SY tokens are auto-resolved via the Pendle API, but standard tokens like USDC need raw amounts in the token's smallest unit.
+- **Missing `enable_aggregator`** — Some routes require an aggregator. If no route is found, retry with `enable_aggregator=true` in the `with()` clause.
+
+### Supported actions
+
+| Action | Description | Input | Output |
+|--------|-------------|-------|--------|
+| `swap` | Swap between any Pendle tokens | Single token | Single token |
+| `add_liquidity` | Add single-sided liquidity | Underlying/SY | LP token |
+| `remove_liquidity` | Remove single-sided liquidity | LP token | Underlying/SY |
+| `mint_py` | Mint PT + YT from underlying | Underlying/SY | PT + YT |
+| `redeem_py` | Redeem PT + YT to underlying | PT + YT | Underlying/SY |
+| `mint_sy` | Wrap underlying into SY | Underlying | SY |
+| `redeem_sy` | Unwrap SY to underlying | SY | Underlying |
+
 ## Spell Constraints
 
 When writing Pendle actions in `.spell` files, use `with` clauses:

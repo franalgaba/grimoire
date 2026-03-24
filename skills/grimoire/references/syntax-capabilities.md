@@ -63,6 +63,20 @@ params: {
 }
 ```
 
+**Amounts must be in raw token units (smallest denomination).** This applies to all venue actions — swaps, lending, bridging, etc.
+
+| Token | Decimals | 1000 tokens as raw | Example |
+|-------|----------|-------------------|---------|
+| USDC | 6 | `1000000000` | `amount: 1000000000` |
+| USDT | 6 | `1000000000` | `amount: 1000000000` |
+| ETH/WETH | 18 | `1000000000000000000000` | `amount: 1000000000000000000000` |
+| WBTC | 8 | `100000000000` | `amount: 100000000000` |
+| DAI | 18 | `1000000000000000000000` | `amount: 1000000000000000000000` |
+
+Formula: `raw_amount = human_amount × 10^decimals`
+
+Common mistake: writing `amount: 1000` for "1000 USDC" — this is actually 0.001 USDC (1000 / 10^6). Use `amount: 1000000000` instead.
+
 Typed/extended values:
 
 ```spell
@@ -204,13 +218,22 @@ Supported statement forms inside blocks:
 
 Method calls on venue-like identifiers compile into action steps.
 
+All amounts are in **raw token units** (see params section above).
+
 Examples:
 
 ```spell
+# Swap 1000 USDC (6 decimals) to WETH
 uniswap_v3.swap(USDC, WETH, params.amount)
-aave_v3.lend(USDC, amount)
-aave_v3.borrow(USDC, amount, WETH)
-across.bridge(USDC, amount, 42161)
+
+# Lend 1000 USDC to Aave
+aave_v3.lend(USDC, params.amount)
+
+# Borrow 1000 USDC with ETH collateral
+aave_v3.borrow(USDC, params.amount, WETH)
+
+# Bridge 1000 USDC to Arbitrum
+across.bridge(USDC, params.amount, 42161)
 ```
 
 Optional action clauses:
