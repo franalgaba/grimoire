@@ -65,9 +65,7 @@ morpho_blue.supply_collateral(cbBTC, params.amount)
 morpho_blue.withdraw_collateral(cbBTC, params.amount)
 ```
 
-**Market resolution is strict.** When multiple markets match a loan token and no `market_id` is specified, the adapter throws an error listing candidate market IDs instead of silently picking one. Single-market resolution remains implicit.
-
-To target a specific market when ambiguous, specify `market_id` in the `with()` clause:
+**Market resolution is automatic.** When multiple markets match a loan token and no collateral or `market_id` is specified, the adapter auto-selects the first matching market and emits a warning. To target a specific market explicitly, specify `market_id` in the `with()` clause:
 
 ```spell
 morpho_blue.lend(USDC, params.amount) with (
@@ -77,16 +75,26 @@ morpho_blue.lend(USDC, params.amount) with (
 
 Use `grimoire venue morpho-blue vaults` to discover available market IDs.
 
-## Default Markets (Base)
+## Default Markets
 
-The adapter ships with pre-configured markets for Base (chain 8453):
+The adapter ships with pre-configured markets for Ethereum (chain 1) and Base (chain 8453):
 
-| Market | Collateral | LLTV |
-|--------|-----------|------|
-| cbBTC/USDC | cbBTC | 86% |
-| WETH/USDC | WETH | 86% |
+### Ethereum (chain 1)
 
-When no collateral is specified in a spell, the first matching market by loan token is selected.
+| Market | Loan | Collateral | LLTV |
+|--------|------|-----------|------|
+| cbbtc-usdc-1 | USDC | cbBTC | 86% |
+| wbtc-usdc-1 | USDC | WBTC | 86% |
+| wsteth-weth-1 | WETH | wstETH | 96.5% |
+
+### Base (chain 8453)
+
+| Market | Loan | Collateral | LLTV |
+|--------|------|-----------|------|
+| cbbtc-usdc-86 | USDC | cbBTC | 86% |
+| weth-usdc-86 | USDC | WETH | 86% |
+
+When no collateral is specified, the adapter auto-selects the first matching market by loan token.
 
 ## Notes
 

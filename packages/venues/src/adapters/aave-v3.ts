@@ -94,38 +94,36 @@ export function createAaveV3Adapter(
         case "lend": {
           const request = {
             ...requestBase,
-            sender: address,
+            supplier: address,
             amount: { erc20: { currency: evmAddress(assetAddress), value: humanAmount } },
-          } as unknown as Parameters<typeof actions.supply>[1]; // SDK type mismatch — parameters are correct at runtime
+          } as unknown as Parameters<typeof actions.supply>[1];
           result = await actions.supply(client, request);
           break;
         }
         case "withdraw": {
           const request = {
             ...requestBase,
-            sender: address,
+            supplier: address,
             amount: { erc20: { currency: evmAddress(assetAddress), value: { exact: rawAmount } } },
-            recipient: address,
-          } as unknown as Parameters<typeof actions.withdraw>[1]; // SDK type mismatch — parameters are correct at runtime
+          } as unknown as Parameters<typeof actions.withdraw>[1];
           result = await actions.withdraw(client, request);
           break;
         }
         case "borrow": {
           const request = {
             ...requestBase,
-            sender: address,
+            borrower: address,
             amount: { erc20: { currency: evmAddress(assetAddress), value: humanAmount } },
-            recipient: address,
-          } as unknown as Parameters<typeof actions.borrow>[1]; // SDK type mismatch — parameters are correct at runtime
+          } as unknown as Parameters<typeof actions.borrow>[1];
           result = await actions.borrow(client, request);
           break;
         }
         case "repay": {
           const request = {
             ...requestBase,
-            sender: address,
+            borrower: address,
             amount: { erc20: { currency: evmAddress(assetAddress), value: { exact: rawAmount } } },
-          } as unknown as Parameters<typeof actions.repay>[1]; // SDK type mismatch — parameters are correct at runtime
+          } as unknown as Parameters<typeof actions.repay>[1];
           result = await actions.repay(client, request);
           break;
         }
