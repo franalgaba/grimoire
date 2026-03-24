@@ -387,6 +387,55 @@ describe("Uniswap V3 adapter", () => {
     expect(built[built.length - 1]?.metadata?.quote?.slippageBps).toBe(50); // default
   });
 
+  test("handles zero-quote gracefully without division by zero (preview mode)", async () => {
+    // Reproduces eval failure: 0.5 ETH swap in preview mode where pool quote
+    // returns 0 output (no real wallet context). Previously caused division by
+    // zero in priceImpact / minimumAmountOut calculations.
+    const tinyPriceSlot0 = [
+      4295128739n, // MIN_SQRT_RATIO (smallest valid)
+      -887272n,
+      0n,
+      0n,
+      0n,
+      0n,
+      true,
+    ] as const;
+
+    const zeroProvider = {
+      chainId: 1,
+      readContract: async (params: { functionName: string }) => {
+        if (params.functionName === "slot0") return tinyPriceSlot0;
+        if (params.functionName === "liquidity") return 1n;
+        return 0n;
+      },
+      getClient: () => ({
+        readContract: async () => 0n,
+      }),
+    } as unknown as Provider;
+
+    const zeroCtx: VenueAdapterContext = { ...ctx, provider: zeroProvider };
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    // No constraints — the exact eval scenario
+    const result = await adapter.buildAction(
+      {
+        type: "swap",
+        venue: "uniswap_v3",
+        assetIn: "USDC",
+        assetOut: "WETH",
+        amount: 500000000n as unknown as Expression, // 500 USDC
+        mode: "exact_in",
+        feeTier: 3000,
+      },
+      zeroCtx
+    );
+
+    const built = Array.isArray(result) ? result : [result];
+    expect(built[built.length - 1]?.description).toContain("Uniswap V3 swap");
+    expect(built[built.length - 1]?.description).toContain("expected:   ~0");
+  });
+
   test("wraps ETH and approves WETH for native ETH input", async () => {
     const adapter = createUniswapV3Adapter();
     if (!adapter.buildAction) throw new Error("Missing buildAction");
