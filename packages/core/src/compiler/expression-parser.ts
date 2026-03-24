@@ -107,8 +107,11 @@ function tokenize(input: string): Token[] {
       continue;
     }
 
-    // Number
-    if (/[0-9]/.test(input[pos] ?? "")) {
+    // Number (including `.5` style floats)
+    if (
+      /[0-9]/.test(input[pos] ?? "") ||
+      (input[pos] === "." && /[0-9]/.test(input[pos + 1] ?? ""))
+    ) {
       let value = "";
       while (pos < input.length && /[0-9.]/.test(input[pos] ?? "")) {
         value += input[pos];

@@ -42,6 +42,11 @@ const SHARED_TOKENS: Record<number, Record<string, TokenRecord>> = {
       address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address,
       decimals: 18,
     },
+    WSTETH: {
+      symbol: "WSTETH",
+      address: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0" as Address,
+      decimals: 18,
+    },
   },
   10: {
     USDC: {

@@ -196,9 +196,9 @@ export function createUniswapV3Adapter(
       const explicitMaxIn = action.constraints?.maxInput;
       let slippageBps = defaultSlippageBps;
 
-      if (!isExactOut && explicitMinOut !== undefined) {
+      if (!isExactOut && explicitMinOut !== undefined && expectedOut > 0n) {
         slippageBps = computeSlippageBpsFromMinOut(expectedOut, explicitMinOut);
-      } else if (isExactOut && explicitMaxIn !== undefined) {
+      } else if (isExactOut && explicitMaxIn !== undefined && expectedIn > 0n) {
         slippageBps = computeSlippageBpsFromMaxIn(expectedIn, explicitMaxIn);
       }
 

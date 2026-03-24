@@ -281,6 +281,25 @@ describe("Morpho Blue adapter", () => {
     expect(built[0]?.description).toContain("Morpho Blue borrow");
   });
 
+  test("resolves Ethereum default markets for USDC lending", async () => {
+    // Use default markets which now include Ethereum (chain 1) entries
+    const { MORPHO_BLUE_DEFAULT_MARKETS } = await import("./morpho-blue/markets.js");
+    const adapter = createMorphoBlueAdapter({ markets: MORPHO_BLUE_DEFAULT_MARKETS });
+    if (!adapter.buildAction) throw new Error("Missing buildAction");
+
+    const action: Action = {
+      type: "lend",
+      venue: "morpho_blue",
+      asset: "USDC",
+      amount: amount5,
+    };
+
+    // Should succeed on chain 1 — previously would fail with "market not configured"
+    const result = await adapter.buildAction(action, createCtx());
+    const built = Array.isArray(result) ? result : [result];
+    expect(built[built.length - 1]?.description).toContain("Morpho Blue lend");
+  });
+
   test("rejects unknown market and max amount", async () => {
     const adapter = createMorphoBlueAdapter({ markets: [market] });
 
@@ -402,7 +421,7 @@ describe("Morpho Blue adapter", () => {
     expect(built[0]?.description).toContain("Morpho Blue borrow");
   });
 
-  test("rejects ambiguous market when multiple match and no collateral or market_id specified", async () => {
+  test("auto-selects first market with warning when multiple match without collateral", async () => {
     const market2 = {
       ...market,
       id: "test2",
@@ -411,17 +430,17 @@ describe("Morpho Blue adapter", () => {
     const adapter = createMorphoBlueAdapter({ markets: [market, market2] });
     if (!adapter.buildAction) throw new Error("Missing buildAction");
 
-    // Multiple USDC markets, no collateral specified — must error
+    // Multiple USDC markets, no collateral specified — should auto-select first
     const action = {
-      type: "borrow",
+      type: "lend",
       venue: "morpho_blue",
       asset: "USDC",
       amount: amount1,
     } as unknown as Action;
 
-    await expect(adapter.buildAction(action, createCtx())).rejects.toThrow(
-      "Set explicit market_id to resolve ambiguity"
-    );
+    const result = await adapter.buildAction(action, createCtx());
+    const built = Array.isArray(result) ? result : [result];
+    expect(built[built.length - 1]?.description).toContain("Morpho Blue lend");
   });
 
   test("resolves single market implicitly without error", async () => {

@@ -14,6 +14,12 @@ describe("Expression Parser", () => {
     expect(parseExpression('"hello"')).toEqual({ kind: "literal", value: "hello", type: "string" });
   });
 
+  test("handles float starting with dot", () => {
+    expect(parseExpression(".5")).toEqual({ kind: "literal", value: 0.5, type: "float" });
+    expect(parseExpression(".123")).toEqual({ kind: "literal", value: 0.123, type: "float" });
+    expect(parseExpression("0.5")).toEqual({ kind: "literal", value: 0.5, type: "float" });
+  });
+
   test("parses addresses", () => {
     const addr = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
     expect(parseExpression(addr)).toEqual({ kind: "literal", value: addr, type: "address" });
