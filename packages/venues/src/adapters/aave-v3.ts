@@ -94,7 +94,7 @@ export function createAaveV3Adapter(
         case "lend": {
           const request = {
             ...requestBase,
-            supplier: address,
+            sender: address,
             amount: { erc20: { currency: evmAddress(assetAddress), value: humanAmount } },
           } as unknown as Parameters<typeof actions.supply>[1];
           result = await actions.supply(client, request);
@@ -103,7 +103,7 @@ export function createAaveV3Adapter(
         case "withdraw": {
           const request = {
             ...requestBase,
-            supplier: address,
+            sender: address,
             amount: { erc20: { currency: evmAddress(assetAddress), value: { exact: rawAmount } } },
           } as unknown as Parameters<typeof actions.withdraw>[1];
           result = await actions.withdraw(client, request);
@@ -112,7 +112,7 @@ export function createAaveV3Adapter(
         case "borrow": {
           const request = {
             ...requestBase,
-            borrower: address,
+            sender: address,
             amount: { erc20: { currency: evmAddress(assetAddress), value: humanAmount } },
           } as unknown as Parameters<typeof actions.borrow>[1];
           result = await actions.borrow(client, request);
@@ -121,7 +121,7 @@ export function createAaveV3Adapter(
         case "repay": {
           const request = {
             ...requestBase,
-            borrower: address,
+            sender: address,
             amount: { erc20: { currency: evmAddress(assetAddress), value: { exact: rawAmount } } },
           } as unknown as Parameters<typeof actions.repay>[1];
           result = await actions.repay(client, request);
