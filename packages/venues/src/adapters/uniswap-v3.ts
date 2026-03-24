@@ -165,13 +165,18 @@ export function createUniswapV3Adapter(
       const quoteTimestampMs = Date.now();
 
       let trade: Trade<Token, Token, TradeType>;
+      let zeroQuote = false;
       if (isExactOut) {
         const outputAmount = CurrencyAmount.fromRawAmount(tokenOut, amount.toString());
         const price = pool.priceOf(tokenOut);
         const estimatedInput = price.quote(outputAmount);
+        zeroQuote = estimatedInput.quotient.toString() === "0";
         trade = Trade.createUncheckedTrade({
           route: swapRoute,
-          inputAmount: CurrencyAmount.fromRawAmount(tokenIn, estimatedInput.quotient.toString()),
+          inputAmount: CurrencyAmount.fromRawAmount(
+            tokenIn,
+            zeroQuote ? amount.toString() : estimatedInput.quotient.toString()
+          ),
           outputAmount,
           tradeType: TradeType.EXACT_OUTPUT,
         });
@@ -179,10 +184,14 @@ export function createUniswapV3Adapter(
         const inputAmount = CurrencyAmount.fromRawAmount(tokenIn, amount.toString());
         const price = pool.priceOf(tokenIn);
         const estimatedOutput = price.quote(inputAmount);
+        zeroQuote = estimatedOutput.quotient.toString() === "0";
         trade = Trade.createUncheckedTrade({
           route: swapRoute,
           inputAmount,
-          outputAmount: CurrencyAmount.fromRawAmount(tokenOut, estimatedOutput.quotient.toString()),
+          outputAmount: CurrencyAmount.fromRawAmount(
+            tokenOut,
+            zeroQuote ? "1" : estimatedOutput.quotient.toString()
+          ),
           tradeType: TradeType.EXACT_INPUT,
         });
       }
@@ -196,9 +205,9 @@ export function createUniswapV3Adapter(
       const explicitMaxIn = action.constraints?.maxInput;
       let slippageBps = defaultSlippageBps;
 
-      if (!isExactOut && explicitMinOut !== undefined && expectedOut > 0n) {
+      if (!zeroQuote && !isExactOut && explicitMinOut !== undefined && expectedOut > 0n) {
         slippageBps = computeSlippageBpsFromMinOut(expectedOut, explicitMinOut);
-      } else if (isExactOut && explicitMaxIn !== undefined && expectedIn > 0n) {
+      } else if (!zeroQuote && isExactOut && explicitMaxIn !== undefined && expectedIn > 0n) {
         slippageBps = computeSlippageBpsFromMaxIn(expectedIn, explicitMaxIn);
       }
 
@@ -258,11 +267,13 @@ export function createUniswapV3Adapter(
       }
 
       const shortAddr = (a: string) => `${a.slice(0, 6)}...${a.slice(-4)}`;
-      const expectedOutput = trade.outputAmount.toSignificant(6);
+      const expectedOutput = zeroQuote ? "0" : trade.outputAmount.toSignificant(6);
       const minOutAmount =
         explicitMinOut !== undefined
           ? CurrencyAmount.fromRawAmount(tokenOut, explicitMinOut.toString())
-          : trade.minimumAmountOut(slippageTolerance);
+          : zeroQuote
+            ? CurrencyAmount.fromRawAmount(tokenOut, "0")
+            : trade.minimumAmountOut(slippageTolerance);
       const minOut = minOutAmount.toSignificant(6);
       const descLines = [
         `Uniswap V3 swap ${action.assetIn} → ${action.assetOut}`,
@@ -295,10 +306,13 @@ export function createUniswapV3Adapter(
         constraints: action.constraints,
         venueName: "Uniswap V3",
       });
-      const priceImpactPct = Number.parseFloat(trade.priceImpact.toFixed(6));
-      const priceImpactBps = Number.isFinite(priceImpactPct)
-        ? Math.max(0, Math.round(priceImpactPct * 100))
-        : undefined;
+      let priceImpactBps: number | undefined;
+      if (!zeroQuote) {
+        const priceImpactPct = Number.parseFloat(trade.priceImpact.toFixed(6));
+        priceImpactBps = Number.isFinite(priceImpactPct)
+          ? Math.max(0, Math.round(priceImpactPct * 100))
+          : undefined;
+      }
 
       const swapTx = {
         tx: {
