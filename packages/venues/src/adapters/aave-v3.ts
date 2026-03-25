@@ -8,6 +8,7 @@ import type {
   VenueBuildMetadata,
 } from "@grimoirelabs/core";
 import { assertSupportedConstraints } from "../shared/constraints.js";
+import { buildApprovalIfNeeded } from "../shared/erc20.js";
 import { resolveTokenAddress, resolveTokenDecimals } from "../shared/token-registry.js";
 
 export interface AaveV3AdapterConfig {
@@ -149,7 +150,34 @@ export function createAaveV3Adapter(
         return [buildInsufficientBalancePlaceholder(plan, action, metadataContext, ctx.mode)];
       }
 
-      return buildAaveTransactions(plan, action, metadataContext);
+      const txs = buildAaveTransactions(plan, action, metadataContext);
+
+      // The Aave SDK may skip approval generation (e.g. on Base) even when the
+      // wallet has no allowance. Inject an ERC20 approve if the SDK didn't
+      // return ApprovalRequired and the action pulls tokens from the wallet.
+      // Only check when a provider with readContract is available — otherwise
+      // trust the SDK's own plan.
+      const needsTokenInput = action.type === "lend" || action.type === "repay";
+      const hasApprovalTx = txs.some(
+        (tx) => tx.description?.toLowerCase().includes("approve") || tx.metadata?.route?.approval
+      );
+      const canCheckAllowance = !!ctx.provider.getClient?.()?.readContract;
+      if (needsTokenInput && !hasApprovalTx && canCheckAllowance) {
+        const spender = market;
+        const approvalTxs = await buildApprovalIfNeeded({
+          ctx,
+          token: assetAddress,
+          spender,
+          amount: metadataContext.rawAmount,
+          action,
+          description: `Approve ${action.asset} for Aave V3`,
+        });
+        if (approvalTxs.length > 0) {
+          return [...approvalTxs, ...txs];
+        }
+      }
+
+      return txs;
     },
   };
 }
