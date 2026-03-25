@@ -1,5 +1,12 @@
 # @grimoirelabs/cli
 
+## 0.15.8
+
+### Patch Changes
+
+- Updated dependencies [1102ec1]
+  - @grimoirelabs/venues@0.10.8
+
 ## 0.15.7
 
 ### Patch Changes
