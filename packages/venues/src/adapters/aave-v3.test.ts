@@ -199,7 +199,7 @@ describe("Aave V3 adapter", () => {
     expect(withdraw.description).toContain("Aave V3 withdraw");
     expect(borrow.description).toContain("Aave V3 borrow");
     expect(repay.description).toContain("Aave V3 repay");
-    expect(withdraw.metadata?.route?.amountFormat).toBe("exact_raw");
+    expect(withdraw.metadata?.route?.amountFormat).toBe("human_decimal");
     expect(withdraw.metadata?.quote?.expectedOut).toBe(5n);
     expect(borrow.metadata?.quote?.expectedOut).toBe(2n);
     expect(repay.metadata?.quote?.expectedIn).toBe(2n);

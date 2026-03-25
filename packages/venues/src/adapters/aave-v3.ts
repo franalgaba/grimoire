@@ -105,7 +105,9 @@ export function createAaveV3Adapter(
           const request = {
             ...requestBase,
             sender: address,
-            amount: { erc20: { currency: evmAddress(assetAddress), value: { exact: rawAmount } } },
+            amount: {
+              erc20: { currency: evmAddress(assetAddress), value: { exact: humanAmount } },
+            },
           } as unknown as Parameters<typeof actions.withdraw>[1];
           result = await actions.withdraw(client, request);
           break;
@@ -123,7 +125,9 @@ export function createAaveV3Adapter(
           const request = {
             ...requestBase,
             sender: address,
-            amount: { erc20: { currency: evmAddress(assetAddress), value: { exact: rawAmount } } },
+            amount: {
+              erc20: { currency: evmAddress(assetAddress), value: { exact: humanAmount } },
+            },
           } as unknown as Parameters<typeof actions.repay>[1];
           result = await actions.repay(client, request);
           break;
@@ -413,8 +417,7 @@ function buildAaveMetadata(
       assetDecimals: metadataContext.decimals,
       amountRaw: metadataContext.rawAmount,
       amountHuman: metadataContext.humanAmount,
-      amountFormat:
-        action.type === "lend" || action.type === "borrow" ? "human_decimal" : "exact_raw",
+      amountFormat: "human_decimal",
       approval: options.isApproval === true,
     },
   };
