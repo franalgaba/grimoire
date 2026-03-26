@@ -187,7 +187,8 @@ async function buildVaultAction(
 
   const vaultAddress = action.vault as Address;
   const amount = toBigInt(action.amount);
-  const receiver = (ctx.vault ?? ctx.walletAddress) as Address;
+  const ZERO = "0x0000000000000000000000000000000000000000" as Address;
+  const receiver = ctx.vault && ctx.vault !== ZERO ? ctx.vault : ctx.walletAddress;
 
   if (action.type === "vault_deposit") {
     const assetAddress = resolveTokenAddress(action.asset, ctx.chainId, {
