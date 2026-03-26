@@ -19,7 +19,10 @@ export function toConvertRequest(
   singleInputActions: Set<string>,
   multiInputActions: Set<string>
 ): PendleConvertRequest {
-  const defaultReceiver = (ctx.vault ?? ctx.walletAddress) as string;
+  const ZERO = "0x0000000000000000000000000000000000000000";
+  const defaultReceiver = (
+    ctx.vault && ctx.vault !== ZERO ? ctx.vault : ctx.walletAddress
+  ) as string;
 
   if (action.type === "custom") {
     return buildRequestFromCustomConvert(action, ctx.chainId, config, slippageBps, defaultReceiver);

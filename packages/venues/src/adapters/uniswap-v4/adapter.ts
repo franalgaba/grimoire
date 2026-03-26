@@ -39,6 +39,14 @@ const DEFAULT_TICK_SPACING = 60;
 const DEFAULT_DEADLINE_SECONDS = 1200;
 const DEFAULT_SLIPPAGE_BPS = 50;
 
+/** Standard fee → tickSpacing mapping (matches Uniswap V4 pool defaults) */
+const FEE_TO_TICK_SPACING: Record<number, number> = {
+  100: 1,
+  500: 10,
+  3000: 60,
+  10000: 200,
+};
+
 export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): VenueAdapter {
   const routers = config.routers ?? DEFAULT_ROUTERS;
   const quoters = config.quoters ?? DEFAULT_QUOTERS;
@@ -95,7 +103,8 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
         );
       }
       const fee = action.feeTier;
-      const tickSpacing = config.defaultTickSpacing ?? DEFAULT_TICK_SPACING;
+      const tickSpacing =
+        config.defaultTickSpacing ?? FEE_TO_TICK_SPACING[fee] ?? DEFAULT_TICK_SPACING;
       const [currency0, currency1] = sortCurrencies(currencyIn, currencyOut);
       const zeroForOne = currency0.toLowerCase() === currencyIn.toLowerCase();
 

@@ -32,7 +32,6 @@ export const DEFAULT_ROUTERS: Record<number, Address> = {
   10: DEFAULT_SWAP_ROUTER,
   137: DEFAULT_SWAP_ROUTER,
   42161: DEFAULT_SWAP_ROUTER,
-  8453: DEFAULT_SWAP_ROUTER,
 };
 
 export const defaultUniswapV3Routers = DEFAULT_ROUTERS;
@@ -44,7 +43,6 @@ const DEFAULT_FACTORIES: Record<number, Address> = {
   10: DEFAULT_FACTORY,
   137: DEFAULT_FACTORY,
   42161: DEFAULT_FACTORY,
-  8453: "0x33128a8fC17869897dcE68Ed026d694621f6FDfD" as Address,
 };
 
 export const defaultUniswapV3Factories = DEFAULT_FACTORIES;
@@ -110,7 +108,8 @@ export function createUniswapV3Adapter(
       }
       const fee = action.feeTier as FeeAmount;
       const amount = toBigInt(action.amount, "Unsupported amount type for swap");
-      const recipient = (ctx.vault ?? ctx.walletAddress) as string;
+      const ZERO = "0x0000000000000000000000000000000000000000";
+      const recipient = (ctx.vault && ctx.vault !== ZERO ? ctx.vault : ctx.walletAddress) as string;
 
       // Compute pool address using the SDK
       const poolAddress = computePoolAddress({
