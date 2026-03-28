@@ -13,7 +13,7 @@ import type {
 } from "../types/execution.js";
 import type { AdvisorDef, Guard, GuardDef, SpellIR } from "../types/ir.js";
 import type { PolicySet } from "../types/policy.js";
-import type { Address, ChainId, Trigger } from "../types/primitives.js";
+import type { Address, AssetDef, ChainId, Trigger } from "../types/primitives.js";
 import type { QueryProvider } from "../types/query-provider.js";
 import type {
   AccountingSummary,
@@ -232,6 +232,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
       provider: options.provider,
       walletAddress: options.walletAddress ?? vault,
       chainId: chain,
+      assets: spell.assets,
     };
   }
 
@@ -478,6 +479,8 @@ export interface CommitOptions {
   driftValues?: Record<string, unknown>;
   resolveDriftValue?: (key: DriftKey) => Promise<unknown>;
   eventCallback?: (entry: LedgerEntry) => void;
+  /** Spell-defined asset definitions for adapter address resolution. */
+  assets?: AssetDef[];
 }
 
 /**
@@ -836,7 +839,8 @@ export async function buildTransactions(
         getProvider,
         options.walletAddress,
         receipt.chainContext.vault,
-        registry
+        registry,
+        options.assets
       );
       transactions.push({
         stepId: planned.stepId,
@@ -936,6 +940,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     progressCallback: options.progressCallback,
     skipTestnetConfirmation: options.skipTestnetConfirmation,
     eventCallback: options.eventCallback,
+    assets: spell.assets,
   });
 
   return convertPreviewCommitToExecutionResult(previewResult, commitResult);
@@ -1568,7 +1573,8 @@ async function buildActionTransactions(
   getProvider: () => Provider,
   walletAddress: Address,
   vault: Address,
-  registry: VenueRegistry
+  registry: VenueRegistry,
+  assets?: AssetDef[]
 ): Promise<BuiltTransaction[]> {
   const normalizeBuildResult = (result: VenueBuildResult): BuiltTransaction[] =>
     Array.isArray(result) ? result : [result];
@@ -1607,6 +1613,7 @@ async function buildActionTransactions(
         vault,
         chainId,
         mode: "execute",
+        assets,
       })
     );
   }
@@ -1641,6 +1648,7 @@ async function buildActionTransactions(
         vault,
         chainId,
         mode: "execute",
+        assets,
       })
     );
   }

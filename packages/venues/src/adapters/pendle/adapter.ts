@@ -1,4 +1,4 @@
-import type { Action, Address, VenueAdapter } from "@grimoirelabs/core";
+import type { Action, Address, VenueAdapter, VenueAdapterContext } from "@grimoirelabs/core";
 import { assertSupportedConstraints, validateGasConstraints } from "../../shared/constraints.js";
 import { requestConvert } from "./api.js";
 import { toConvertRequest } from "./convert.js";
@@ -95,11 +95,14 @@ export function createPendleAdapter(config: PendleAdapterConfig = {}): VenueAdap
         throw new Error(`Pendle adapter does not support action '${action.type}'`);
       }
 
+      // Merge spell-defined asset addresses into config tokenMap
+      const configWithSpellAssets = mergeSpellAssets(config, ctx);
+
       // Pre-resolve Pendle PT/YT/SY tokens that aren't in the shared registry
       const resolvedConfig = await preResolvePendleTokens(
         action,
         ctx.chainId,
-        config,
+        configWithSpellAssets,
         baseUrl,
         fetchFn
       );
@@ -232,6 +235,30 @@ export function isSupportedPendleAction(action: Action): boolean {
     return true;
   }
   return action.type === "custom" && action.op === "convert";
+}
+
+/**
+ * Merge spell-defined asset addresses into the adapter config tokenMap
+ * so that resolveAssetAddress can find them by symbol.
+ */
+function mergeSpellAssets(
+  config: PendleAdapterConfig,
+  ctx: VenueAdapterContext
+): PendleAdapterConfig {
+  if (!ctx.assets || ctx.assets.length === 0) return config;
+
+  const relevantAssets = ctx.assets.filter((a) => a.chain === ctx.chainId && a.address);
+  if (relevantAssets.length === 0) return config;
+
+  const existing = config.tokenMap?.[ctx.chainId] ?? {};
+  const merged: Record<string, Address> = { ...existing };
+  for (const asset of relevantAssets) {
+    if (!merged[asset.symbol]) {
+      merged[asset.symbol] = asset.address;
+    }
+  }
+
+  return { ...config, tokenMap: { ...config.tokenMap, [ctx.chainId]: merged } };
 }
 
 const PENDLE_TOKEN_PREFIX = /^(PT|YT|SY)[_-]/i;
