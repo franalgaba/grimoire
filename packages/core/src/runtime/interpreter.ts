@@ -715,6 +715,8 @@ export interface BuildTransactionsOptions {
   receiptSecret?: string;
   /** HMAC integrity hash produced by signReceipt(receipt, secret) */
   receiptIntegrity?: string;
+  /** Spell-defined asset definitions for adapter address resolution. */
+  assets?: AssetDef[];
 }
 
 /**
