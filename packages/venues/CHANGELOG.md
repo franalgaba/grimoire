@@ -1,5 +1,11 @@
 # @grimoirelabs/venues
 
+## 0.10.11
+
+### Patch Changes
+
+- fba6b56: Default enableAggregator to true in Pendle adapter so non-SY tokens like USDC can be swapped into PT/YT tokens without requiring explicit enable_aggregator=true in the spell.
+
 ## 0.10.10
 
 ### Patch Changes
