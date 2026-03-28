@@ -147,7 +147,7 @@ export function buildRequestFromCustomConvert(
   const outputs = tokensOut.map((token) => resolveAssetAddress(token, chainId, config.tokenMap));
 
   const receiver = parseOptionalString(action.args.receiver) ?? defaultReceiver;
-  const enableAggregator = parseOptionalBoolean(action.args.enable_aggregator) ?? false;
+  const enableAggregator = parseOptionalBoolean(action.args.enable_aggregator) ?? true;
   const aggregators = parseOptionalStringList(action.args.aggregators);
   const needScale = parseOptionalBoolean(action.args.need_scale);
   const redeemRewards = parseOptionalBoolean(action.args.redeem_rewards);
@@ -181,7 +181,7 @@ export function readPendleOptions(action: Action): PendleOptions {
   return {
     receiver: parseOptionalString(record.receiver),
     enableAggregator:
-      parseOptionalBoolean(record.enableAggregator ?? record.enable_aggregator) ?? false,
+      parseOptionalBoolean(record.enableAggregator ?? record.enable_aggregator) ?? true,
     aggregators: parseOptionalStringList(record.aggregators),
     needScale: parseOptionalBoolean(record.needScale ?? record.need_scale),
     redeemRewards: parseOptionalBoolean(record.redeemRewards ?? record.redeem_rewards),

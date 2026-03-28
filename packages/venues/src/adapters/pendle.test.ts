@@ -133,7 +133,7 @@ describe("Pendle adapter", () => {
       outputs: string[];
       enableAggregator: boolean;
     };
-    expect(request.enableAggregator).toBe(false);
+    expect(request.enableAggregator).toBe(true);
     expect(request.inputs[0]?.token).toBe(ADDRS.usdc);
     expect(request.outputs[0]).toBe(ADDRS.pt);
   });
@@ -953,6 +953,7 @@ describe("Pendle adapter", () => {
           assetOut: "PT",
           amount: 100n,
           mode: "exact_in",
+          enable_aggregator: false,
         } as Action,
         createCtx(undefined, 1, (warning) => warnings.push(warning))
       )
