@@ -6,7 +6,7 @@ import type { BuiltTransaction } from "../wallet/tx-builder.js";
 import type { Action, ActionConstraintsResolved } from "./actions.js";
 import type { CrossChainHandoffReceiptEntry, CrossChainTrackReceiptEntry } from "./cross-chain.js";
 import type { ExecutionMetrics, LedgerEntry } from "./execution.js";
-import type { Address, AssetId, BasisPoints, ChainId, Timestamp } from "./primitives.js";
+import type { Address, AssetDef, AssetId, BasisPoints, ChainId, Timestamp } from "./primitives.js";
 import type { OnFailure } from "./steps.js";
 
 // =============================================================================
@@ -166,6 +166,8 @@ export interface Receipt {
   status: ReceiptStatus;
   metrics: ExecutionMetrics;
   finalState: Record<string, unknown>;
+  /** Optional spell-defined assets used for adapter address resolution. */
+  assets?: AssetDef[];
   error?: string;
   crossChain?: {
     runId: string;

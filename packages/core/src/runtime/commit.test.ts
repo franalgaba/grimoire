@@ -173,6 +173,35 @@ describe("commit()", () => {
     expect(result.driftChecks).toHaveLength(0);
   });
 
+  test("rejects conflicting options.assets when receipt already includes assets", async () => {
+    const receipt = await createReadyReceipt({
+      assets: [
+        {
+          symbol: "PTYOETH",
+          chain: 8453,
+          address: "0x1111111111111111111111111111111111111111",
+          decimals: 18,
+        },
+      ],
+    });
+
+    const result = await commit({
+      receipt,
+      wallet: createMockWallet(),
+      assets: [
+        {
+          symbol: "PTYOETH",
+          chain: 8453,
+          address: "0x2222222222222222222222222222222222222222",
+          decimals: 18,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("ASSET_CONTEXT_MISMATCH");
+  });
+
   test("performs drift checks on drift keys", async () => {
     const receipt = await createReadyReceipt({
       driftKeys: [
@@ -245,6 +274,36 @@ describe("commit()", () => {
 
     expect(result.success).toBe(true);
     expect(result.driftChecks[0]?.passed).toBe(true);
+  });
+
+  test("rejects provider when chain does not match receipt chain", async () => {
+    const receipt = await createReadyReceipt({
+      chainContext: {
+        chainId: 1,
+        vault: VAULT,
+      },
+    });
+
+    const wrongChainProvider = {
+      chainId: 137,
+      rpcUrl: "http://localhost",
+      getGasEstimate: async () => ({
+        gasLimit: 21000n,
+        maxFeePerGas: 100n,
+        maxPriorityFeePerGas: 2n,
+        estimatedCost: 21000n * 100n,
+      }),
+      readContract: async () => 0n,
+    } as unknown as NonNullable<Parameters<typeof commit>[0]["provider"]>;
+
+    const result = await commit({
+      receipt,
+      wallet: createMockWallet(),
+      provider: wrongChainProvider,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("CHAIN_MISMATCH");
   });
 
   test("rejects when drift exceeds tolerance", async () => {

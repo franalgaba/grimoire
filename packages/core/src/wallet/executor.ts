@@ -1,4 +1,5 @@
 import type { Action } from "../types/actions.js";
+import type { AssetDef } from "../types/primitives.js";
 import { createVenueRegistry } from "../venues/index.js";
 import type {
   OffchainExecutionResult,
@@ -34,6 +35,8 @@ export interface ExecutorOptions {
   confirmations?: number;
   /** Venue adapters */
   adapters?: VenueAdapter[];
+  /** Spell-defined asset definitions for adapter address resolution. */
+  assets?: AssetDef[];
 }
 
 /** Result of a single transaction execution */
@@ -298,6 +301,7 @@ export class Executor {
               walletAddress: this.wallet.address,
               chainId: this.provider.chainId,
               mode: this.options.mode,
+              assets: this.options.assets,
             })
           );
         }
@@ -327,6 +331,7 @@ export class Executor {
           walletAddress: this.wallet.address,
           chainId: this.provider.chainId,
           mode: this.options.mode,
+          assets: this.options.assets,
         })
       );
     }
@@ -350,6 +355,7 @@ export class Executor {
               walletAddress: this.wallet.address,
               chainId: this.provider.chainId,
               mode: this.options.mode,
+              assets: this.options.assets,
             })
           );
         }
@@ -373,6 +379,7 @@ export class Executor {
           walletAddress: this.wallet.address,
           chainId: this.provider.chainId,
           mode: this.options.mode,
+          assets: this.options.assets,
         })
       );
     }
@@ -547,6 +554,7 @@ export class Executor {
         walletAddress: this.wallet.address,
         chainId: this.provider.chainId,
         mode: this.options.mode,
+        assets: this.options.assets,
       });
 
       return { ...result, success: true };

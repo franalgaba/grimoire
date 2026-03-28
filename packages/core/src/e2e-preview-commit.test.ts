@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildTransactions, commit, compile, execute, preview, signReceipt } from "./index.js";
 import type { SpellIR } from "./types/ir.js";
-import type { Address } from "./types/primitives.js";
+import type { Address, AssetDef } from "./types/primitives.js";
 import type { VenueAdapter } from "./venues/types.js";
 import type { Provider } from "./wallet/provider.js";
 import type { BuiltTransaction } from "./wallet/tx-builder.js";
@@ -281,6 +281,9 @@ describe("Preview/Commit E2E", () => {
       expect(typeof receipt.status).toBe("string");
       expect(receipt.metrics).toBeDefined();
       expect(receipt.finalState).toBeDefined();
+      expect(receipt.assets).toBeInstanceOf(Array);
+      expect(receipt.assets).toHaveLength(2);
+      expect(receipt.assets?.map((asset) => asset.symbol)).toEqual(["ETH", "USDC"]);
     });
   });
 
@@ -589,6 +592,15 @@ describe("Preview/Commit E2E", () => {
     });
 
     test("rejects offchain adapters even when buildAction returns placeholders", async () => {
+      const spellAssets: SpellIR["assets"] = [
+        {
+          symbol: "PTYOETH",
+          chain: 8453,
+          address: "0x1111111111111111111111111111111111111111",
+          decimals: 18,
+        },
+      ];
+      let capturedExecuteAssets: AssetDef[] | undefined;
       const offchainAdapter: VenueAdapter = {
         meta: {
           name: "offchain_fixture",
@@ -606,11 +618,14 @@ describe("Preview/Commit E2E", () => {
           description: "Offchain placeholder",
           action,
         }),
-        executeAction: async () => ({
-          id: "offchain-1",
-          status: "submitted",
-          reference: "session-1",
-        }),
+        executeAction: async (_action, ctx) => {
+          capturedExecuteAssets = ctx.assets;
+          return {
+            id: "offchain-1",
+            status: "submitted",
+            reference: "session-1",
+          };
+        },
       };
       const spell = createRuntimeSpell(
         [
@@ -634,7 +649,8 @@ describe("Preview/Commit E2E", () => {
             chain: 1,
             address: "0x0000000000000000000000000000000000000001",
           },
-        ]
+        ],
+        spellAssets
       );
 
       const previewResult = await preview({
@@ -646,6 +662,7 @@ describe("Preview/Commit E2E", () => {
 
       expect(previewResult.success).toBe(true);
       const receipt = getReceipt(previewResult);
+      expect(receipt.assets).toEqual(spellAssets);
 
       // buildTransactions rejects offchain-only adapters — they produce
       // no signable calldata and must go through commit() instead.
@@ -671,6 +688,7 @@ describe("Preview/Commit E2E", () => {
       expect(commitResult.success).toBe(true);
       expect(commitResult.transactions[0]?.success).toBe(true);
       expect(commitResult.transactions[0]?.hash).toBe("offchain-1");
+      expect(capturedExecuteAssets).toEqual(spellAssets);
     });
 
     test("compute-only receipts on chain 0 do not require a provider", async () => {
@@ -891,6 +909,43 @@ describe("Preview/Commit E2E", () => {
       expect(buildResult.error?.code).toBe("RECEIPT_INVALID_STATUS");
     });
 
+    test("rejects conflicting options.assets when receipt already has assets", async () => {
+      const source = `spell AssetConflict {
+  version: "1.0.0"
+  assets: [ETH]
+
+  on manual: {
+    x = 1
+  }
+}`;
+      const compileResult = compile(source);
+      assertIR(compileResult);
+
+      const previewResult = await preview({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+      });
+      const receipt = getReceipt(previewResult);
+      expect(receipt.assets).toBeDefined();
+
+      const buildResult = await buildTransactions({
+        receipt,
+        walletAddress: WALLET_ADDRESS,
+        assets: [
+          {
+            symbol: "ETH",
+            chain: 1,
+            address: "0x2222222222222222222222222222222222222222",
+            decimals: 18,
+          },
+        ],
+      });
+
+      expect(buildResult.success).toBe(false);
+      expect(buildResult.error?.code).toBe("ASSET_CONTEXT_MISMATCH");
+    });
+
     test("no side effects: buildTransactions does not prevent subsequent commit", async () => {
       const source = `spell NoSideEffects {
   version: "1.0.0"
@@ -1103,6 +1158,66 @@ describe("Preview/Commit E2E", () => {
       expect(buildResult.error?.code).toBe("RECEIPT_INTEGRITY_FAILED");
     });
 
+    test("rejects cross-process receipts with tampered assets", async () => {
+      const secret = "test-secret-key";
+      const crossProcessReceipt = {
+        id: `rcpt_tampered_assets_${Date.now()}`,
+        spellId: "cross_process_spell",
+        phase: "preview" as const,
+        timestamp: Date.now(),
+        chainContext: { chainId: 1, vault: VAULT },
+        guardResults: [],
+        advisoryResults: [],
+        plannedActions: [],
+        valueDeltas: [],
+        accounting: { assets: [], totalUnaccounted: 0n, passed: true },
+        constraintResults: [],
+        driftKeys: [],
+        requiresApproval: false,
+        status: "ready" as const,
+        metrics: {
+          stepsExecuted: 0,
+          actionsExecuted: 0,
+          gasUsed: 0n,
+          advisoryCalls: 0,
+          errors: 0,
+          retries: 0,
+        },
+        finalState: {},
+        assets: [
+          {
+            symbol: "PTYOETH",
+            chain: 8453,
+            address: "0x1111111111111111111111111111111111111111" as Address,
+            decimals: 18,
+          },
+        ],
+      };
+
+      const integrity = signReceipt(crossProcessReceipt, secret);
+      const tampered = {
+        ...crossProcessReceipt,
+        assets: [
+          {
+            symbol: "PTYOETH",
+            chain: 8453,
+            address: "0x2222222222222222222222222222222222222222" as Address,
+            decimals: 18,
+          },
+        ],
+      };
+
+      const buildResult = await buildTransactions({
+        receipt: tampered,
+        walletAddress: WALLET_ADDRESS,
+        receiptSecret: secret,
+        receiptIntegrity: integrity,
+      });
+
+      expect(buildResult.success).toBe(false);
+      expect(buildResult.error?.code).toBe("RECEIPT_INTEGRITY_FAILED");
+    });
+
     test("rejects provider with wrong chain", async () => {
       const source = `spell ChainMismatch {
   version: "1.0.0"
@@ -1139,10 +1254,47 @@ describe("Preview/Commit E2E", () => {
       expect(buildResult.error?.message).toContain("1");
     });
 
+    test("commit rejects provider with wrong chain", async () => {
+      const source = `spell CommitChainMismatch {
+  version: "1.0.0"
+
+  on manual: {
+    x = 1
+  }
+}`;
+      const compileResult = compile(source);
+      assertIR(compileResult);
+
+      const previewResult = await preview({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+      });
+      const receipt = getReceipt(previewResult);
+      const wrongChainProvider = {
+        ...PROVIDER,
+        chainId: 137,
+      } as unknown as Provider;
+
+      const commitResult = await commit({
+        receipt,
+        wallet: WALLET,
+        provider: wrongChainProvider,
+        confirmCallback: async () => true,
+      });
+
+      expect(commitResult.success).toBe(false);
+      expect(commitResult.error?.code).toBe("CHAIN_MISMATCH");
+      expect(commitResult.error?.message).toContain("137");
+      expect(commitResult.error?.message).toContain("1");
+    });
+
     test("forwards vault from receipt to adapter context", async () => {
       const SIGNER: Address = "0x0000000000000000000000000000000000000099";
       const SPELL_VAULT: Address = "0x0000000000000000000000000000000000000077";
-      let capturedContext: { walletAddress?: string; vault?: string } | undefined;
+      let capturedContext:
+        | { walletAddress?: string; vault?: string; assets?: AssetDef[] }
+        | undefined;
 
       const adapterWithCapture: VenueAdapter = {
         meta: {
@@ -1155,6 +1307,7 @@ describe("Preview/Commit E2E", () => {
           capturedContext = {
             walletAddress: ctx.walletAddress,
             vault: ctx.vault,
+            assets: ctx.assets,
           };
           return mockBuiltTx;
         },
@@ -1200,6 +1353,7 @@ describe("Preview/Commit E2E", () => {
       expect(capturedContext).toBeDefined();
       expect(capturedContext?.walletAddress).toBe(SIGNER);
       expect(capturedContext?.vault).toBe(SPELL_VAULT);
+      expect(capturedContext?.assets).toEqual(receipt.assets);
     });
   });
 });

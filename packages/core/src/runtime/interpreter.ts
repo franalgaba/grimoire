@@ -585,6 +585,39 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
 
   // Execute planned actions
   const { chainId } = receipt.chainContext;
+  if (options.provider && options.provider.chainId !== chainId) {
+    const structuredError = createStructuredError(
+      "commit",
+      "CHAIN_MISMATCH",
+      `Provider chain ${options.provider.chainId} does not match receipt chain ${chainId}. ` +
+        `Provide a provider for chain ${chainId} or omit it to auto-create one.`
+    );
+    ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+    return {
+      success: false,
+      receiptId: receipt.id,
+      transactions: [],
+      driftChecks,
+      finalState: receipt.finalState,
+      ledgerEvents: ledger.getEntries(),
+      error: structuredError,
+    };
+  }
+
+  const resolvedAssets = resolveAuthoritativeAssets(receipt.assets, options.assets);
+  if (resolvedAssets.error) {
+    ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
+    return {
+      success: false,
+      receiptId: receipt.id,
+      transactions: [],
+      driftChecks,
+      finalState: receipt.finalState,
+      ledgerEvents: ledger.getEntries(),
+      error: resolvedAssets.error,
+    };
+  }
+
   const provider = options.provider ?? createProvider(chainId, options.rpcUrl);
   const executor = createExecutor({
     wallet,
@@ -595,6 +628,7 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
     progressCallback: options.progressCallback,
     skipTestnetConfirmation: options.skipTestnetConfirmation,
     adapters: options.adapters,
+    assets: resolvedAssets.assets,
   });
 
   const transactions: CommitResult["transactions"] = [];
@@ -830,6 +864,17 @@ export async function buildTransactions(
     return lazyProvider;
   };
 
+  const resolvedAssets = resolveAuthoritativeAssets(receipt.assets, options.assets);
+  if (resolvedAssets.error) {
+    return {
+      success: false,
+      receiptId: receipt.id,
+      transactions: [],
+      driftChecks: driftResult.driftChecks,
+      error: resolvedAssets.error,
+    };
+  }
+
   const transactions: BuildTransactionsResult["transactions"] = [];
 
   for (const planned of receipt.plannedActions) {
@@ -842,7 +887,7 @@ export async function buildTransactions(
         options.walletAddress,
         receipt.chainContext.vault,
         registry,
-        options.assets
+        resolvedAssets.assets
       );
       transactions.push({
         stepId: planned.stepId,
@@ -1182,6 +1227,7 @@ function buildReceipt(opts: {
     status: opts.status,
     metrics: { ...opts.ctx.metrics },
     finalState: getPersistentStateObject(opts.ctx),
+    assets: cloneAssetDefs(opts.spell.assets),
     error: opts.error,
   };
 }
@@ -1248,6 +1294,45 @@ function formatStructuredError(error: StructuredError): string {
   return `[${error.code}] ${error.message}`;
 }
 
+function cloneAssetDefs(assets: AssetDef[] | undefined): AssetDef[] | undefined {
+  if (!assets) return undefined;
+  return assets.map((asset) => ({
+    symbol: asset.symbol,
+    chain: asset.chain,
+    address: asset.address,
+    decimals: asset.decimals,
+  }));
+}
+
+function resolveAuthoritativeAssets(
+  receiptAssets: AssetDef[] | undefined,
+  optionAssets: AssetDef[] | undefined
+): { assets?: AssetDef[]; error?: StructuredError } {
+  if (receiptAssets && optionAssets) {
+    const canonicalReceipt = JSON.stringify(canonicalizeAssetDefs(receiptAssets) ?? []);
+    const canonicalOptions = JSON.stringify(canonicalizeAssetDefs(optionAssets) ?? []);
+    if (canonicalReceipt !== canonicalOptions) {
+      return {
+        error: createStructuredError(
+          "commit",
+          "ASSET_CONTEXT_MISMATCH",
+          "Provided assets conflict with receipt assets. Reuse the receipt assets or run preview again."
+        ),
+      };
+    }
+  }
+
+  if (receiptAssets) {
+    return { assets: cloneAssetDefs(receiptAssets) };
+  }
+
+  if (optionAssets) {
+    return { assets: cloneAssetDefs(optionAssets) };
+  }
+
+  return {};
+}
+
 function registerIssuedReceipt(receipt: Receipt): void {
   issuedReceipts.set(receipt.id, {
     spellId: receipt.spellId,
@@ -1279,10 +1364,52 @@ function canonicalizeReceiptFields(receipt: Receipt): string {
       action: pa.action,
       onFailure: pa.onFailure,
     })),
+    assets: canonicalizeAssetDefs(receipt.assets),
   };
   return JSON.stringify(critical, (_key, value) =>
     typeof value === "bigint" ? `__bigint__${value.toString()}` : value
   );
+}
+
+function canonicalizeReceiptFieldsLegacy(receipt: Receipt): string {
+  const critical = {
+    id: receipt.id,
+    spellId: receipt.spellId,
+    chainId: receipt.chainContext.chainId,
+    vault: receipt.chainContext.vault,
+    timestamp: receipt.timestamp,
+    status: receipt.status,
+    plannedActions: receipt.plannedActions.map((pa) => ({
+      stepId: pa.stepId,
+      venue: pa.venue,
+      action: pa.action,
+      onFailure: pa.onFailure,
+    })),
+  };
+  return JSON.stringify(critical, (_key, value) =>
+    typeof value === "bigint" ? `__bigint__${value.toString()}` : value
+  );
+}
+
+function canonicalizeAssetDefs(
+  assets: AssetDef[] | undefined
+): Array<{ symbol: string; chain: number; address: Address; decimals?: number }> | undefined {
+  if (!assets || assets.length === 0) {
+    return undefined;
+  }
+
+  return [...assets]
+    .map((asset) => ({
+      symbol: asset.symbol.trim().toUpperCase(),
+      chain: asset.chain,
+      address: asset.address.toLowerCase() as Address,
+      decimals: asset.decimals,
+    }))
+    .sort((left, right) => {
+      if (left.symbol !== right.symbol) return left.symbol.localeCompare(right.symbol);
+      if (left.chain !== right.chain) return left.chain - right.chain;
+      return left.address.localeCompare(right.address);
+    });
 }
 
 /**
@@ -1301,9 +1428,26 @@ export function signReceipt(receipt: Receipt, secret: string): string {
  */
 function verifyReceiptIntegrity(receipt: Receipt, secret: string, integrity: string): boolean {
   const expected = signReceipt(receipt, secret);
-  if (expected.length !== integrity.length) return false;
+  if (integrityMatches(expected, integrity)) {
+    return true;
+  }
+
+  // Backward compatibility with receipts signed before assets were added to
+  // canonicalization payload.
+  if (receipt.assets !== undefined) {
+    return false;
+  }
+
+  const legacyExpected = createHmac("sha256", secret)
+    .update(canonicalizeReceiptFieldsLegacy(receipt))
+    .digest("hex");
+  return integrityMatches(legacyExpected, integrity);
+}
+
+function integrityMatches(expected: string, actual: string): boolean {
+  if (expected.length !== actual.length) return false;
   try {
-    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(integrity, "hex"));
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(actual, "hex"));
   } catch {
     return false;
   }
