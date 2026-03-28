@@ -9,7 +9,7 @@ import type {
   BridgeLifecycleStatusResult,
   CrossChainTrackRole,
 } from "../types/cross-chain.js";
-import type { Address } from "../types/primitives.js";
+import type { Address, AssetDef } from "../types/primitives.js";
 import type { Provider } from "../wallet/provider.js";
 import type { BuiltTransaction } from "../wallet/tx-builder.js";
 
@@ -75,6 +75,8 @@ export interface VenueAdapterContext {
   };
   /** Optional warning sink for adapter-level warnings. */
   onWarning?: (message: string) => void;
+  /** Spell-defined asset definitions for address resolution. */
+  assets?: AssetDef[];
 }
 
 export interface OffchainExecutionResult {
