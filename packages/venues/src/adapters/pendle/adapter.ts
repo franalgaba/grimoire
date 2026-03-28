@@ -240,6 +240,11 @@ export function isSupportedPendleAction(action: Action): boolean {
 /**
  * Merge spell-defined asset addresses into the adapter config tokenMap
  * so that resolveAssetAddress can find them by symbol.
+ *
+ * Chain matching: prefer assets whose chain matches ctx.chainId, but also
+ * include assets with explicit addresses regardless of chain — the spell's
+ * asset `chain` field defaults to 1 (mainnet) when omitted, which would
+ * cause mismatches when running on other chains (e.g. 8453/Base).
  */
 function mergeSpellAssets(
   config: PendleAdapterConfig,
@@ -247,13 +252,21 @@ function mergeSpellAssets(
 ): PendleAdapterConfig {
   if (!ctx.assets || ctx.assets.length === 0) return config;
 
-  const relevantAssets = ctx.assets.filter((a) => a.chain === ctx.chainId && a.address);
-  if (relevantAssets.length === 0) return config;
+  const assetsWithAddress = ctx.assets.filter((a) => a.address);
+  if (assetsWithAddress.length === 0) return config;
 
   const existing = config.tokenMap?.[ctx.chainId] ?? {};
   const merged: Record<string, Address> = { ...existing };
-  for (const asset of relevantAssets) {
-    if (!merged[asset.symbol]) {
+
+  // First pass: add assets from non-matching chains (lower priority)
+  for (const asset of assetsWithAddress) {
+    if (asset.chain !== ctx.chainId && !merged[asset.symbol]) {
+      merged[asset.symbol] = asset.address;
+    }
+  }
+  // Second pass: chain-matched assets take priority
+  for (const asset of assetsWithAddress) {
+    if (asset.chain === ctx.chainId) {
       merged[asset.symbol] = asset.address;
     }
   }
@@ -261,7 +274,7 @@ function mergeSpellAssets(
   return { ...config, tokenMap: { ...config.tokenMap, [ctx.chainId]: merged } };
 }
 
-const PENDLE_TOKEN_PREFIX = /^(PT|YT|SY)[_-]/i;
+const PENDLE_TOKEN_PREFIX = /^(PT|YT|SY)([_-]|\w)/i;
 
 /**
  * Extract all asset symbols from an action that might need Pendle API resolution.

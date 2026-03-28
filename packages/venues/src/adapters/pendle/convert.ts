@@ -223,12 +223,12 @@ export function resolveAssetAddress(
   } catch {
     // Pendle PT/YT/SY tokens aren't in the shared token registry.
     // Provide a helpful error message so the agent can retry with an address.
-    const isPendleToken = /^(PT|YT|SY)[_-]/i.test(asset);
+    const isPendleToken = /^(PT|YT|SY)([_-]|\w)/i.test(asset) && asset.length > 2;
     if (isPendleToken) {
       throw new Error(
         `Unknown Pendle asset '${asset}' on chain ${chainId}. ` +
           `PT/YT/SY tokens require explicit addresses. ` +
-          `Use 'grimoire venue pendle assets --chain ${chainId} --query ${asset.replace(/^(PT|YT|SY)[_-]/i, "")}' to find the address, ` +
+          `Use 'grimoire venue pendle assets --chain ${chainId} --query ${asset.replace(/^(PT|YT|SY)[_-]?/i, "")}' to find the address, ` +
           `then use the 0x address directly in the spell.`
       );
     }
