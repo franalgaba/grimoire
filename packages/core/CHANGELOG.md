@@ -1,5 +1,11 @@
 # @grimoirelabs/core
 
+## 0.17.4
+
+### Patch Changes
+
+- a3e1b89: Thread spell-defined asset addresses to venue adapters so custom tokens with explicit addresses (e.g. PTYOETH) are resolved correctly instead of throwing "Unknown asset" errors.
+
 ## 0.17.3
 
 ### Patch Changes
