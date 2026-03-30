@@ -7,6 +7,11 @@ const FACTORY_ABI = parseAbi(["function getPool(address,address,uint24) view ret
 const POOL_ABI = parseAbi(["function liquidity() view returns (uint128)"]);
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const DEFAULT_FEES = [500, 3000, 10000];
+const DEFAULT_POOL_FACTORIES: Record<number, string> = {
+  ...defaultUniswapV3Factories,
+  // Uniswap V3 Base deployment factory (8453)
+  8453: "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
+};
 
 // --- Types ---
 
@@ -48,7 +53,7 @@ export type PoolOptions = {
 
 type FetchPoolsOnchainOptions = {
   chainId: number;
-  rpcUrl: string;
+  rpcUrl?: string;
   factory: string;
   token0: TokenInfo;
   token1: TokenInfo;
@@ -103,12 +108,11 @@ export async function fetchPoolsWithFallbackMeta(
   const token0Info = await resolveTokenInfo(options.token0, options.chain, options.source);
   const token1Info = await resolveTokenInfo(options.token1, options.chain, options.source);
   const envGraphKey = graphKey ?? process.env.GRAPH_API_KEY;
-  const hasGraphConfig = Boolean(
-    options.endpoint || envGraphKey || options.subgraphId || V3_SUBGRAPH_IDS[options.chain]
-  );
+  const subgraphId = options.subgraphId ?? V3_SUBGRAPH_IDS[options.chain];
+  const hasGraphConfig = Boolean(options.endpoint || (subgraphId && envGraphKey));
 
-  if (rpcUrl && !hasGraphConfig) {
-    const resolvedFactory = options.factory ?? defaultUniswapV3Factories[options.chain];
+  if (!hasGraphConfig) {
+    const resolvedFactory = options.factory ?? DEFAULT_POOL_FACTORIES[options.chain];
     if (!resolvedFactory) {
       throw new Error(
         `No factory configured for chain ${options.chain}. Provide --factory to use RPC mode.`
@@ -140,13 +144,8 @@ export async function fetchPoolsWithFallbackMeta(
     );
     return { pools, usedRpc: false };
   } catch (error) {
-    if (!rpcUrl) throw error;
-    const resolvedFactory = options.factory ?? defaultUniswapV3Factories[options.chain];
-    if (!resolvedFactory) {
-      throw new Error(
-        `No factory configured for chain ${options.chain}. Provide --factory to use RPC mode.`
-      );
-    }
+    const resolvedFactory = options.factory ?? DEFAULT_POOL_FACTORIES[options.chain];
+    if (!resolvedFactory) throw error;
     const pools = await fetchPoolsOnchain({
       chainId: options.chain,
       rpcUrl,

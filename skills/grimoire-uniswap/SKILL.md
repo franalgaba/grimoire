@@ -32,7 +32,7 @@ Recommended preflight:
 Pools can be fetched from The Graph (subgraph) or directly from on-chain factory contracts:
 
 - **Subgraph** (default when `GRAPH_API_KEY` is set): queries The Graph decentralized network. Built-in subgraph IDs for Ethereum, Optimism, Polygon, Base, Arbitrum.
-- **RPC** (fallback): if `--rpc-url` or `RPC_URL` is set and no graph key is available, pools uses on-chain factory lookups.
+- **RPC** (fallback): if no usable graph config is present, pools uses on-chain factory lookups (with `--rpc-url`/`RPC_URL` when provided, otherwise chain default RPC where available).
 - To force RPC mode: provide `--rpc-url` and omit `--graph-key`.
 
 ## Environment Variables
@@ -101,6 +101,7 @@ Always set both `max_slippage` and `min_output` for swaps to prevent unexpected 
 ## Notes
 
 - CLI currently exposes V3 metadata. V4 adapter is available programmatically via `createUniswapV4Adapter()`.
+- For metadata lookups (`tokens`, `pools`), use `grimoire venue uniswap ...` even when your spell venue is `uniswap_v4`.
 - Outputs JSON/table; `tokens` and `pools` also support `--format spell`.
 - Prefer `--format json` for automation and reproducible snapshots.
 - Only metadata is exposed (no on-chain quote endpoints).

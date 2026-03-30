@@ -66,7 +66,6 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
     supportsQuote: true,
     supportsSimulation: true,
     supportsPreviewCommit: true,
-    dataEndpoints: ["info", "routers", "tokens", "pools"],
     description: "Uniswap V4 swap adapter (Universal Router v2)",
   };
 

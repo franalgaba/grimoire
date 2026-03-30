@@ -101,7 +101,7 @@ Implementation notes:
 
 - Type: `evm`
 - Actions: `swap`
-- Data endpoints: `info`, `routers`, `tokens`, `pools`
+- Data endpoints: none on adapter metadata (use `grimoire venue uniswap ...` for token/pool discovery)
 
 Implementation notes:
 
