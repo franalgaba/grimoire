@@ -23,7 +23,7 @@ import {
   SqliteStateStore,
   toCrossChainReceipt,
 } from "@grimoirelabs/core";
-import { adapters, createHyperliquidAdapter } from "@grimoirelabs/venues";
+import { adapters, createHyperliquidAdapter, createPolymarketAdapter } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import {
@@ -112,7 +112,7 @@ export interface ExecuteCrossChainCastInput {
   replayResolution: ReplayResolution;
 }
 
-export function configureHyperliquidAdapters(keyConfig: KeyConfig): VenueAdapter[] {
+export function configureOffchainAdapters(keyConfig: KeyConfig): VenueAdapter[] {
   try {
     const rawKey = loadPrivateKey(keyConfig);
     return adapters.map((adapter) => {
@@ -120,6 +120,11 @@ export function configureHyperliquidAdapters(keyConfig: KeyConfig): VenueAdapter
         return createHyperliquidAdapter({
           privateKey: rawKey,
           assetMap: { ETH: 4 },
+        });
+      }
+      if (adapter.meta.name === "polymarket") {
+        return createPolymarketAdapter({
+          privateKey: rawKey,
         });
       }
       return adapter;
@@ -256,7 +261,7 @@ export async function executeCrossChainCast(input: ExecuteCrossChainCastInput): 
 
   if (input.mode === "execute") {
     keyConfig = await resolveKeyConfig(input.options, spinner);
-    configuredAdapters = configureHyperliquidAdapters(keyConfig);
+    configuredAdapters = configureOffchainAdapters(keyConfig);
     sourceWallet = createWalletFromConfig(keyConfig, input.sourceChainId, sourceProvider.rpcUrl);
     destinationWallet = createWalletFromConfig(
       keyConfig,
@@ -265,7 +270,7 @@ export async function executeCrossChainCast(input: ExecuteCrossChainCastInput): 
     );
   } else if (input.hasKey) {
     keyConfig = await resolveKeyConfig(input.options, spinner);
-    configuredAdapters = configureHyperliquidAdapters(keyConfig);
+    configuredAdapters = configureOffchainAdapters(keyConfig);
   }
 
   const vault = resolveVaultAddress(input.options.vault, sourceWallet?.address);

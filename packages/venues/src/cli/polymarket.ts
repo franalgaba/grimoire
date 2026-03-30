@@ -5,6 +5,7 @@ import {
   OFFICIAL_CLI_BINARY,
   probeOfficialCli,
   runOfficialCli,
+  runOfficialJsonCommand,
 } from "./polymarket-official-cli.js";
 import {
   DEFAULT_SEARCH_MAX_PAGES,
@@ -12,16 +13,7 @@ import {
   streamSearchMarkets,
 } from "./polymarket-search.js";
 
-const OFFICIAL_ALLOWED_TOP_LEVEL = new Set([
-  "markets",
-  "events",
-  "tags",
-  "series",
-  "sports",
-  "clob",
-  "data",
-  "status",
-]);
+const OFFICIAL_PASSTHROUGH_GROUPS = new Set(["markets", "data"]);
 const COMPAT_ALLOWED_TOP_LEVEL = new Set([
   "info",
   "search-markets",
@@ -42,6 +34,257 @@ const COMPAT_ALLOWED_TOP_LEVEL = new Set([
   "balance-allowance",
   "closed-only-mode",
 ]);
+
+const SIGNATURE_TYPES = ["eoa", "proxy", "gnosis-safe"] as const;
+
+const officialAuthOptions = {
+  privateKey: z.string().optional().describe("Private key for official CLI auth"),
+  signatureType: z
+    .enum(SIGNATURE_TYPES)
+    .optional()
+    .describe("Signature type override: eoa, proxy, or gnosis-safe"),
+};
+
+type OfficialAuthOptions = {
+  privateKey?: string;
+  signatureType?: (typeof SIGNATURE_TYPES)[number];
+};
+
+type PaginationOptions = {
+  limit?: number;
+  offset?: number;
+};
+
+const paginationOptions = {
+  limit: z.coerce.number().optional().describe("Maximum results"),
+  offset: z.coerce.number().optional().describe("Pagination offset"),
+};
+
+const walletAddressArg = z.object({
+  address: z.string().describe("Wallet address"),
+});
+
+const marketsCli = Cli.create("markets", {
+  description: "Official Polymarket markets namespace",
+})
+  .command("list", {
+    description: "List markets with optional filters",
+    options: z.object({
+      ...officialAuthOptions,
+      active: z.boolean().optional().describe("Filter by active status"),
+      closed: z.boolean().optional().describe("Filter by closed status"),
+      ...paginationOptions,
+      order: z.string().optional().describe("Sort field"),
+      ascending: z.boolean().optional().describe("Sort ascending"),
+    }),
+    run(c) {
+      const args = ["markets", "list"];
+      appendBooleanOption(args, "--active", c.options.active);
+      appendBooleanOption(args, "--closed", c.options.closed);
+      appendPagination(args, c.options);
+      appendOptional(args, "--order", c.options.order);
+      if (c.options.ascending) args.push("--ascending");
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  })
+  .command("get", {
+    description: "Get a single market by ID or slug",
+    args: z.object({
+      id: z.string().describe("Market ID or slug"),
+    }),
+    options: z.object({
+      ...officialAuthOptions,
+    }),
+    run(c) {
+      const args = ["markets", "get", c.args.id];
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  })
+  .command("search", {
+    description: "Search markets",
+    args: z.object({
+      query: z.string().describe("Search query"),
+    }),
+    options: z.object({
+      ...officialAuthOptions,
+      limit: z.coerce.number().optional().describe("Maximum results per type"),
+    }),
+    run(c) {
+      const args = ["markets", "search", c.args.query];
+      appendOptional(args, "--limit", c.options.limit);
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  })
+  .command("tags", {
+    description: "Get tags for a market",
+    args: z.object({
+      id: z.string().describe("Market ID"),
+    }),
+    options: z.object({
+      ...officialAuthOptions,
+    }),
+    run(c) {
+      const args = ["markets", "tags", c.args.id];
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  });
+
+const dataCli = Cli.create("data", {
+  description: "Official Polymarket data namespace",
+})
+  .command("positions", {
+    description: "Get open positions for a wallet address",
+    args: walletAddressArg,
+    options: z.object({
+      ...officialAuthOptions,
+      ...paginationOptions,
+    }),
+    run(c) {
+      const args = ["data", "positions", c.args.address];
+      appendPagination(args, c.options);
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  })
+  .command("closed-positions", {
+    description: "Get closed positions for a wallet address",
+    args: walletAddressArg,
+    options: z.object({
+      ...officialAuthOptions,
+      ...paginationOptions,
+    }),
+    run(c) {
+      const args = ["data", "closed-positions", c.args.address];
+      appendPagination(args, c.options);
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  })
+  .command("value", {
+    description: "Get total position value for a wallet address",
+    args: walletAddressArg,
+    options: z.object({
+      ...officialAuthOptions,
+    }),
+    run(c) {
+      return c.ok(runOfficialJsonWithAuth(["data", "value", c.args.address], c.options));
+    },
+  })
+  .command("traded", {
+    description: "Get count of unique markets traded by a wallet",
+    args: walletAddressArg,
+    options: z.object({
+      ...officialAuthOptions,
+    }),
+    run(c) {
+      return c.ok(runOfficialJsonWithAuth(["data", "traded", c.args.address], c.options));
+    },
+  })
+  .command("trades", {
+    description: "Get trade history for a wallet",
+    args: walletAddressArg,
+    options: z.object({
+      ...officialAuthOptions,
+      ...paginationOptions,
+    }),
+    run(c) {
+      const args = ["data", "trades", c.args.address];
+      appendPagination(args, c.options);
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  })
+  .command("activity", {
+    description: "Get on-chain activity for a wallet address",
+    args: walletAddressArg,
+    options: z.object({
+      ...officialAuthOptions,
+      ...paginationOptions,
+    }),
+    run(c) {
+      const args = ["data", "activity", c.args.address];
+      appendPagination(args, c.options);
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  })
+  .command("holders", {
+    description: "Get top token holders for a market",
+    args: z.object({
+      market: z.string().describe("Market condition ID"),
+    }),
+    options: z.object({
+      ...officialAuthOptions,
+      limit: z.coerce.number().optional().describe("Maximum results per token"),
+    }),
+    run(c) {
+      const args = ["data", "holders", c.args.market];
+      appendOptional(args, "--limit", c.options.limit);
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  })
+  .command("open-interest", {
+    description: "Get open interest for a market",
+    args: z.object({
+      market: z.string().describe("Market condition ID"),
+    }),
+    options: z.object({
+      ...officialAuthOptions,
+    }),
+    run(c) {
+      return c.ok(runOfficialJsonWithAuth(["data", "open-interest", c.args.market], c.options));
+    },
+  })
+  .command("volume", {
+    description: "Get live volume for an event",
+    args: z.object({
+      id: z.string().describe("Event ID"),
+    }),
+    options: z.object({
+      ...officialAuthOptions,
+    }),
+    run(c) {
+      return c.ok(runOfficialJsonWithAuth(["data", "volume", c.args.id], c.options));
+    },
+  })
+  .command("leaderboard", {
+    description: "Trader leaderboard",
+    options: z.object({
+      ...officialAuthOptions,
+      period: z.enum(["day", "week", "month", "all"]).optional().describe("Time period"),
+      orderBy: z.enum(["pnl", "vol"]).optional().describe("Order field"),
+      ...paginationOptions,
+    }),
+    run(c) {
+      const args = ["data", "leaderboard"];
+      appendOptional(args, "--period", c.options.period);
+      appendOptional(args, "--order-by", c.options.orderBy);
+      appendPagination(args, c.options);
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  })
+  .command("builder-leaderboard", {
+    description: "Builder leaderboard",
+    options: z.object({
+      ...officialAuthOptions,
+      period: z.enum(["day", "week", "month", "all"]).optional().describe("Time period"),
+      ...paginationOptions,
+    }),
+    run(c) {
+      const args = ["data", "builder-leaderboard"];
+      appendOptional(args, "--period", c.options.period);
+      appendPagination(args, c.options);
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  })
+  .command("builder-volume", {
+    description: "Builder volume time-series",
+    options: z.object({
+      ...officialAuthOptions,
+      period: z.enum(["day", "week", "month", "all"]).optional().describe("Time period"),
+    }),
+    run(c) {
+      const args = ["data", "builder-volume"];
+      appendOptional(args, "--period", c.options.period);
+      return c.ok(runOfficialJsonWithAuth(args, c.options));
+    },
+  });
 
 const cli = Cli.create("grimoire-polymarket", {
   description: "Polymarket prediction market data — search, events, CLOB, and trading",
@@ -66,7 +309,7 @@ const cli = Cli.create("grimoire-polymarket", {
           installed: probe.installed,
           version: probe.version,
           compatibilityCommands: Array.from(COMPAT_ALLOWED_TOP_LEVEL),
-          passthroughGroups: Array.from(OFFICIAL_ALLOWED_TOP_LEVEL),
+          passthroughGroups: Array.from(OFFICIAL_PASSTHROUGH_GROUPS),
         },
         { cta: { commands: ['search-markets --query "..."'] } }
       );
@@ -131,6 +374,8 @@ const cli = Cli.create("grimoire-polymarket", {
       return c.ok(data, { cta: { commands: ["market --conditionId <id>"] } });
     },
   })
+  .command(marketsCli)
+  .command(dataCli)
   .command("status", {
     description: "Check Polymarket API status",
     run() {
@@ -318,3 +563,29 @@ const cli = Cli.create("grimoire-polymarket", {
   });
 
 cli.serve();
+
+function appendOptional(args: string[], flag: string, value: string | number | undefined): void {
+  if (value === undefined) return;
+  args.push(flag, String(value));
+}
+
+function appendBooleanOption(args: string[], flag: string, value: boolean | undefined): void {
+  if (value === undefined) return;
+  args.push(flag, value ? "true" : "false");
+}
+
+function appendPagination(args: string[], options: PaginationOptions): void {
+  appendOptional(args, "--limit", options.limit);
+  appendOptional(args, "--offset", options.offset);
+}
+
+function appendAuthArgs(args: string[], options: OfficialAuthOptions): void {
+  appendOptional(args, "--private-key", options.privateKey);
+  appendOptional(args, "--signature-type", options.signatureType);
+}
+
+function runOfficialJsonWithAuth(args: string[], options: OfficialAuthOptions): unknown {
+  const next = [...args];
+  appendAuthArgs(next, options);
+  return runOfficialJsonCommand(next);
+}

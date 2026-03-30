@@ -31,7 +31,7 @@ import { resolveAdvisorSkillsDirs } from "./advisor-skill-helpers.js";
 import { resolveAdvisoryHandler } from "./advisory-handlers.js";
 import { createAdvisoryLiveTraceLogger } from "./advisory-live-trace.js";
 import {
-  configureHyperliquidAdapters,
+  configureOffchainAdapters,
   executeCrossChainCast,
   resolveKeystorePassword,
   safeGetBlockNumber,
@@ -297,7 +297,7 @@ async function executeWithWallet(
     keyConfig = { type: "keystore", source: keystoreJson, password };
   }
 
-  const configuredAdapters: VenueAdapter[] = configureHyperliquidAdapters(keyConfig);
+  const configuredAdapters: VenueAdapter[] = configureOffchainAdapters(keyConfig);
 
   const rpcUrl = resolveRpcUrlFromOption(chainId, options.rpcUrl);
   if (!rpcUrl) {

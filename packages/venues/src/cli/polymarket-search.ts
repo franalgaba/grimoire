@@ -144,9 +144,13 @@ export function* streamSearchMarkets(
   const event = (options.event ?? "").trim();
   const tag = (options.tag ?? "").trim();
 
-  if (!query && !slug && !question && !sport && !category && !league && !event && !tag) {
+  const hasTextOrEntityFilter =
+    !!query || !!slug || !!question || !!sport || !!category || !!league || !!event || !!tag;
+  const hasBooleanFilter = options.openOnly || options.activeOnly || options.tradableOnly;
+
+  if (!hasTextOrEntityFilter && !hasBooleanFilter) {
     throw new Error(
-      "search-markets requires at least one of --query, --slug, --question, --sport, --category, --league, --event, or --tag"
+      "search-markets requires at least one of --query, --slug, --question, --sport, --category, --league, --event, --tag, --open-only, --active-only, or --tradable-only"
     );
   }
 

@@ -310,7 +310,7 @@ Behavior notes:
 
 - Always runs preview first.
 - Commits only when mode is `execute`, a wallet exists, and receipt has planned actions.
-- Hyperliquid adapter is key-configured dynamically in wallet paths.
+- Hyperliquid and Polymarket adapters are key-configured dynamically in wallet paths.
 - In cross-chain mode, source and destination runs share one logical `runId`.
 - If `--watch` is not set in execute mode, runs can return a waiting state and must be continued with `resume`.
 
@@ -365,6 +365,7 @@ Example:
 
 - `grimoire venue pendle chains`
 - `grimoire venue polymarket markets list --limit 10 --format json`
+- `grimoire venue polymarket data positions <address> --limit 10 --format json`
 - `grimoire venue polymarket search-markets --category sports --league "la liga" --active-only true --open-only true --format json`
 
 ## `venue doctor`
