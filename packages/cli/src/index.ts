@@ -328,14 +328,26 @@ const cli = Cli.create("grimoire", {
     description: "Run venue metadata commands (proxy to @grimoirelabs/venues CLIs)",
     args: z.object({
       adapter: z.string().optional().describe("Venue adapter name"),
+      venue: z.string().optional().describe("Alias for adapter (agent/JSON mode)"),
+      args: z
+        .union([z.string(), z.array(z.string())])
+        .optional()
+        .describe("Pass-through arguments for venue CLI"),
+    }),
+    options: z.object({
+      adapter: z.string().optional().describe("Venue adapter name"),
+      venue: z.string().optional().describe("Alias for adapter"),
+      args: z
+        .union([z.string(), z.array(z.string())])
+        .optional()
+        .describe("Pass-through arguments for venue CLI"),
     }),
     hint: "Pass additional arguments after the adapter name, e.g.: grimoire venue uniswap tokens --chain 1",
     async run(c) {
-      // Collect remaining argv after 'venue <adapter>' as pass-through args
-      const argv = process.argv;
-      const venueIdx = argv.indexOf("venue");
-      const passArgs = venueIdx >= 0 ? argv.slice(venueIdx + 2) : [];
-      await venueCommand(c.args.adapter ?? "", passArgs);
+      const adapter = c.args.adapter ?? c.args.venue ?? c.options.adapter ?? c.options.venue ?? "";
+      const passArgs = getVenuePassArgsFromArgv(process.argv);
+      const structuredArgs = c.args.args ?? c.options.args ?? [];
+      await venueCommand(adapter, passArgs.length > 0 ? passArgs : structuredArgs);
       return c.ok({ success: true });
     },
   })
@@ -405,9 +417,12 @@ const cli = Cli.create("grimoire", {
 // Bypass incur's parser for `venue` — it rejects unknown flags that
 // are actually meant for the proxied venue CLI (e.g. --query, --chain).
 const firstArg = process.argv[2];
-if (firstArg === "venue") {
+const secondArg = process.argv[3] ?? "";
+const shouldBypassVenueParser =
+  firstArg === "venue" && secondArg.length > 0 && !secondArg.startsWith("-");
+if (shouldBypassVenueParser) {
   const adapter = process.argv[3] ?? "";
-  const passArgs = process.argv.slice(4);
+  const passArgs = getVenuePassArgsFromArgv(process.argv);
   venueCommand(adapter, passArgs).catch((err) => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`${msg}`);
@@ -415,4 +430,12 @@ if (firstArg === "venue") {
   });
 } else {
   cli.serve();
+}
+
+function getVenuePassArgsFromArgv(argv: string[]): string[] {
+  const venueIdx = argv.indexOf("venue");
+  if (venueIdx < 0) return [];
+  const adapterToken = argv[venueIdx + 1];
+  if (!adapterToken || adapterToken.startsWith("-")) return [];
+  return argv.slice(venueIdx + 2);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { normalizeAdapter, resolveVenueCliPath, venueCommand } from "./venue.js";
+import { normalizeAdapter, parseVenueArgs, resolveVenueCliPath, venueCommand } from "./venue.js";
 
 describe("venue command helpers", () => {
   it("normalizes adapter names", () => {
@@ -18,6 +18,15 @@ describe("venue command helpers", () => {
         ? normalized.endsWith("src/cli/morpho-blue.ts")
         : normalized.endsWith("dist/cli/morpho-blue.js")
     ).toBe(true);
+  });
+
+  it("parses pass-through args from a single string", () => {
+    expect(parseVenueArgs("spot-meta --format table")).toEqual(["spot-meta", "--format", "table"]);
+    expect(parseVenueArgs('l2-book --coin "HYPE PERP"')).toEqual([
+      "l2-book",
+      "--coin",
+      "HYPE PERP",
+    ]);
   });
 
   it("prints usage for missing adapter", () => {
