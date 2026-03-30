@@ -1,5 +1,15 @@
 # @grimoirelabs/venues
 
+## 0.10.15
+
+### Patch Changes
+
+- 356c511: Improve Polymarket offchain execution wiring and venue CLI coverage.
+
+  - Reuse the loaded wallet-manager key for Polymarket adapter configuration in `cast`/`resume` wallet paths (matching Hyperliquid behavior), avoiding a separate Polymarket private key requirement in those flows.
+  - Expose first-class Polymarket `markets` and `data` command namespaces in the venue CLI wrapper with JSON passthrough and optional auth flags.
+  - Fix `search-markets` validation to allow boolean-only filters (`open-only`, `active-only`, `tradable-only`) and add regression test coverage.
+
 ## 0.10.14
 
 ### Patch Changes
