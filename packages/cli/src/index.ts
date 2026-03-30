@@ -104,6 +104,8 @@ const morphoOptions = {
   morphoMarketMap: z.string().optional().describe("JSON file mapping actionRef -> marketId"),
 };
 
+const venuePassThroughArgsSchema = z.union([z.string(), z.array(z.string())]);
+
 // ── CLI ────────────────────────────────────────────────────────────
 
 const cli = Cli.create("grimoire", {
@@ -329,24 +331,18 @@ const cli = Cli.create("grimoire", {
     args: z.object({
       adapter: z.string().optional().describe("Venue adapter name"),
       venue: z.string().optional().describe("Alias for adapter (agent/JSON mode)"),
-      args: z
-        .union([z.string(), z.array(z.string())])
-        .optional()
-        .describe("Pass-through arguments for venue CLI"),
+      args: venuePassThroughArgsSchema.optional().describe("Pass-through arguments for venue CLI"),
     }),
     options: z.object({
       adapter: z.string().optional().describe("Venue adapter name"),
       venue: z.string().optional().describe("Alias for adapter"),
-      args: z
-        .union([z.string(), z.array(z.string())])
-        .optional()
-        .describe("Pass-through arguments for venue CLI"),
+      args: venuePassThroughArgsSchema.optional().describe("Pass-through arguments for venue CLI"),
     }),
     hint: "Pass additional arguments after the adapter name, e.g.: grimoire venue uniswap tokens --chain 1",
     async run(c) {
-      const adapter = c.args.adapter ?? c.args.venue ?? c.options.adapter ?? c.options.venue ?? "";
+      const adapter = resolveVenueAdapter(c.args, c.options);
       const passArgs = getVenuePassArgsFromArgv(process.argv);
-      const structuredArgs = c.args.args ?? c.options.args ?? [];
+      const structuredArgs = resolveStructuredVenueArgs(c.args, c.options);
       await venueCommand(adapter, passArgs.length > 0 ? passArgs : structuredArgs);
       return c.ok({ success: true });
     },
@@ -418,8 +414,7 @@ const cli = Cli.create("grimoire", {
 // are actually meant for the proxied venue CLI (e.g. --query, --chain).
 const firstArg = process.argv[2];
 const secondArg = process.argv[3] ?? "";
-const shouldBypassVenueParser =
-  firstArg === "venue" && secondArg.length > 0 && !secondArg.startsWith("-");
+const shouldBypassVenueParser = firstArg === "venue" && isPositionalVenueAdapter(secondArg);
 if (shouldBypassVenueParser) {
   const adapter = process.argv[3] ?? "";
   const passArgs = getVenuePassArgsFromArgv(process.argv);
@@ -436,6 +431,24 @@ function getVenuePassArgsFromArgv(argv: string[]): string[] {
   const venueIdx = argv.indexOf("venue");
   if (venueIdx < 0) return [];
   const adapterToken = argv[venueIdx + 1];
-  if (!adapterToken || adapterToken.startsWith("-")) return [];
+  if (!isPositionalVenueAdapter(adapterToken)) return [];
   return argv.slice(venueIdx + 2);
+}
+
+function resolveVenueAdapter(
+  args: { adapter?: string; venue?: string },
+  options: { adapter?: string; venue?: string }
+): string {
+  return args.adapter ?? args.venue ?? options.adapter ?? options.venue ?? "";
+}
+
+function resolveStructuredVenueArgs(
+  args: { args?: string | string[] },
+  options: { args?: string | string[] }
+): string | string[] {
+  return args.args ?? options.args ?? [];
+}
+
+function isPositionalVenueAdapter(token: string | undefined): boolean {
+  return Boolean(token && token.length > 0 && !token.startsWith("-"));
 }

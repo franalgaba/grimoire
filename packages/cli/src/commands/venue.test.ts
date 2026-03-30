@@ -36,7 +36,7 @@ describe("venue command helpers", () => {
       logs.push(String(message ?? ""));
     };
 
-    venueCommand("" as unknown as string).catch(() => {});
+    venueCommand("").catch(() => {});
 
     console.error = originalError;
     const output = logs.join("\n");

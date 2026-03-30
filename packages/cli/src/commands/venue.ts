@@ -13,6 +13,10 @@ import {
 } from "../lib/venue-discovery.js";
 import { venueDoctorCommand } from "./venue-doctor.js";
 
+type VenueArgs = string[] | string;
+
+const HELP_FLAGS = new Set(["--help", "-h"]);
+
 export function normalizeAdapter(adapter: string): string {
   return normalizeAdapterName(adapter);
 }
@@ -73,15 +77,15 @@ export function parseVenueArgs(rawArgs: string): string[] {
   return tokens;
 }
 
-function normalizeVenueArgs(args: string[] | string): string[] {
+function normalizeVenueArgs(args: VenueArgs): string[] {
   if (typeof args === "string") return parseVenueArgs(args);
   return args.filter((arg) => arg.length > 0);
 }
 
-export async function venueCommand(adapter: string, args: string[] | string = []): Promise<void> {
+export async function venueCommand(adapter: string, args: VenueArgs = []): Promise<void> {
   const passArgs = normalizeVenueArgs(args);
 
-  if (!adapter || adapter === "--help" || adapter === "-h") {
+  if (!adapter || HELP_FLAGS.has(adapter)) {
     printUsage();
     return;
   }
