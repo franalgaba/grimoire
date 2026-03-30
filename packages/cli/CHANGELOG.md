@@ -1,5 +1,11 @@
 # @grimoirelabs/cli
 
+## 0.15.16
+
+### Patch Changes
+
+- e93d428: Fix `grimoire venue` passthrough argument routing for both positional and structured invocation modes. This includes proper handling of string/array passthrough args and prevents argv fallback from corrupting adapter commands (notably affecting Hyperliquid and Polymarket flows).
+
 ## 0.15.15
 
 ### Patch Changes
