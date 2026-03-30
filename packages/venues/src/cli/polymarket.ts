@@ -50,6 +50,20 @@ type OfficialAuthOptions = {
   signatureType?: (typeof SIGNATURE_TYPES)[number];
 };
 
+type PaginationOptions = {
+  limit?: number;
+  offset?: number;
+};
+
+const paginationOptions = {
+  limit: z.coerce.number().optional().describe("Maximum results"),
+  offset: z.coerce.number().optional().describe("Pagination offset"),
+};
+
+const walletAddressArg = z.object({
+  address: z.string().describe("Wallet address"),
+});
+
 const marketsCli = Cli.create("markets", {
   description: "Official Polymarket markets namespace",
 })
@@ -59,8 +73,7 @@ const marketsCli = Cli.create("markets", {
       ...officialAuthOptions,
       active: z.boolean().optional().describe("Filter by active status"),
       closed: z.boolean().optional().describe("Filter by closed status"),
-      limit: z.coerce.number().optional().describe("Maximum results"),
-      offset: z.coerce.number().optional().describe("Pagination offset"),
+      ...paginationOptions,
       order: z.string().optional().describe("Sort field"),
       ascending: z.boolean().optional().describe("Sort ascending"),
     }),
@@ -68,8 +81,7 @@ const marketsCli = Cli.create("markets", {
       const args = ["markets", "list"];
       appendBooleanOption(args, "--active", c.options.active);
       appendBooleanOption(args, "--closed", c.options.closed);
-      appendOptional(args, "--limit", c.options.limit);
-      appendOptional(args, "--offset", c.options.offset);
+      appendPagination(args, c.options);
       appendOptional(args, "--order", c.options.order);
       if (c.options.ascending) args.push("--ascending");
       return c.ok(runOfficialJsonWithAuth(args, c.options));
@@ -122,43 +134,33 @@ const dataCli = Cli.create("data", {
 })
   .command("positions", {
     description: "Get open positions for a wallet address",
-    args: z.object({
-      address: z.string().describe("Wallet address"),
-    }),
+    args: walletAddressArg,
     options: z.object({
       ...officialAuthOptions,
-      limit: z.coerce.number().optional().describe("Maximum results"),
-      offset: z.coerce.number().optional().describe("Pagination offset"),
+      ...paginationOptions,
     }),
     run(c) {
       const args = ["data", "positions", c.args.address];
-      appendOptional(args, "--limit", c.options.limit);
-      appendOptional(args, "--offset", c.options.offset);
+      appendPagination(args, c.options);
       return c.ok(runOfficialJsonWithAuth(args, c.options));
     },
   })
   .command("closed-positions", {
     description: "Get closed positions for a wallet address",
-    args: z.object({
-      address: z.string().describe("Wallet address"),
-    }),
+    args: walletAddressArg,
     options: z.object({
       ...officialAuthOptions,
-      limit: z.coerce.number().optional().describe("Maximum results"),
-      offset: z.coerce.number().optional().describe("Pagination offset"),
+      ...paginationOptions,
     }),
     run(c) {
       const args = ["data", "closed-positions", c.args.address];
-      appendOptional(args, "--limit", c.options.limit);
-      appendOptional(args, "--offset", c.options.offset);
+      appendPagination(args, c.options);
       return c.ok(runOfficialJsonWithAuth(args, c.options));
     },
   })
   .command("value", {
     description: "Get total position value for a wallet address",
-    args: z.object({
-      address: z.string().describe("Wallet address"),
-    }),
+    args: walletAddressArg,
     options: z.object({
       ...officialAuthOptions,
     }),
@@ -168,9 +170,7 @@ const dataCli = Cli.create("data", {
   })
   .command("traded", {
     description: "Get count of unique markets traded by a wallet",
-    args: z.object({
-      address: z.string().describe("Wallet address"),
-    }),
+    args: walletAddressArg,
     options: z.object({
       ...officialAuthOptions,
     }),
@@ -180,35 +180,27 @@ const dataCli = Cli.create("data", {
   })
   .command("trades", {
     description: "Get trade history for a wallet",
-    args: z.object({
-      address: z.string().describe("Wallet address"),
-    }),
+    args: walletAddressArg,
     options: z.object({
       ...officialAuthOptions,
-      limit: z.coerce.number().optional().describe("Maximum results"),
-      offset: z.coerce.number().optional().describe("Pagination offset"),
+      ...paginationOptions,
     }),
     run(c) {
       const args = ["data", "trades", c.args.address];
-      appendOptional(args, "--limit", c.options.limit);
-      appendOptional(args, "--offset", c.options.offset);
+      appendPagination(args, c.options);
       return c.ok(runOfficialJsonWithAuth(args, c.options));
     },
   })
   .command("activity", {
     description: "Get on-chain activity for a wallet address",
-    args: z.object({
-      address: z.string().describe("Wallet address"),
-    }),
+    args: walletAddressArg,
     options: z.object({
       ...officialAuthOptions,
-      limit: z.coerce.number().optional().describe("Maximum results"),
-      offset: z.coerce.number().optional().describe("Pagination offset"),
+      ...paginationOptions,
     }),
     run(c) {
       const args = ["data", "activity", c.args.address];
-      appendOptional(args, "--limit", c.options.limit);
-      appendOptional(args, "--offset", c.options.offset);
+      appendPagination(args, c.options);
       return c.ok(runOfficialJsonWithAuth(args, c.options));
     },
   })
@@ -257,15 +249,13 @@ const dataCli = Cli.create("data", {
       ...officialAuthOptions,
       period: z.enum(["day", "week", "month", "all"]).optional().describe("Time period"),
       orderBy: z.enum(["pnl", "vol"]).optional().describe("Order field"),
-      limit: z.coerce.number().optional().describe("Maximum results"),
-      offset: z.coerce.number().optional().describe("Pagination offset"),
+      ...paginationOptions,
     }),
     run(c) {
       const args = ["data", "leaderboard"];
       appendOptional(args, "--period", c.options.period);
       appendOptional(args, "--order-by", c.options.orderBy);
-      appendOptional(args, "--limit", c.options.limit);
-      appendOptional(args, "--offset", c.options.offset);
+      appendPagination(args, c.options);
       return c.ok(runOfficialJsonWithAuth(args, c.options));
     },
   })
@@ -274,14 +264,12 @@ const dataCli = Cli.create("data", {
     options: z.object({
       ...officialAuthOptions,
       period: z.enum(["day", "week", "month", "all"]).optional().describe("Time period"),
-      limit: z.coerce.number().optional().describe("Maximum results"),
-      offset: z.coerce.number().optional().describe("Pagination offset"),
+      ...paginationOptions,
     }),
     run(c) {
       const args = ["data", "builder-leaderboard"];
       appendOptional(args, "--period", c.options.period);
-      appendOptional(args, "--limit", c.options.limit);
-      appendOptional(args, "--offset", c.options.offset);
+      appendPagination(args, c.options);
       return c.ok(runOfficialJsonWithAuth(args, c.options));
     },
   })
@@ -584,6 +572,11 @@ function appendOptional(args: string[], flag: string, value: string | number | u
 function appendBooleanOption(args: string[], flag: string, value: boolean | undefined): void {
   if (value === undefined) return;
   args.push(flag, value ? "true" : "false");
+}
+
+function appendPagination(args: string[], options: PaginationOptions): void {
+  appendOptional(args, "--limit", options.limit);
+  appendOptional(args, "--offset", options.offset);
 }
 
 function appendAuthArgs(args: string[], options: OfficialAuthOptions): void {
