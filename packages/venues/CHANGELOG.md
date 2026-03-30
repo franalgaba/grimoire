@@ -1,5 +1,13 @@
 # @grimoirelabs/venues
 
+## 0.10.16
+
+### Patch Changes
+
+- 6cdb24a: Fix Across bridge asset resolution for chain-scoped spell symbols (for example `USDC_ETH`).
+
+  The Across adapter now merges spell-defined `ctx.assets` mappings and can derive the destination token address from the resolved source token address when direct symbol resolution is unavailable. This prevents `No Across asset mapping` failures for valid chain-specific asset aliases.
+
 ## 0.10.15
 
 ### Patch Changes

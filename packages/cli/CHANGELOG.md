@@ -1,5 +1,12 @@
 # @grimoirelabs/cli
 
+## 0.15.17
+
+### Patch Changes
+
+- Updated dependencies [6cdb24a]
+  - @grimoirelabs/venues@0.10.16
+
 ## 0.15.16
 
 ### Patch Changes
