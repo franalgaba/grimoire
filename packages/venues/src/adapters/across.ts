@@ -1,13 +1,17 @@
 import { addressToBytes32, getIntegratorDataSuffix, getQuote } from "@across-protocol/app-sdk";
 import { spokePoolAbiV3_5 } from "@across-protocol/app-sdk/dist/abis/SpokePool/v3_5.js";
-import type { Address, VenueAdapter } from "@grimoirelabs/core";
+import type { Address, AssetDef, VenueAdapter } from "@grimoirelabs/core";
 import { zeroAddress } from "viem";
 import { toBigInt, toBigIntIfPossible } from "../shared/bigint.js";
 import { applyBps } from "../shared/bps.js";
 import { assertSupportedConstraints, validateGasConstraints } from "../shared/constraints.js";
 import { buildApprovalIfNeeded } from "../shared/erc20.js";
 import { estimateGasIfSupported } from "../shared/gas.js";
-import { resolveBridgedTokenAddress, resolveTokenAddress } from "../shared/token-registry.js";
+import {
+  resolveBridgedTokenAddress,
+  resolveTokenAddress,
+  tryResolveTokenByAddress,
+} from "../shared/token-registry.js";
 
 export interface AcrossAdapterConfig {
   integratorId?: `0x${string}`;
@@ -64,14 +68,15 @@ export function createAcrossAdapter(config: AcrossAdapterConfig = {}): VenueAdap
         throw new Error("Across adapter requires numeric toChain");
       }
       const destinationChainId = action.toChain;
-      const inputToken = resolveAssetAddress(action.asset, originChainId, assets);
-      const outputToken = resolveAssetAddress(
-        action.asset,
+      const resolvedAssets = mergeSpellAssets(assets, ctx.assets);
+      const inputToken = resolveAssetAddress(action.asset, originChainId, resolvedAssets);
+      const outputToken = resolveOutputAssetAddress({
+        asset: action.asset,
+        originChainId,
         destinationChainId,
-        assets,
+        assets: resolvedAssets,
         inputToken,
-        originChainId
-      );
+      });
 
       const quote = await getQuoteImpl({
         route: {
@@ -236,7 +241,7 @@ function resolveAssetAddress(
   }
 
   // 2. Config overrides (test chains, user overrides)
-  const configAddr = assets[asset]?.[chainId];
+  const configAddr = assets[asset]?.[chainId] ?? assets[asset.toUpperCase()]?.[chainId];
   if (configAddr) {
     return configAddr;
   }
@@ -262,6 +267,77 @@ function resolveAssetAddress(
   }
 
   throw new Error(`No Across asset mapping for ${asset} on chain ${chainId}`);
+}
+
+function mergeSpellAssets(
+  configAssets: Record<string, Record<number, Address>>,
+  spellAssets: AssetDef[] | undefined
+): Record<string, Record<number, Address>> {
+  const merged: Record<string, Record<number, Address>> = {};
+
+  for (const [symbol, chainMap] of Object.entries(configAssets)) {
+    merged[symbol] = { ...chainMap };
+  }
+
+  if (!spellAssets || spellAssets.length === 0) {
+    return merged;
+  }
+
+  for (const asset of spellAssets) {
+    const symbol = asset.symbol?.trim();
+    if (!symbol || !asset.address || typeof asset.chain !== "number") {
+      continue;
+    }
+
+    const existing = merged[symbol] ?? {};
+    existing[asset.chain] = asset.address;
+    merged[symbol] = existing;
+
+    const upper = symbol.toUpperCase();
+    if (upper !== symbol) {
+      const upperExisting = merged[upper] ?? {};
+      upperExisting[asset.chain] = asset.address;
+      merged[upper] = upperExisting;
+    }
+  }
+
+  return merged;
+}
+
+function resolveOutputAssetAddress(input: {
+  asset: string;
+  originChainId: number;
+  destinationChainId: number;
+  assets: Record<string, Record<number, Address>>;
+  inputToken: Address;
+}): Address {
+  const { asset, originChainId, destinationChainId, assets, inputToken } = input;
+
+  try {
+    return resolveAssetAddress(asset, destinationChainId, assets, undefined, originChainId);
+  } catch {
+    // Continue with canonical token inference from input token.
+  }
+
+  const sourceToken = tryResolveTokenByAddress(inputToken, originChainId);
+  if (sourceToken) {
+    try {
+      return resolveTokenAddress(sourceToken.symbol, destinationChainId);
+    } catch {
+      // Continue with bridge info/fallback path.
+    }
+
+    const bridged = resolveBridgedTokenAddress(
+      sourceToken.symbol,
+      originChainId,
+      destinationChainId
+    );
+    if (bridged) {
+      return bridged;
+    }
+  }
+
+  return resolveAssetAddress(asset, destinationChainId, assets, inputToken, originChainId);
 }
 
 async function resolveAcrossHandoffStatus(
