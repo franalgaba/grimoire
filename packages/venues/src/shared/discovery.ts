@@ -11,10 +11,10 @@ import type { VenueManifest } from "@grimoirelabs/core";
 
 /** Mapping from CLI filename (without extension) to known aliases. */
 const BUILTIN_ALIAS_MAP: Record<string, string[]> = {
-  aave: ["aave-v3"],
-  across: ["across-protocol"],
-  uniswap: ["uniswap-v3", "uniswap-v4"],
-  "morpho-blue": ["morpho"],
+  aave: ["aave-v3", "aave_v3"],
+  across: ["across-protocol", "across_protocol"],
+  uniswap: ["uniswap-v3", "uniswap_v3", "uniswap-v4", "uniswap_v4"],
+  "morpho-blue": ["morpho", "morpho_blue"],
 };
 
 /**
