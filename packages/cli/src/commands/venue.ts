@@ -13,6 +13,10 @@ import {
 } from "../lib/venue-discovery.js";
 import { venueDoctorCommand } from "./venue-doctor.js";
 
+type VenueArgs = string[] | string;
+
+const HELP_FLAGS = new Set(["--help", "-h"]);
+
 export function normalizeAdapter(adapter: string): string {
   return normalizeAdapterName(adapter);
 }
@@ -25,15 +29,70 @@ export function resolveVenueCliPath(cliName: string): string {
   throw new Error(`Venue CLI "${cliName}" not found. Is @grimoirelabs/venues installed?`);
 }
 
-export async function venueCommand(adapter: string, args: string[] = []): Promise<void> {
-  if (!adapter || adapter === "--help" || adapter === "-h") {
+export function parseVenueArgs(rawArgs: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let quote: '"' | "'" | null = null;
+  let escaping = false;
+
+  for (const ch of rawArgs.trim()) {
+    if (escaping) {
+      current += ch;
+      escaping = false;
+      continue;
+    }
+
+    if (ch === "\\" && quote !== "'") {
+      escaping = true;
+      continue;
+    }
+
+    if (quote) {
+      if (ch === quote) {
+        quote = null;
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+
+    if (/\s/.test(ch)) {
+      if (current.length > 0) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (escaping) current += "\\";
+  if (current.length > 0) tokens.push(current);
+  return tokens;
+}
+
+function normalizeVenueArgs(args: VenueArgs): string[] {
+  if (typeof args === "string") return parseVenueArgs(args);
+  return args.filter((arg) => arg.length > 0);
+}
+
+export async function venueCommand(adapter: string, args: VenueArgs = []): Promise<void> {
+  const passArgs = normalizeVenueArgs(args);
+
+  if (!adapter || HELP_FLAGS.has(adapter)) {
     printUsage();
     return;
   }
 
   const normalized = normalizeAdapterName(adapter);
   if (normalized === "doctor") {
-    const report = await venueDoctorCommand(args);
+    const report = await venueDoctorCommand(passArgs);
     if (!report.ok) {
       throw new Error("Venue doctor checks failed");
     }
@@ -58,7 +117,7 @@ export async function venueCommand(adapter: string, args: string[] = []): Promis
     );
   }
 
-  const result = spawnSync(process.execPath, [cliPath, ...args], { stdio: "inherit" });
+  const result = spawnSync(process.execPath, [cliPath, ...passArgs], { stdio: "inherit" });
   if (result.error) {
     throw new Error(result.error instanceof Error ? result.error.message : String(result.error));
   }

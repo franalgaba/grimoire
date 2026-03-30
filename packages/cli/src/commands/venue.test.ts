@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { normalizeAdapter, resolveVenueCliPath, venueCommand } from "./venue.js";
+import { normalizeAdapter, parseVenueArgs, resolveVenueCliPath, venueCommand } from "./venue.js";
 
 describe("venue command helpers", () => {
   it("normalizes adapter names", () => {
@@ -20,6 +20,15 @@ describe("venue command helpers", () => {
     ).toBe(true);
   });
 
+  it("parses pass-through args from a single string", () => {
+    expect(parseVenueArgs("spot-meta --format table")).toEqual(["spot-meta", "--format", "table"]);
+    expect(parseVenueArgs('l2-book --coin "HYPE PERP"')).toEqual([
+      "l2-book",
+      "--coin",
+      "HYPE PERP",
+    ]);
+  });
+
   it("prints usage for missing adapter", () => {
     const logs: string[] = [];
     const originalError = console.error;
@@ -27,7 +36,7 @@ describe("venue command helpers", () => {
       logs.push(String(message ?? ""));
     };
 
-    venueCommand("" as unknown as string).catch(() => {});
+    venueCommand("").catch(() => {});
 
     console.error = originalError;
     const output = logs.join("\n");

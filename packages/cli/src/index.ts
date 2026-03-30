@@ -104,6 +104,8 @@ const morphoOptions = {
   morphoMarketMap: z.string().optional().describe("JSON file mapping actionRef -> marketId"),
 };
 
+const venuePassThroughArgsSchema = z.union([z.string(), z.array(z.string())]);
+
 // ── CLI ────────────────────────────────────────────────────────────
 
 const cli = Cli.create("grimoire", {
@@ -328,14 +330,20 @@ const cli = Cli.create("grimoire", {
     description: "Run venue metadata commands (proxy to @grimoirelabs/venues CLIs)",
     args: z.object({
       adapter: z.string().optional().describe("Venue adapter name"),
+      venue: z.string().optional().describe("Alias for adapter (agent/JSON mode)"),
+      args: venuePassThroughArgsSchema.optional().describe("Pass-through arguments for venue CLI"),
+    }),
+    options: z.object({
+      adapter: z.string().optional().describe("Venue adapter name"),
+      venue: z.string().optional().describe("Alias for adapter"),
+      args: venuePassThroughArgsSchema.optional().describe("Pass-through arguments for venue CLI"),
     }),
     hint: "Pass additional arguments after the adapter name, e.g.: grimoire venue uniswap tokens --chain 1",
     async run(c) {
-      // Collect remaining argv after 'venue <adapter>' as pass-through args
-      const argv = process.argv;
-      const venueIdx = argv.indexOf("venue");
-      const passArgs = venueIdx >= 0 ? argv.slice(venueIdx + 2) : [];
-      await venueCommand(c.args.adapter ?? "", passArgs);
+      const adapter = resolveVenueAdapter(c.args, c.options);
+      const passArgs = getVenuePassArgsFromArgv(process.argv);
+      const structuredArgs = resolveStructuredVenueArgs(c.args, c.options);
+      await venueCommand(adapter, passArgs.length > 0 ? passArgs : structuredArgs);
       return c.ok({ success: true });
     },
   })
@@ -405,9 +413,11 @@ const cli = Cli.create("grimoire", {
 // Bypass incur's parser for `venue` — it rejects unknown flags that
 // are actually meant for the proxied venue CLI (e.g. --query, --chain).
 const firstArg = process.argv[2];
-if (firstArg === "venue") {
+const secondArg = process.argv[3] ?? "";
+const shouldBypassVenueParser = firstArg === "venue" && isPositionalVenueAdapter(secondArg);
+if (shouldBypassVenueParser) {
   const adapter = process.argv[3] ?? "";
-  const passArgs = process.argv.slice(4);
+  const passArgs = getVenuePassArgsFromArgv(process.argv);
   venueCommand(adapter, passArgs).catch((err) => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`${msg}`);
@@ -415,4 +425,30 @@ if (firstArg === "venue") {
   });
 } else {
   cli.serve();
+}
+
+function getVenuePassArgsFromArgv(argv: string[]): string[] {
+  const venueIdx = argv.indexOf("venue");
+  if (venueIdx < 0) return [];
+  const adapterToken = argv[venueIdx + 1];
+  if (!isPositionalVenueAdapter(adapterToken)) return [];
+  return argv.slice(venueIdx + 2);
+}
+
+function resolveVenueAdapter(
+  args: { adapter?: string; venue?: string },
+  options: { adapter?: string; venue?: string }
+): string {
+  return args.adapter ?? args.venue ?? options.adapter ?? options.venue ?? "";
+}
+
+function resolveStructuredVenueArgs(
+  args: { args?: string | string[] },
+  options: { args?: string | string[] }
+): string | string[] {
+  return args.args ?? options.args ?? [];
+}
+
+function isPositionalVenueAdapter(token: string | undefined): boolean {
+  return Boolean(token && token.length > 0 && !token.startsWith("-"));
 }
