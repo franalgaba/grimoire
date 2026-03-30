@@ -8,16 +8,15 @@ import {
   createWalletFromConfig,
   execute,
   injectHandoffParams,
-  loadPrivateKey,
   SqliteStateStore,
 } from "@grimoirelabs/core";
-import { adapters, createHyperliquidAdapter } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { parseRequiredNumber, sleep } from "../lib/execution-helpers.js";
 import { DEFAULT_KEYSTORE_PATH } from "../lib/keystore.js";
 import { promptPassword } from "../lib/prompts.js";
 import { createAdvisoryLiveTraceLogger } from "./advisory-live-trace.js";
+import { configureOffchainAdapters } from "./cast-cross-chain.js";
 import { isCrossChainRunManifest, resolveRpcUrlForChain } from "./cross-chain-helpers.js";
 
 interface ResumeOptions {
@@ -101,16 +100,7 @@ export async function resumeCommand(runId: string, options: ResumeOptions) {
     const destinationProvider = createProvider(manifest.destination_chain_id, destinationRpcUrl);
 
     const keyConfig = await resolveResumeKeyConfig(spinner);
-    const rawKey = loadPrivateKey(keyConfig);
-    const configuredAdapters = adapters.map((adapter) => {
-      if (adapter.meta.name === "hyperliquid") {
-        return createHyperliquidAdapter({
-          privateKey: rawKey,
-          assetMap: { ETH: 4 },
-        });
-      }
-      return adapter;
-    });
+    const configuredAdapters = configureOffchainAdapters(keyConfig);
     const destinationWallet = createWalletFromConfig(
       keyConfig,
       manifest.destination_chain_id,
