@@ -82,37 +82,39 @@ Setup security/runtime expectations:
 
 1. Read syntax references first (mandatory rule above).
 2. Author/update spell.
-3. Run `validate` (use `--strict` for advisory-heavy spells).
-4. Fix errors/warnings and re-run until validation passes.
-5. Run `simulate`.
-6. Before venue metadata queries or value-moving runs, execute `venue doctor` for the target adapter/chain.
+3. Run `format` to canonicalize layout before validation.
+4. Run `validate` (use `--strict` for advisory-heavy spells).
+5. Fix errors/warnings and re-run until validation passes.
+6. Run `simulate`.
+7. Before venue metadata queries or value-moving runs, execute `venue doctor` for the target adapter/chain.
    - Example: `<grimoire-cmd> venue doctor --adapter uniswap --chain 1 --rpc-url <rpc> --json`
-7. Before value-moving runs on EVM venues, verify endpoint and signer state with Foundry Cast quickchecks (`chain-id`, `block-number`, `balance`, `nonce`).
+8. Before value-moving runs on EVM venues, verify endpoint and signer state with Foundry Cast quickchecks (`chain-id`, `block-number`, `balance`, `nonce`).
    - Do not apply Anvil/Cast checks to offchain venues such as `hyperliquid`.
-8. For advisory steps intended for deterministic execution, record and then use `--advisory-replay <runId>` in dry-run/live cast.
-9. If spell includes irreversible actions, require `cast --dry-run` before any live cast.
-10. Ask for explicit user confirmation before live value-moving `cast`.
-11. For cross-chain mode, require explicit per-chain RPC mappings:
+9. For advisory steps intended for deterministic execution, record and then use `--advisory-replay <runId>` in dry-run/live cast.
+10. If spell includes irreversible actions, require `cast --dry-run` before any live cast.
+11. Ask for explicit user confirmation before live value-moving `cast`.
+12. For cross-chain mode, require explicit per-chain RPC mappings:
    - `--rpc-url <sourceChainId>=<url>`
    - `--rpc-url <destinationChainId>=<url>`
-12. For cross-chain Morpho actions, require explicit market mapping via:
+13. For cross-chain Morpho actions, require explicit market mapping via:
    - `--morpho-market-id <actionRef>=<marketId>` (repeatable), or
    - `--morpho-market-map <path>`
-13. For Morpho collateral lifecycle, prefer explicit actions:
+14. For Morpho collateral lifecycle, prefer explicit actions:
    - `morpho_blue.supply_collateral(asset, amount[, market_id])`
    - `morpho_blue.withdraw_collateral(asset, amount[, market_id])`
-14. Use bare `0x...` address literals in action token fields; quoted address-like strings trigger `QUOTED_ADDRESS_LITERAL`.
-15. For Morpho doctor readiness checks, set wallet env explicitly (`GRIMOIRE_WALLET_ADDRESS` preferred, fallback `WALLET_ADDRESS`).
-16. If a cross-chain run is left waiting, continue with `resume <runId>` (use `--watch` to poll settlement).
-17. Never place passwords/private keys in agent prompts or inline command assignments.
-18. Prefer keystore + `--password-env` over `--private-key` for dry-run/live casts.
-19. Treat `.grimoire/setup.env` as plaintext secret material: keep local-only and rotate/remove when no longer needed.
-20. For commands run outside the project tree, set `GRIMOIRE_SETUP_ENV_FILE=/abs/path/to/.grimoire/setup.env` when needed.
+15. Use bare `0x...` address literals in action token fields; quoted address-like strings trigger `QUOTED_ADDRESS_LITERAL`.
+16. For Morpho doctor readiness checks, set wallet env explicitly (`GRIMOIRE_WALLET_ADDRESS` preferred, fallback `WALLET_ADDRESS`).
+17. If a cross-chain run is left waiting, continue with `resume <runId>` (use `--watch` to poll settlement).
+18. Never place passwords/private keys in agent prompts or inline command assignments.
+19. Prefer keystore + `--password-env` over `--private-key` for dry-run/live casts.
+20. Treat `.grimoire/setup.env` as plaintext secret material: keep local-only and rotate/remove when no longer needed.
+21. For commands run outside the project tree, set `GRIMOIRE_SETUP_ENV_FILE=/abs/path/to/.grimoire/setup.env` when needed.
 
 ## Command Surface (Core)
 
 - `init`
 - `setup`
+- `format`
 - `compile`
 - `compile-all`
 - `validate`

@@ -43,6 +43,7 @@ export {
 } from "./builders/index.js";
 export type {
   AdvisorySummary,
+  GrimoireFormatResult,
   IRGeneratorResult,
   ParseResult,
   TypeCheckResult,
@@ -52,6 +53,7 @@ export type {
 export {
   compile,
   compileFile,
+  formatGrimoire,
   parseExpression,
   parseSpell,
   typeCheckIR,

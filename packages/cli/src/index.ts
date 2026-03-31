@@ -8,6 +8,7 @@ import { Cli, z } from "incur";
 import { castCommand } from "./commands/cast.js";
 import { compileCommand } from "./commands/compile.js";
 import { compileAllCommand } from "./commands/compile-all.js";
+import { formatCommandFromArgv } from "./commands/format.js";
 import { historyCommand } from "./commands/history.js";
 import { initCommand } from "./commands/init.js";
 import { logCommand } from "./commands/log.js";
@@ -186,6 +187,26 @@ const cli = Cli.create("grimoire", {
       return c.ok(result, {
         cta: { commands: ["cast <spell> --dry-run", "venue doctor"] },
       });
+    },
+  })
+
+  // ── Format ───────────────────────────────────────────────────────
+  .command("format", {
+    description: "Format .spell source files",
+    options: z.object({
+      write: z.boolean().optional().describe("Write formatted output in place"),
+      check: z.boolean().optional().describe("Check whether files are already canonical"),
+      diff: z.boolean().optional().describe("Print unified diff for changed files"),
+      stdin: z.boolean().optional().describe("Read source from stdin"),
+      stdinFilepath: z.string().optional().describe("Virtual filepath label for stdin"),
+    }),
+    async run() {
+      const exitCode = await formatCommandFromArgv(process.argv);
+      if (exitCode !== 0) {
+        process.exitCode = exitCode;
+        throw new Error(`Format failed (exit ${exitCode})`);
+      }
+      return { success: true };
     },
   })
 
@@ -414,8 +435,19 @@ const cli = Cli.create("grimoire", {
 // are actually meant for the proxied venue CLI (e.g. --query, --chain).
 const firstArg = process.argv[2];
 const secondArg = process.argv[3] ?? "";
+const shouldBypassFormatParser = firstArg === "format";
 const shouldBypassVenueParser = firstArg === "venue" && isPositionalVenueAdapter(secondArg);
-if (shouldBypassVenueParser) {
+if (shouldBypassFormatParser) {
+  formatCommandFromArgv(process.argv)
+    .then((exitCode) => {
+      process.exitCode = exitCode;
+    })
+    .catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`${msg}`);
+      process.exitCode = 3;
+    });
+} else if (shouldBypassVenueParser) {
   const adapter = process.argv[3] ?? "";
   const passArgs = getVenuePassArgsFromArgv(process.argv);
   venueCommand(adapter, passArgs).catch((err) => {
@@ -450,5 +482,5 @@ function resolveStructuredVenueArgs(
 }
 
 function isPositionalVenueAdapter(token: string | undefined): boolean {
-  return Boolean(token && token.length > 0 && !token.startsWith("-"));
+  return Boolean(token && !token.startsWith("-"));
 }
