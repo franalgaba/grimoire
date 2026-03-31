@@ -1,5 +1,11 @@
 # @grimoirelabs/venues
 
+## 0.10.17
+
+### Patch Changes
+
+- fa20ce9: Pin axios to 1.13.5 and add minimumReleaseAge policy to mitigate supply-chain compromise
+
 ## 0.10.16
 
 ### Patch Changes
