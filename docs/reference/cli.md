@@ -6,6 +6,7 @@ This page documents the `grimoire` CLI surface from `packages/cli/src/index.ts` 
 
 - `grimoire init`
 - `grimoire setup`
+- `grimoire format`
 - `grimoire compile <spell>`
 - `grimoire compile-all [dir]`
 - `grimoire validate <spell>`
@@ -122,6 +123,45 @@ Exit code:
 
 - `0` on success
 - `1` on compile errors or IO failures
+
+## `format`
+
+Canonical formatter for `.spell` source.
+
+```bash
+grimoire format <paths...> --write
+grimoire format <paths...> --check
+grimoire format <path>
+grimoire format --stdin --stdin-filepath <virtual-path>
+```
+
+Flags:
+
+- `--write`: write formatted output in place.
+- `--check`: no writes; exits non-zero when any file is non-canonical.
+- `--diff`: print unified diff for changed files.
+- `--json`: machine-readable output payload.
+- `--stdin`: read spell source from stdin.
+- `--stdin-filepath <path>`: required with `--stdin` for diagnostics labeling.
+
+Rules:
+
+- `--write` and `--check` are mutually exclusive.
+- stdout mode (no `--write`/`--check`) requires exactly one file path.
+
+JSON shape:
+
+- `success`
+- `mode`: `write|check|stdout|stdin`
+- `files[]`: `{ path, changed, formatted, error }`
+- `summary`: `{ total, changed, failed }`
+
+Exit code:
+
+- `0` success (or canonical in check mode)
+- `1` `--check` found non-canonical files
+- `2` parse error in at least one input
+- `3` usage or IO/runtime error
 
 ## `compile-all`
 

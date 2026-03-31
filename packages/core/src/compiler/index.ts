@@ -7,6 +7,8 @@ export { parseExpression, tryParseExpression } from "./expression-parser.js";
 export {
   compileGrimoire,
   type ExpressionNode,
+  formatGrimoire,
+  type GrimoireFormatResult,
   parse as parseGrimoireAST,
   parseGrimoire,
   type SectionNode,
