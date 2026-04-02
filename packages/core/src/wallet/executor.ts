@@ -536,8 +536,9 @@ export class Executor {
     }
 
     const adapter = this.adapterRegistry.get(action.venue);
-    if (!adapter || adapter.meta.executionType !== "offchain") {
-      return null;
+    if (!adapter) return null;
+    if (adapter.meta.executionType !== "offchain") {
+      if (action.type !== "custom" || !adapter.executeAction) return null;
     }
 
     if (!adapter.executeAction) {

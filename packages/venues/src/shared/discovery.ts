@@ -15,6 +15,7 @@ const BUILTIN_ALIAS_MAP: Record<string, string[]> = {
   across: ["across-protocol", "across_protocol"],
   uniswap: ["uniswap-v3", "uniswap_v3", "uniswap-v4", "uniswap_v4"],
   "morpho-blue": ["morpho", "morpho_blue"],
+  compass: ["compass-v2", "compass_v2"],
 };
 
 /**
@@ -29,6 +30,7 @@ const CLI_TO_ADAPTER_MAP: Record<string, string[]> = {
   hyperliquid: ["hyperliquid"],
   pendle: ["pendle"],
   polymarket: ["polymarket"],
+  compass: ["compass-v2"],
 };
 
 function isBunRuntime(): boolean {
