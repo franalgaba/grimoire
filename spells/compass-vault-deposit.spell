@@ -1,0 +1,22 @@
+# Deposit into an ERC-4626 vault via Compass V2
+
+spell CompassVaultDeposit {
+
+  version: "1.0.0"
+  description: "Deposit USDC into an ERC-4626 vault via Compass Labs V2"
+  assets: [USDC]
+
+  params: {
+    amount: 1
+
+  }
+  venues: {
+    compass_v2: @compass_v2
+
+  }
+  on manual: {
+    compass_v2.deposit(USDC, params.amount)
+    emit vault_deposit_done(venue="compass_v2", asset=USDC, amount=params.amount)
+
+  }
+}

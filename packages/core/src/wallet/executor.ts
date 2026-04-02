@@ -37,6 +37,8 @@ export interface ExecutorOptions {
   adapters?: VenueAdapter[];
   /** Spell-defined asset definitions for adapter address resolution. */
   assets?: AssetDef[];
+  /** Vault address for adapter context (e.g. ERC-4626 vault routing). */
+  vault?: `0x${string}`;
 }
 
 /** Result of a single transaction execution */
@@ -302,6 +304,7 @@ export class Executor {
               chainId: this.provider.chainId,
               mode: this.options.mode,
               assets: this.options.assets,
+              vault: this.options.vault,
             })
           );
         }
@@ -356,6 +359,7 @@ export class Executor {
               chainId: this.provider.chainId,
               mode: this.options.mode,
               assets: this.options.assets,
+              vault: this.options.vault,
             })
           );
         }

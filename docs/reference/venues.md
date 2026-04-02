@@ -34,6 +34,7 @@ Default adapter bundle order:
 - `across`
 - `pendle`
 - `polymarket`
+- `compass_v2`
 
 ## Constraint Matrix
 
@@ -49,6 +50,7 @@ Default adapter bundle order:
 | `hyperliquid` | - | - | - | - | - | - | - | - | - |
 | `pendle` | ✓ | ✓ | - | - | - | - | ✓ | - | ✓ |
 | `polymarket` | - | - | - | - | - | - | - | - | - |
+| `compass_v2` | ✓ | - | - | - | - | - | - | - | - |
 
 Unsupported constraints fail fast with:
 
@@ -209,6 +211,26 @@ Implementation notes:
 - `grimoire cast` / `grimoire resume` key-based paths inject the same loaded wallet key into the Polymarket adapter factory, so a separate `POLYMARKET_PRIVATE_KEY` env is not required there.
 - Advanced users can inject a prebuilt client with `createPolymarketAdapter({ client })`.
 
+## `compass_v2`
+
+- Type: hybrid (`evm` + offchain for Traditional Investing)
+- Actions: `lend`, `withdraw`, `swap`, `transfer`, `supply_collateral`, `withdraw_collateral`, `borrow`, `repay`, `bridge`, `custom`
+- Supported chains: Ethereum (1), Base (8453), Arbitrum (42161)
+- Data endpoints: `info`, `aave-markets`, `vaults`, `positions`, `balances`, `credit-positions`, `ti-opportunities`, `ti-positions`
+
+Implementation notes:
+
+- Uses `@compass-labs/api-sdk` (Speakeasy-generated SDK).
+- **Earn** (Aave V3 + ERC-4626 vaults): `lend`, `withdraw`, `swap`, `transfer`. Pass `--vault <address>` to target an ERC-4626 vault instead of Aave.
+- **Credit**: `supply_collateral`, `withdraw_collateral`, `borrow`, `repay`.
+- **Bridge** (CCTP): `bridge` for cross-chain USDC via Circle CCTP. Requires numeric `toChain`.
+- **Traditional Investing** (offchain): perpetual futures on stocks/commodities/forex via Hyperliquid. Uses `custom` action with `ti_` prefix ops (`ti_market_order`, `ti_limit_order`, `ti_cancel_order`, `ti_deposit`, `ti_withdraw`, `ti_setup`, `ti_set_leverage`).
+- Auto-creates Earn and Credit accounts on first interaction (account-creation tx prepended to action tx list).
+- TI auto-setup: first trade triggers `enable_unified_account` + `approve_builder_fee`.
+- Supports `max_slippage` constraint for swap and borrow actions.
+- Requires `COMPASS_API_KEY` env var. TI operations additionally require `privateKey` in adapter config for EIP-712 signing.
+- Factory: `createCompassV2Adapter({ privateKey? })`.
+
 ## QueryProvider
 
 `@grimoirelabs/venues` exports a `QueryProvider` factory backed by Alchemy for on-chain balance reads and token price lookups.
@@ -286,6 +308,7 @@ See `docs/how-to/add-a-venue.md` for step-by-step contribution instructions.
 - Hyperliquid
 - Pendle
 - Polymarket
+- Compass (aliases: compass-v2)
 
 External `grimoire-venue-*` packages are also discovered and routed automatically.
 
@@ -316,6 +339,7 @@ Per-venue CLIs support `--format <auto|json|table>` (plus `spell` for snapshot-c
 - `grimoire-hyperliquid`
 - `grimoire-pendle`
 - `grimoire-polymarket`
+- `grimoire-compass`
 
 ### `grimoire-aave`
 
@@ -402,3 +426,18 @@ Commands:
 `search-markets` supports cross-category discovery filters: `--query`, `--slug`, `--question`,
 `--event`, `--tag`, `--category`, `--league`, `--sport`, plus pagination controls including
 `--stop-after-empty-pages`.
+
+### `grimoire-compass`
+
+Commands:
+
+- `info`
+- `aave-markets --chain <id>`
+- `vaults --chain <id> [--asset <symbol>] [--order-by <field>] [--direction <asc|desc>] [--min-tvl <usd>] [--min-liquidity <usd>] [--limit <n>]`
+- `positions --owner <address> --chain <id>`
+- `balances --owner <address> --chain <id>`
+- `credit-positions --owner <address> --chain <id>`
+- `ti-opportunities --chain <id>`
+- `ti-positions --owner <address> --chain <id>`
+
+Requires `COMPASS_API_KEY` env var (except `info`). Supported chains: Ethereum (1), Base (8453), Arbitrum (42161).

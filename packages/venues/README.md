@@ -12,6 +12,7 @@ Official Grimoire venue adapters bundle.
 - `across` (Across Protocol bridge SDK)
 - `pendle` (Pendle Hosted SDK convert adapter)
 - `polymarket` (Polymarket CLOB offchain adapter)
+- `compass_v2` (Compass Labs V2 — Earn, Credit, Bridge, TI; hybrid EVM + offchain)
 
 ## Usage
 
@@ -80,7 +81,19 @@ grimoire-polymarket data positions <address> --limit 10 --format json
 grimoire-polymarket search-markets --category sports --league "la liga" --open-only true --format json
 grimoire-polymarket book --token-id <token_id> --format json
 grimoire-polymarket price --token-id <token_id> --side buy --format json
+
+grimoire-compass info
+grimoire-compass aave-markets --chain 1
+grimoire-compass vaults --chain 8453 --asset USDC --order-by tvl --direction desc
+grimoire-compass positions --owner 0x... --chain 1
+grimoire-compass credit-positions --owner 0x... --chain 1
+grimoire-compass ti-opportunities --chain 42161
 ```
+
+Compass note:
+
+- Requires `COMPASS_API_KEY` env var (except `info` command).
+- Supported chains: Ethereum (1), Base (8453), Arbitrum (42161).
 
 Polymarket note:
 

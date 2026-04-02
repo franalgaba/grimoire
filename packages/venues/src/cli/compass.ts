@@ -100,14 +100,30 @@ const cli = Cli.create("grimoire-compass", {
     },
   })
   .command("vaults", {
-    description: "List ERC-4626 yield vaults",
+    description: "List ERC-4626 yield vaults (filterable by asset, TVL, liquidity)",
     options: z.object({
       chain: z.coerce.number().describe("Chain ID (1, 8453, 42161)"),
+      "order-by": z.string().default("tvl").describe("Sort field: tvl, apy"),
+      direction: z.enum(["asc", "desc"]).default("desc").describe("Sort direction"),
+      asset: z.string().optional().describe("Filter by asset symbol (e.g. USDC, WETH)"),
+      "min-tvl": z.coerce.number().optional().describe("Minimum TVL in USD"),
+      "min-liquidity": z.coerce.number().optional().describe("Minimum available liquidity in USD"),
+      limit: z.coerce.number().default(20).describe("Max results to return"),
     }),
     async run(c) {
       const sdk = getSDK();
       const chain = resolveChain(c.options.chain);
-      const result = await sdk.earn.earnVaults({ chain, orderBy: "tvl" });
+      const result = await sdk.earn.earnVaults({
+        chain,
+        orderBy: c.options["order-by"],
+        direction: c.options.direction as "asc" | "desc",
+        limit: c.options.limit,
+        ...(c.options.asset && { assetSymbol: c.options.asset }),
+        ...(c.options["min-tvl"] !== undefined && { minTvlUsd: c.options["min-tvl"] }),
+        ...(c.options["min-liquidity"] !== undefined && {
+          minLiquidityUsd: c.options["min-liquidity"],
+        }),
+      });
       return c.ok(serializeBigInts(result));
     },
   })
