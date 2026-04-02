@@ -335,6 +335,7 @@ export class Executor {
           chainId: this.provider.chainId,
           mode: this.options.mode,
           assets: this.options.assets,
+          vault: this.options.vault,
         })
       );
     }
@@ -384,6 +385,7 @@ export class Executor {
           chainId: this.provider.chainId,
           mode: this.options.mode,
           assets: this.options.assets,
+          vault: this.options.vault,
         })
       );
     }
