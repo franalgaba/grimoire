@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add a `compass_v2` venue adapter that wraps `@compass-labs/api-sdk` to expose Compass Labs V2 Earn, Credit, and Bridge APIs through Grimoire's venue system, with transparent product-account auto-management.
+**Goal:** Add a `compass_v2` venue adapter that wraps `@compass-labs/api-sdk` to expose Compass Labs V2 Earn, Credit, Bridge, and Traditional Investing APIs through Grimoire's venue system, with transparent product-account auto-management.
 
-**Architecture:** Thin SDK wrapper using factory + singleton pattern. A single `compass-v2.ts` adapter file implements `buildAction()` which routes Grimoire actions to SDK namespaces (`sdk.earn.*`, `sdk.credit.*`, `sdk.bridge.*`). Account existence is cached per `(wallet, chain, product)` and account-creation transactions are auto-prepended.
+**Architecture:** Thin SDK wrapper using factory + singleton pattern. A single `compass-v2.ts` adapter file implements both `buildAction()` (EVM products) and `executeAction()` (offchain TradFi). EVM actions route to SDK namespaces (`sdk.earn.*`, `sdk.credit.*`, `sdk.bridge.*`). Traditional Investing custom actions route through `executeAction()` to `sdk.traditionalInvesting.*` with EIP-712 signing. Account existence is cached per `(wallet, chain, product)` and account-creation transactions are auto-prepended.
 
 **Tech Stack:** TypeScript, `@compass-labs/api-sdk`, Bun test runner, `incur` CLI framework, `zod` schemas.
 
@@ -25,6 +25,8 @@ Before starting, familiarise yourself with these files — they define the patte
 | `packages/venues/src/adapters/aave-v3.ts` | Reference lending adapter — factory pattern, meta, action routing |
 | `packages/venues/src/adapters/aave-v3.test.ts` | Reference test pattern — mock injection via factory config, `bun:test` |
 | `packages/venues/src/adapters/across.ts` | Reference bridge adapter — `resolveHandoffStatus`, bridge lifecycle |
+| `packages/venues/src/adapters/hyperliquid.ts` | Reference offchain adapter — `executeAction`, EIP-712 signing, preview-commit pattern |
+| `packages/core/src/wallet/executor.ts` | `tryExecuteOffchainAction` routing — hybrid adapter guard change |
 | `packages/venues/src/cli/across.ts` | Reference CLI — `incur` framework, `Cli.create()`, zod options, `c.ok()` |
 | `packages/venues/src/index.ts` | Barrel exports — adapters array + named exports |
 | `packages/venues/src/shared/discovery.ts` | `BUILTIN_ALIAS_MAP`, `CLI_TO_ADAPTER_MAP` for venue discovery |
@@ -70,6 +72,7 @@ import type {
   VenueBuildResult,
 } from "@grimoirelabs/core";
 import { CompassApiSDK } from "@compass-labs/api-sdk";
+import { zeroAddress } from "viem";
 import { toBigInt } from "../shared/bigint.js";
 
 // --- Chain mapping ---
@@ -184,6 +187,7 @@ export interface CompassV2AdapterConfig {
   sdk?: CompassApiSDK;
   supportedChains?: number[];
   gasSponsorship?: boolean;
+  privateKey?: `0x${string}`;        // Required for Traditional Investing (EIP-712 signing)
 }
 
 export function createCompassV2Adapter(config: CompassV2AdapterConfig = {}): VenueAdapter {
@@ -208,10 +212,11 @@ export function createCompassV2Adapter(config: CompassV2AdapterConfig = {}): Ven
       "borrow",
       "repay",
       "bridge",
+      "custom",
     ],
     supportedConstraints: ["max_slippage"],
     requiredEnv: ["COMPASS_API_KEY"],
-    description: "Compass Labs V2 multi-product DeFi adapter (Earn, Credit, Bridge)",
+    description: "Compass Labs V2 multi-product DeFi adapter (Earn, Credit, Bridge, Traditional Investing)",
   };
 
   // --- Earn handlers ---
@@ -479,11 +484,23 @@ export function createCompassV2Adapter(config: CompassV2AdapterConfig = {}): Ven
         case "bridge":
           return handleBridge(action, ctx);
 
+        // Traditional Investing (preview — real execution in executeAction)
+        case "custom":
+          return {
+            tx: { to: zeroAddress, data: "0x" as `0x${string}`, value: 0n },
+            description: `Compass V2 custom action: ${(action as any).op}`,
+            action,
+          };
+
         default:
           throw new Error(
             `Compass V2: unsupported action type "${action.type}". Supported: ${meta.actions.join(", ")}`
           );
       }
+    },
+    async executeAction(action: Action, ctx: VenueAdapterContext) {
+      // Stub — implemented in Task 7 (Traditional Investing)
+      throw new Error("Compass V2: executeAction not yet implemented");
     },
     bridgeLifecycle: { resolveHandoffStatus },
     resolveHandoffStatus,
@@ -547,6 +564,11 @@ function createMockSdk() {
       value: "0",
     },
   };
+  const mockTiResponse = {
+    id: "ti-123",
+    status: "submitted",
+    reference: "0xti-ref",
+  };
 
   return {
     calls,
@@ -605,6 +627,40 @@ function createMockSdk() {
           return mockTxResponse;
         },
       },
+      traditionalInvesting: {
+        traditionalInvestingMarketOrder: async (args: unknown) => {
+          calls.push({ namespace: "ti", method: "traditionalInvestingMarketOrder", args });
+          return mockTiResponse;
+        },
+        traditionalInvestingLimitOrder: async (args: unknown) => {
+          calls.push({ namespace: "ti", method: "traditionalInvestingLimitOrder", args });
+          return mockTiResponse;
+        },
+        traditionalInvestingCancelOrder: async (args: unknown) => {
+          calls.push({ namespace: "ti", method: "traditionalInvestingCancelOrder", args });
+          return mockTiResponse;
+        },
+        traditionalInvestingDeposit: async (args: unknown) => {
+          calls.push({ namespace: "ti", method: "traditionalInvestingDeposit", args });
+          return mockTiResponse;
+        },
+        traditionalInvestingWithdraw: async (args: unknown) => {
+          calls.push({ namespace: "ti", method: "traditionalInvestingWithdraw", args });
+          return mockTiResponse;
+        },
+        traditionalInvestingEnableUnifiedAccount: async (args: unknown) => {
+          calls.push({ namespace: "ti", method: "traditionalInvestingEnableUnifiedAccount", args });
+          return {};
+        },
+        traditionalInvestingApproveBuilderFee: async (args: unknown) => {
+          calls.push({ namespace: "ti", method: "traditionalInvestingApproveBuilderFee", args });
+          return {};
+        },
+        traditionalInvestingEnsureLeverage: async (args: unknown) => {
+          calls.push({ namespace: "ti", method: "traditionalInvestingEnsureLeverage", args });
+          return mockTiResponse;
+        },
+      },
     },
   };
 }
@@ -645,7 +701,7 @@ describe("Compass V2 adapter", () => {
       expect.arrayContaining([
         "lend", "withdraw", "swap", "transfer",
         "supply_collateral", "withdraw_collateral", "borrow", "repay",
-        "bridge",
+        "bridge", "custom",
       ])
     );
   });
@@ -1054,13 +1110,15 @@ function serializeBigInts(obj: unknown): unknown {
 }
 
 const cli = Cli.create("grimoire-compass", {
-  description: "Compass Labs V2 — Earn, Credit, and Bridge operations",
+  description: "Compass Labs V2 — Earn, Credit, Bridge, and Traditional Investing operations",
   sync: {
     suggestions: [
       "list Aave earn markets on Ethereum",
       "show ERC-4626 vaults on Base",
       "check earn positions for an address",
       "check credit positions for an address",
+      "list Traditional Investing opportunities",
+      "show TI positions for an address",
     ],
   },
 })
@@ -1078,10 +1136,10 @@ const cli = Cli.create("grimoire-compass", {
           actions: [
             "lend", "withdraw", "swap", "transfer",
             "supply_collateral", "withdraw_collateral", "borrow", "repay",
-            "bridge",
+            "bridge", "custom",
           ],
           supportedChains: SUPPORTED_CHAINS,
-          products: ["earn", "credit", "bridge"],
+          products: ["earn", "credit", "bridge", "traditional_investing"],
         },
         { cta: { commands: ["aave-markets --chain 1", "vaults --chain 1"] } }
       );
@@ -1160,6 +1218,36 @@ const cli = Cli.create("grimoire-compass", {
       const chain = COMPASS_CHAIN_MAP[c.options.chain];
       if (!chain) throw new Error(`Unsupported chain ${c.options.chain}`);
       const result = await sdk.credit.creditPositions({
+        owner: c.options.owner,
+        chain,
+      });
+      return c.ok(serializeBigInts(result));
+    },
+  })
+  .command("ti-opportunities", {
+    description: "List available Traditional Investing assets (perpetual futures)",
+    options: z.object({
+      chain: z.coerce.number().describe("Chain ID"),
+    }),
+    async run(c) {
+      const sdk = getSDK();
+      const chain = COMPASS_CHAIN_MAP[c.options.chain];
+      if (!chain) throw new Error(`Unsupported chain ${c.options.chain}`);
+      const result = await sdk.traditionalInvesting.traditionalInvestingOpportunities({ chain });
+      return c.ok(serializeBigInts(result));
+    },
+  })
+  .command("ti-positions", {
+    description: "Show Traditional Investing positions",
+    options: z.object({
+      owner: z.string().describe("Wallet address (0x...)"),
+      chain: z.coerce.number().describe("Chain ID"),
+    }),
+    async run(c) {
+      const sdk = getSDK();
+      const chain = COMPASS_CHAIN_MAP[c.options.chain];
+      if (!chain) throw new Error(`Unsupported chain ${c.options.chain}`);
+      const result = await sdk.traditionalInvesting.traditionalInvestingPositions({
         owner: c.options.owner,
         chain,
       });
@@ -1266,13 +1354,326 @@ git commit -m "fix(venues): compass_v2 adapter fixups from verification"
 
 ---
 
+## Task 6: Executor Hybrid Routing
+
+**Files:**
+- Modify: `packages/core/src/wallet/executor.ts`
+
+### What
+
+Modify `tryExecuteOffchainAction()` to allow custom actions on adapters that have `executeAction`, even when `executionType !== "offchain"`. This enables the compass_v2 hybrid adapter (EVM for Earn/Credit/Bridge, offchain for Traditional Investing).
+
+### Step 1: Update the guard in `tryExecuteOffchainAction`
+
+In `packages/core/src/wallet/executor.ts` around line 539, change:
+
+```typescript
+if (!adapter || adapter.meta.executionType !== "offchain") {
+  return null;
+}
+```
+
+To:
+
+```typescript
+if (!adapter) return null;
+if (adapter.meta.executionType !== "offchain") {
+  if (action.type !== "custom" || !adapter.executeAction) return null;
+}
+```
+
+This is a 3-line change. The logic:
+- Pure offchain adapters (like Hyperliquid): all actions go through `executeAction` — unchanged
+- Hybrid adapters (like compass_v2): only `custom` actions go through `executeAction`, everything else goes through `buildAction` as before
+- Pure EVM adapters: unchanged (they don't have `executeAction`)
+
+### Step 2: Verify existing tests still pass
+
+Run: `bun test packages/core/`
+Expected: All existing tests pass. The change is backward-compatible.
+
+### Step 3: Commit
+
+```bash
+git add packages/core/src/wallet/executor.ts
+git commit -m "feat(core): allow hybrid adapters to route custom actions to executeAction"
+```
+
+---
+
+## Task 7: Traditional Investing Handlers
+
+**Files:**
+- Modify: `packages/venues/src/adapters/compass-v2.ts`
+
+### Step 1: Add `privateKey` to config and imports
+
+Add to `CompassV2AdapterConfig`:
+```typescript
+privateKey?: `0x${string}`;
+```
+
+Add import:
+```typescript
+import { privateKeyToAccount } from "viem/accounts";
+import { zeroAddress } from "viem";
+```
+
+### Step 2: Add TI setup cache and auto-manager
+
+Inside the factory closure:
+
+```typescript
+// TI setup cache: "wallet:chainId" → setup complete
+const tiSetupCache = new Map<string, boolean>();
+
+async function ensureTradFiSetup(ctx: VenueAdapterContext): Promise<void> {
+  const key = `${ctx.walletAddress}:${ctx.chainId}`;
+  if (tiSetupCache.get(key)) return;
+
+  const chain = resolveCompassChain(ctx.chainId);
+
+  // Enable unified account
+  await sdk.traditionalInvesting.traditionalInvestingEnableUnifiedAccount({
+    owner: ctx.walletAddress,
+    chain,
+  });
+
+  // Approve builder fee
+  await sdk.traditionalInvesting.traditionalInvestingApproveBuilderFee({
+    owner: ctx.walletAddress,
+    chain,
+  });
+
+  tiSetupCache.set(key, true);
+}
+```
+
+### Step 3: Add `case "custom"` to `buildAction` switch
+
+Before the `default:` case:
+
+```typescript
+case "custom":
+  return {
+    tx: { to: zeroAddress, data: "0x", value: 0n },
+    description: `Compass V2 custom action: ${(action as any).op}`,
+    action,
+  };
+```
+
+This returns a dummy preview transaction — real execution happens in `executeAction`.
+
+### Step 4: Add `executeAction()` method
+
+Add `executeAction` to the returned adapter object:
+
+```typescript
+async executeAction(action: Action, ctx: VenueAdapterContext) {
+  if (action.type !== "custom") {
+    throw new Error(`Compass V2 executeAction only handles custom actions, got "${action.type}"`);
+  }
+
+  if (!config.privateKey) {
+    throw new Error("Compass V2: privateKey is required for Traditional Investing actions");
+  }
+
+  const customAction = action as CustomAction;
+  const chain = resolveCompassChain(ctx.chainId);
+  const account = privateKeyToAccount(config.privateKey);
+  const args = customAction.args as Record<string, unknown>;
+
+  // Auto-setup on first trade (skip for setup/leverage ops)
+  if (!["ti_setup", "ti_set_leverage"].includes(customAction.op)) {
+    await ensureTradFiSetup(ctx);
+  }
+
+  switch (customAction.op) {
+    case "ti_market_order": {
+      const result = await sdk.traditionalInvesting.traditionalInvestingMarketOrder({
+        owner: ctx.walletAddress, chain, ...args,
+      });
+      // Sign any EIP-712 payloads
+      return signAndSubmit(result, account, customAction.op);
+    }
+    case "ti_limit_order": { /* similar pattern */ }
+    case "ti_cancel_order": { /* similar pattern */ }
+    case "ti_deposit": { /* similar pattern */ }
+    case "ti_withdraw": { /* similar pattern */ }
+    case "ti_setup": {
+      await ensureTradFiSetup(ctx);
+      return { id: "setup", status: "completed", reference: "setup" };
+    }
+    case "ti_set_leverage": {
+      const result = await sdk.traditionalInvesting.traditionalInvestingEnsureLeverage({
+        owner: ctx.walletAddress, chain, ...args,
+      });
+      return signAndSubmit(result, account, customAction.op);
+    }
+    default:
+      throw new Error(`Compass V2: unknown TI op "${customAction.op}"`);
+  }
+}
+```
+
+### Step 5: Update meta
+
+Update `meta.actions` to include `"custom"`:
+```typescript
+actions: [
+  "lend", "withdraw", "swap", "transfer",
+  "supply_collateral", "withdraw_collateral", "borrow", "repay",
+  "bridge", "custom",
+],
+```
+
+Update `meta.description`:
+```typescript
+description: "Compass Labs V2 multi-product DeFi adapter (Earn, Credit, Bridge, Traditional Investing)",
+```
+
+### Step 6: Commit
+
+```bash
+git add packages/venues/src/adapters/compass-v2.ts
+git commit -m "feat(venues): add Traditional Investing handlers to compass_v2 adapter"
+```
+
+---
+
+## Task 8: TI Tests
+
+**Files:**
+- Modify: `packages/venues/src/adapters/compass-v2.test.ts`
+
+### Step 1: Extend mock SDK with TI namespace
+
+Add to `createMockSdk()`:
+
+```typescript
+traditionalInvesting: {
+  traditionalInvestingMarketOrder: async (args) => { calls.push(...); return mockTiResponse; },
+  traditionalInvestingLimitOrder: async (args) => { ... },
+  traditionalInvestingCancelOrder: async (args) => { ... },
+  traditionalInvestingDeposit: async (args) => { ... },
+  traditionalInvestingWithdraw: async (args) => { ... },
+  traditionalInvestingEnableUnifiedAccount: async (args) => { ... },
+  traditionalInvestingApproveBuilderFee: async (args) => { ... },
+  traditionalInvestingEnsureLeverage: async (args) => { ... },
+},
+```
+
+### Step 2: Add TI test cases
+
+```typescript
+describe("Traditional Investing", () => {
+  test("custom action in buildAction returns dummy preview tx", async () => { ... });
+  test("ti_market_order via executeAction calls SDK and returns result", async () => { ... });
+  test("ti_limit_order via executeAction calls SDK and returns result", async () => { ... });
+  test("first TI trade triggers auto-setup", async () => { ... });
+  test("second TI trade skips setup (cached)", async () => { ... });
+  test("ti_setup explicitly triggers setup", async () => { ... });
+  test("ti_set_leverage calls ensureLeverage", async () => { ... });
+  test("missing privateKey throws clear error", async () => { ... });
+  test("unknown TI op throws", async () => { ... });
+});
+```
+
+### Step 3: Verify tests pass
+
+Run: `bun test packages/venues/src/adapters/compass-v2.test.ts`
+
+### Step 4: Commit
+
+```bash
+git add packages/venues/src/adapters/compass-v2.test.ts
+git commit -m "test(venues): add Traditional Investing test cases for compass_v2"
+```
+
+---
+
+## Task 9: TI CLI Commands
+
+**Files:**
+- Modify: `packages/venues/src/cli/compass.ts`
+
+### Step 1: Add `ti-opportunities` command
+
+```typescript
+.command("ti-opportunities", {
+  description: "List available Traditional Investing assets (perpetual futures)",
+  options: z.object({
+    chain: z.coerce.number().describe("Chain ID"),
+  }),
+  async run(c) {
+    const sdk = getSDK();
+    const chain = COMPASS_CHAIN_MAP[c.options.chain];
+    if (!chain) throw new Error(`Unsupported chain ${c.options.chain}`);
+    const result = await sdk.traditionalInvesting.traditionalInvestingOpportunities({ chain });
+    return c.ok(serializeBigInts(result));
+  },
+})
+```
+
+### Step 2: Add `ti-positions` command
+
+```typescript
+.command("ti-positions", {
+  description: "Show Traditional Investing positions",
+  options: z.object({
+    owner: z.string().describe("Wallet address (0x...)"),
+    chain: z.coerce.number().describe("Chain ID"),
+  }),
+  async run(c) {
+    const sdk = getSDK();
+    const chain = COMPASS_CHAIN_MAP[c.options.chain];
+    if (!chain) throw new Error(`Unsupported chain ${c.options.chain}`);
+    const result = await sdk.traditionalInvesting.traditionalInvestingPositions({
+      owner: c.options.owner,
+      chain,
+    });
+    return c.ok(serializeBigInts(result));
+  },
+})
+```
+
+### Step 3: Update CLI description
+
+```typescript
+description: "Compass Labs V2 — Earn, Credit, Bridge, and Traditional Investing operations",
+```
+
+### Step 4: Add suggestions
+
+```typescript
+suggestions: [
+  // ... existing suggestions ...
+  "list Traditional Investing opportunities",
+  "show TI positions for an address",
+],
+```
+
+### Step 5: Commit
+
+```bash
+git add packages/venues/src/cli/compass.ts
+git commit -m "feat(venues): add Traditional Investing CLI commands to compass_v2"
+```
+
+---
+
 ## Execution Order & Dependencies
 
 ```
-Task 1 (scaffold) ──→ Task 2 (tests) ──→ Task 3 (CLI) ──→ Task 4 (register) ──→ Task 5 (verify)
+Tasks 1-5 (existing EVM) ──→ Task 6 (executor hybrid routing) ──→ Task 7 (TI handlers) ──→ Task 8 (TI tests) ──→ Task 9 (TI CLI)
 ```
 
-All tasks are sequential since each builds on the previous. The adapter code and tests will likely need iteration (Task 2 may reveal SDK type mismatches that require adapter fixes).
+Tasks 1-5 cover the EVM products (Earn, Credit, Bridge) and are unchanged. Tasks 6-9 add Traditional Investing on top:
+
+- **Task 6** (executor): Must come first — enables hybrid adapter routing in the core executor
+- **Task 7** (TI handlers): Depends on Task 6 — implements the actual TI logic in the adapter
+- **Task 8** (TI tests): Depends on Task 7 — validates TI behavior
+- **Task 9** (TI CLI): Can be done in parallel with Task 8 — adds data query commands
 
 ## Important Notes for the Implementer
 

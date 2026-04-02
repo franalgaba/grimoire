@@ -9,8 +9,8 @@ Unit tests for the compass_v2 adapter, following existing test patterns (colocat
 1. Create `packages/venues/src/adapters/compass-v2.test.ts`
 
 2. Test structure:
-   - Create mock SDK object with mock functions for each namespace (earn, credit, bridge)
-   - Inject via `createCompassV2Adapter({ sdk: mockSdk })`
+   - Create mock SDK object with mock functions for each namespace (earn, credit, bridge, traditionalInvesting)
+   - Inject via `createCompassV2Adapter({ sdk: mockSdk, privateKey: "0x..." })`
    - Create minimal `VenueAdapterContext` with mock provider
 
 3. Test cases:
@@ -39,6 +39,17 @@ Unit tests for the compass_v2 adapter, following existing test patterns (colocat
    - `bridge` with USDC → calls `cctpBurn` with correct chain mapping
    - `bridge` with non-USDC → throws error
 
+   **Traditional Investing (custom actions):**
+   - `custom` action in `buildAction` → returns dummy preview tx (to: zeroAddress)
+   - `ti_market_order` via `executeAction` → calls `traditionalInvestingMarketOrder`, returns result
+   - `ti_limit_order` via `executeAction` → calls `traditionalInvestingLimitOrder`, returns result
+   - First TI trade triggers auto-setup (enable_unified_account + approve_builder_fee)
+   - Second TI trade skips setup (cached)
+   - `ti_setup` explicitly triggers setup
+   - `ti_set_leverage` calls `traditionalInvestingEnsureLeverage`
+   - Missing `privateKey` in config → clear error in `executeAction`
+   - Unknown TI op → descriptive error
+
    **Error cases:**
    - Unsupported chain ID → descriptive error
    - Unsupported action type → descriptive error
@@ -48,7 +59,7 @@ Unit tests for the compass_v2 adapter, following existing test patterns (colocat
    **Meta validation:**
    - `meta.name` is `"compass_v2"`
    - `meta.supportedChains` contains expected chains
-   - `meta.actions` lists all supported types
+   - `meta.actions` lists all supported types (including `"custom"`)
 
 4. Verify tests pass with `bun test packages/venues/src/adapters/compass-v2.test.ts`
 
@@ -58,8 +69,14 @@ Unit tests for the compass_v2 adapter, following existing test patterns (colocat
 - [ ] All earn action types have at least one test
 - [ ] All credit action types have at least one test (both granular and combined)
 - [ ] Bridge action has happy path + error tests
+- [ ] TI custom action routing in `buildAction` (dummy preview tx)
+- [ ] TI `executeAction` per op (market order, limit order, etc.)
+- [ ] TI auto-setup flow (first trade triggers, second skips)
+- [ ] Missing `privateKey` error in `executeAction`
+- [ ] Unknown TI op error
+- [ ] Executor hybrid routing test (custom actions routed to `executeAction` on non-offchain adapters)
 - [ ] Error cases are covered
-- [ ] Meta is validated
+- [ ] Meta is validated (includes `"custom"` in actions)
 - [ ] All tests pass
 - [ ] No real API calls — all SDK methods are mocked
 
@@ -73,3 +90,4 @@ Unit tests for the compass_v2 adapter, following existing test patterns (colocat
 - Task 02 (earn implementation)
 - Task 03 (credit implementation)
 - Task 04 (bridge implementation)
+- Task 08 (traditional investing — for TI test cases)

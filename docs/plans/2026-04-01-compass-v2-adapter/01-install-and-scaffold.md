@@ -11,11 +11,12 @@ Set up the foundation: install the `@compass-labs/api-sdk` dependency and create
 3. Create `packages/venues/src/adapters/compass-v2.ts` with:
 
 ### Core scaffold
-- `CompassV2AdapterConfig` interface (apiKey, sdk, supportedChains, gasSponsorship)
+- `CompassV2AdapterConfig` interface (apiKey, sdk, supportedChains, gasSponsorship, privateKey)
 - `createCompassV2Adapter(config)` factory function
 - `compassV2Adapter` default singleton
 - `VenueAdapterMeta` declaration
 - Stub `buildAction` that throws "not yet implemented" per action type
+- Stub `executeAction` that throws "not yet implemented" (for Traditional Investing)
 
 ### Chain mapping
 - `COMPASS_CHAIN_MAP`: `{ 1: "ethereum", 8453: "base", 42161: "arbitrum" }`
@@ -25,6 +26,8 @@ Set up the foundation: install the `@compass-labs/api-sdk` dependency and create
 - `CompassAccountCache` — simple Map keyed by `"${walletAddress}:${chainId}:${product}"` storing boolean (account exists)
 - `ensureAccount(product: "earn" | "credit", ctx, sdk)` — checks cache, queries API if unknown, returns `BuiltTransaction | null` for account creation
 - Product type inference: `getProductType(action)` — maps action types to "earn" or "credit"
+- `tiSetupCache` — simple Map keyed by `"${walletAddress}:${chainId}"` storing boolean (TI setup complete)
+- `ensureTradFiSetup(ctx)` — enables unified account + approves builder fee on first call, cached thereafter
 
 ## Acceptance Criteria
 
@@ -33,10 +36,13 @@ Set up the foundation: install the `@compass-labs/api-sdk` dependency and create
 - [ ] `compassV2Adapter` singleton exists with `COMPASS_API_KEY` env var
 - [ ] `meta.name` is `"compass_v2"`
 - [ ] `meta.supportedChains` is `[1, 8453, 42161]`
-- [ ] `meta.actions` lists: `["lend", "withdraw", "swap", "transfer", "supply_collateral", "withdraw_collateral", "borrow", "repay", "bridge"]`
+- [ ] `meta.actions` lists: `["lend", "withdraw", "swap", "transfer", "supply_collateral", "withdraw_collateral", "borrow", "repay", "bridge", "custom"]`
 - [ ] `meta.requiredEnv` includes `"COMPASS_API_KEY"`
 - [ ] Chain mapping correctly converts chain IDs to Compass API strings
 - [ ] Account cache and ensureAccount helper are implemented
+- [ ] TI setup cache and ensureTradFiSetup helper are implemented
+- [ ] `privateKey` is accepted in `CompassV2AdapterConfig`
+- [ ] Stub `executeAction` exists (throws "not yet implemented")
 
 ## Files to Modify
 
