@@ -159,5 +159,5 @@ The Compass API uses string chain names; Grimoire uses numeric chain IDs:
 4. **Implement Bridge action** — `bridge` via CCTP burn, plus `resolveHandoffStatus` for mint lifecycle
 5. **Add CLI entry point** — Create `compass.ts` CLI with `incur` framework, data endpoints for vaults/markets/positions
 6. **Register & wire up** — Add to adapters array, update discovery maps, update `package.json` bin entry
-7. **Write tests** — Unit tests with mocked SDK, covering all action types, account creation flows, and error cases
-8. **Traditional Investing** — Executor hybrid routing, TI handlers in `executeAction()`, TI tests, TI CLI commands
+7. **Traditional Investing** — Executor hybrid routing, TI handlers in `executeAction()`, TI CLI commands
+8. **Write tests** — Unit tests with mocked SDK, covering all action types (Earn, Credit, Bridge, TI), account creation flows, auto-setup, and error cases

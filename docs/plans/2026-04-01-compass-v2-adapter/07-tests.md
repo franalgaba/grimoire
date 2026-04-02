@@ -90,4 +90,8 @@ Unit tests for the compass_v2 adapter, following existing test patterns (colocat
 - Task 02 (earn implementation)
 - Task 03 (credit implementation)
 - Task 04 (bridge implementation)
-- Task 08 (traditional investing — for TI test cases)
+- Task 05 (CLI entry point)
+- Task 06 (register & wire)
+- Task 08 (traditional investing — executor routing, TI handlers, TI CLI)
+
+> **Note:** Tests are the final implementation step. All adapter code (EVM + TI) and wiring must be complete before writing tests.

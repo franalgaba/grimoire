@@ -527,7 +527,7 @@ git commit -m "feat(venues): scaffold compass_v2 adapter with SDK, chain map, ac
 
 ## Task 2: Write Tests
 
-Tests come before iterating on the implementation — this ensures we know what "done" looks like.
+> **Execution order note:** This task runs **after all implementation is complete** (Tasks 1, 3-7, 8-9). It covers all action types including Traditional Investing.
 
 **Files:**
 - Create: `packages/venues/src/adapters/compass-v2.test.ts`
@@ -1665,15 +1665,22 @@ git commit -m "feat(venues): add Traditional Investing CLI commands to compass_v
 ## Execution Order & Dependencies
 
 ```
-Tasks 1-5 (existing EVM) ──→ Task 6 (executor hybrid routing) ──→ Task 7 (TI handlers) ──→ Task 8 (TI tests) ──→ Task 9 (TI CLI)
+Task 1 (scaffold) ──→ Tasks 3,4 (CLI, register) ──→ Task 6 (executor routing) ──→ Task 7 (TI handlers) ─┬→ Task 9 (TI CLI)
+                                                                                                          └→ Task 2 (ALL tests) ──→ Task 5 (verify)
 ```
 
-Tasks 1-5 cover the EVM products (Earn, Credit, Bridge) and are unchanged. Tasks 6-9 add Traditional Investing on top:
+Implementation-first, tests-last approach:
 
-- **Task 6** (executor): Must come first — enables hybrid adapter routing in the core executor
-- **Task 7** (TI handlers): Depends on Task 6 — implements the actual TI logic in the adapter
-- **Task 8** (TI tests): Depends on Task 7 — validates TI behavior
-- **Task 9** (TI CLI): Can be done in parallel with Task 8 — adds data query commands
+- **Task 1** (scaffold): Foundation — SDK install, adapter file, chain map, account management
+- **Task 3** (CLI): Can start after Task 1 — CLI entry point for data queries
+- **Task 4** (register): Can start after Task 1 — wire up index, discovery, bin
+- **Task 6** (executor): After Tasks 3-4 — enables hybrid adapter routing in the core executor
+- **Task 7** (TI handlers): Depends on Task 6 — implements TI logic in the adapter
+- **Task 9** (TI CLI): After Task 7 — adds TI-specific CLI commands
+- **Task 2** (tests): After Task 9 — **all tests** (Earn, Credit, Bridge, TI) written together once all implementation is complete
+- **Task 5** (verify): Final step — type check, full test suite, no regressions
+
+Task 8 (TI tests) is merged into Task 2 — all tests are written in a single pass after implementation.
 
 ## Important Notes for the Implementer
 

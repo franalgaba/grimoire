@@ -4,11 +4,12 @@
 
 Add Traditional Investing (perpetual futures on stocks/commodities/forex via Hyperliquid) to the compass_v2 adapter. This makes compass_v2 a **hybrid adapter**: `buildAction` for EVM products (Earn, Credit, Bridge) + `executeAction` for offchain TradFi.
 
-This task covers four sub-tasks:
+This task covers three sub-tasks:
 1. Executor hybrid routing change (Task 6 in implementation plan)
 2. TI handler implementation (Task 7)
-3. TI tests (Task 8)
-4. TI CLI commands (Task 9)
+3. TI CLI commands (Task 9)
+
+> **Note:** TI tests are part of Task 07 (Write Tests), which runs after all implementation is complete.
 
 ## Sub-task 6: Executor Hybrid Routing
 
