@@ -1,5 +1,5 @@
-import type { Action, VenueAdapter, VenueAdapterContext } from "@grimoirelabs/core";
-import { ExchangeClient, HttpTransport } from "@nktkas/hyperliquid";
+import type { Action, MetricRequest, VenueAdapter, VenueAdapterContext } from "@grimoirelabs/core";
+import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import { zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { assertSupportedConstraints } from "../shared/constraints.js";
@@ -8,6 +8,7 @@ export interface HyperliquidAdapterConfig {
   privateKey: `0x${string}`;
   assetMap: Record<string, number>;
   exchange?: ExchangeClient;
+  info?: Pick<InfoClient, "allMids">;
   transport?: HttpTransport;
 }
 
@@ -19,6 +20,7 @@ const HYPERLIQUID_META: VenueAdapter["meta"] = {
   supportsQuote: false,
   supportsSimulation: false,
   supportsPreviewCommit: true,
+  metricSurfaces: ["mid_price"],
   requiredEnv: ["HYPERLIQUID_PRIVATE_KEY"],
   dataEndpoints: ["mids", "l2-book", "open-orders", "meta", "spot-meta"],
   description: "Hyperliquid offchain adapter",
@@ -29,9 +31,13 @@ export function createHyperliquidAdapter(config: HyperliquidAdapterConfig): Venu
   const account = privateKeyToAccount(config.privateKey);
   const transport = config.transport ?? new HttpTransport();
   const exchange = config.exchange ?? new ExchangeClient({ transport, wallet: account });
+  const info = config.info ?? new InfoClient({ transport });
 
   return {
     meta: HYPERLIQUID_META,
+    async readMetric(request: MetricRequest) {
+      return await readHyperliquidMetric(request, info);
+    },
     async buildAction(action, _ctx) {
       assertSupportedConstraints(HYPERLIQUID_META, action);
 
@@ -105,6 +111,10 @@ export function createHyperliquidAdapter(config: HyperliquidAdapterConfig): Venu
 
 export const hyperliquidAdapter: VenueAdapter = {
   meta: HYPERLIQUID_META,
+  async readMetric(request: MetricRequest) {
+    const info = new InfoClient({ transport: new HttpTransport() });
+    return await readHyperliquidMetric(request, info);
+  },
   async buildAction() {
     throw new Error("Hyperliquid adapter requires a private key. Use createHyperliquidAdapter().");
   },
@@ -288,4 +298,25 @@ function extractReference(payload: unknown): string | undefined {
   }
 
   return undefined;
+}
+
+async function readHyperliquidMetric(
+  request: MetricRequest,
+  info: Pick<InfoClient, "allMids">
+): Promise<number> {
+  if (request.surface !== "mid_price") {
+    throw new Error(`Hyperliquid does not support metric surface '${request.surface}'`);
+  }
+  if (!request.asset) {
+    throw new Error("Hyperliquid mid_price metric requires asset as the third argument");
+  }
+
+  const mids = await info.allMids();
+  const symbol = request.asset.trim().toUpperCase();
+  const raw = mids[symbol] ?? mids[request.asset] ?? mids[request.asset.trim()];
+  const price = typeof raw === "string" ? Number.parseFloat(raw) : Number(raw);
+  if (!Number.isFinite(price)) {
+    throw new Error(`Hyperliquid mid price unavailable for '${request.asset}'`);
+  }
+  return price;
 }

@@ -5,6 +5,7 @@
 
 import type { ExecutionContext } from "../types/execution.js";
 import type { BuiltinFn, Expression } from "../types/expressions.js";
+import type { MetricRequest } from "../types/query-provider.js";
 
 export type EvalValue =
   | string
@@ -27,7 +28,7 @@ export interface EvalContext {
   // Blockchain query functions (injected)
   queryBalance?: (asset: string, address?: string) => Promise<bigint>;
   queryPrice?: (base: string, quote: string, source?: string) => Promise<number>;
-  queryApy?: (venue: string, asset: string) => Promise<number>;
+  queryMetric?: (request: MetricRequest) => Promise<number>;
   queryHealthFactor?: (venue: string) => Promise<number>;
   queryPosition?: (venue: string, asset: string) => Promise<unknown>;
   queryDebt?: (venue: string, asset: string) => Promise<bigint>;
@@ -374,7 +375,8 @@ function evaluateCall(fn: BuiltinFn, args: EvalValue[]): EvalValue {
     // Async functions should not be called synchronously
     case "balance":
     case "price":
-    case "get_apy":
+    case "apy":
+    case "metric":
     case "get_health_factor":
     case "get_position":
     case "get_debt":
@@ -413,12 +415,30 @@ async function evaluateCallAsync(
       return ctx.queryPrice(base as string, quote as string, source as string | undefined);
     }
 
-    case "get_apy": {
-      if (!ctx.queryApy) {
-        throw new Error("APY queries not available in this context");
+    case "apy": {
+      if (!ctx.queryMetric) {
+        throw new Error("Metric queries not available in this context");
       }
-      const [venue, asset] = args;
-      return ctx.queryApy(venue as string, asset as string);
+      const [venue, asset, selector] = args;
+      return ctx.queryMetric({
+        surface: "apy",
+        venue: venue as string,
+        asset: asset as string,
+        selector: selector as string | undefined,
+      });
+    }
+
+    case "metric": {
+      if (!ctx.queryMetric) {
+        throw new Error("Metric queries not available in this context");
+      }
+      const [surface, venue, asset, selector] = args;
+      return ctx.queryMetric({
+        surface: surface as string,
+        venue: venue as string,
+        asset: asset as string | undefined,
+        selector: selector as string | undefined,
+      });
     }
 
     case "get_health_factor": {
@@ -476,7 +496,7 @@ export function createEvalContext(execCtx: ExecutionContext): EvalContext {
     state: execCtx.state,
     queryBalance: qp?.queryBalance?.bind(qp),
     queryPrice: qp?.queryPrice?.bind(qp),
-    queryApy: qp?.queryApy?.bind(qp),
+    queryMetric: qp?.queryMetric?.bind(qp),
     queryHealthFactor: qp?.queryHealthFactor?.bind(qp),
     queryPosition: qp?.queryPosition?.bind(qp),
     queryDebt: qp?.queryDebt?.bind(qp),

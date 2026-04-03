@@ -19,7 +19,7 @@ import {
   type KeyConfig,
   type SpellIR,
 } from "@grimoirelabs/core";
-import { adapters, createAlchemyQueryProvider } from "@grimoirelabs/venues";
+import { adapters, createCompositeQueryProvider } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { hydrateParamsFromEnsProfile, resolveEnsProfile } from "../lib/ens-profile.js";
@@ -321,7 +321,14 @@ async function executeWithWallet(
   }
 
   const vault = (options.vault ?? wallet.address) as Address;
-  const queryProvider = createAlchemyQueryProvider({ provider, chainId, vault, rpcUrl });
+  const queryProvider = createCompositeQueryProvider({
+    provider,
+    chainId,
+    vault,
+    rpcUrl,
+    adapters: configuredAdapters,
+    venueAliases: spell.aliases,
+  });
   console.error(`  ${chalk.dim("Vault:")} ${vault}`);
 
   if (!isTest) {
@@ -493,7 +500,14 @@ async function executeSimulation(
   const needsSimProvider = !!simRpcUrl || spellUsesQueryFunctions(spell);
   const simProvider = needsSimProvider ? createProvider(chainId, simRpcUrl) : undefined;
   const simQueryProvider = simProvider
-    ? createAlchemyQueryProvider({ provider: simProvider, chainId, vault, rpcUrl: simRpcUrl })
+    ? createCompositeQueryProvider({
+        provider: simProvider,
+        chainId,
+        vault,
+        rpcUrl: simRpcUrl,
+        adapters,
+        venueAliases: spell.aliases,
+      })
     : undefined;
   const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir) ?? [];
   const onAdvisory = await resolveAdvisoryHandler(spell.id, {

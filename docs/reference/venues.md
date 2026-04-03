@@ -9,6 +9,7 @@ Each adapter implements `VenueAdapter`:
 - `meta`: capability metadata for discovery and constraint support
 - `buildAction(action, ctx)`: build EVM tx plan (single or multi-tx)
 - `executeAction(action, ctx)`: offchain execution path (optional)
+- `readMetric(request, ctx)`: optional metric query surface for `metric()` / `apy()`
 
 `meta` includes:
 
@@ -53,6 +54,24 @@ Default adapter bundle order:
 Unsupported constraints fail fast with:
 
 `Adapter '<name>' does not support constraint '<constraint>' for action '<action>'`
+
+## Metric Surfaces
+
+These surfaces are available through spell expressions:
+
+- `apy(venue, asset[, selector])`
+- `metric(surface, venue[, asset[, selector]])`
+
+| Adapter | Surfaces | Selector examples |
+|---------|----------|-------------------|
+| `aave_v3` | `apy` | `apy(aave, USDC)` |
+| `morpho_blue` | `apy` | `apy(morpho, USDC, "wbtc-usdc-1")` |
+| `uniswap_v3` | `quote_out` | `metric("quote_out", uni_v3, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000")` |
+| `uniswap_v4` | `quote_out` | `metric("quote_out", uni_v4, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000")` |
+| `across` | `quote_out` | `metric("quote_out", across, USDC, "to_chain=8453,amount=1000000")` |
+| `pendle` | `quote_out` | `metric("quote_out", pendle, USDC, "asset_out=DAI,amount=1000000,slippage_bps=1000")` |
+| `hyperliquid` | `mid_price` | `metric("mid_price", hyperliquid, ETH)` |
+| `polymarket` | `mid_price` | `metric("mid_price", polymarket, USDC, "token_id=<clobTokenId>")` |
 
 ## Structured Build/Execution Data
 

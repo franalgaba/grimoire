@@ -32,9 +32,9 @@ spell LendingRebalancer {
       if moves_made >= limits.max_moves_per_run {
         emit max_moves_reached(count=moves_made)
       } else {
-        aave_rate = get_apy(aave, asset)
-        morpho_rate = get_apy(morpho, asset)
-        compound_rate = get_apy(compound, asset)
+        aave_rate = apy(aave, asset)
+        morpho_rate = apy(morpho, asset)
+        compound_rate = apy(compound, asset)
 
         wallet_balance = balance(asset)
         best_rate = max(aave_rate, morpho_rate, compound_rate)
@@ -63,9 +63,9 @@ spell LendingRebalancer {
     }
     emit hourly_check_complete(
     rebalances=moves_made,
-    aave_rate=get_apy(aave, USDC),
-    morpho_rate=get_apy(morpho, USDC),
-    compound_rate=get_apy(compound, USDC)
+    aave_rate=apy(aave, USDC),
+    morpho_rate=apy(morpho, USDC),
+    compound_rate=apy(compound, USDC)
     )
 
   }

@@ -92,6 +92,33 @@ function assertCompileSuccess(
 }
 
 describe("Pendle adapter", () => {
+  test("reads quote_out metric for asset pair selector", async () => {
+    const adapter = createPendleAdapter({
+      fetchFn: async () =>
+        new Response(JSON.stringify(createConvertResponse("90")), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      tokenMap,
+      supportedChains: [1],
+      enableV2Fallback: false,
+    });
+    if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+    const quoteOut = await adapter.readMetric(
+      {
+        surface: "quote_out",
+        venue: "pendle",
+        asset: "USDC",
+        selector: "asset_out=PT,amount=100",
+      },
+      createCtx()
+    );
+
+    expect(Number.isFinite(quoteOut)).toBe(true);
+    expect(quoteOut).toBeGreaterThan(0);
+  });
+
   test("builds approval + convert tx from API response", async () => {
     let requestBody: unknown;
     const fetchMock = async (_input: string | URL | Request, init?: RequestInit) => {

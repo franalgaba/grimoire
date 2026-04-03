@@ -22,6 +22,28 @@ const adapterContext: VenueAdapterContext = {
 };
 
 describe("Hyperliquid adapter", () => {
+  test("reads mid_price metric via info client", async () => {
+    const adapter = createHyperliquidAdapter({
+      privateKey: "0x0000000000000000000000000000000000000000000000000000000000000001",
+      assetMap: { BTC: 1 },
+      info: {
+        allMids: async () => ({ BTC: "30000.5" }),
+      },
+    });
+    if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+    const value = await adapter.readMetric(
+      {
+        surface: "mid_price",
+        venue: "hyperliquid",
+        asset: "BTC",
+      },
+      adapterContext
+    );
+
+    expect(value).toBe(30000.5);
+  });
+
   test("builds offchain order description", async () => {
     const adapter = createHyperliquidAdapter({
       privateKey: "0x0000000000000000000000000000000000000000000000000000000000000001",

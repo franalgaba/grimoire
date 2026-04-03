@@ -1,13 +1,24 @@
 import { addressToBytes32, getIntegratorDataSuffix, getQuote } from "@across-protocol/app-sdk";
 import { spokePoolAbiV3_5 } from "@across-protocol/app-sdk/dist/abis/SpokePool/v3_5.js";
-import type { Address, VenueAdapter } from "@grimoirelabs/core";
+import type { Address, MetricRequest, VenueAdapter, VenueAdapterContext } from "@grimoirelabs/core";
 import { zeroAddress } from "viem";
 import { toBigInt, toBigIntIfPossible } from "../shared/bigint.js";
 import { applyBps } from "../shared/bps.js";
 import { assertSupportedConstraints, validateGasConstraints } from "../shared/constraints.js";
 import { buildApprovalIfNeeded } from "../shared/erc20.js";
 import { estimateGasIfSupported } from "../shared/gas.js";
-import { resolveBridgedTokenAddress, resolveTokenAddress } from "../shared/token-registry.js";
+import {
+  parseMetricSelector,
+  readMetricSelectorBigInt,
+  readMetricSelectorInt,
+  readMetricSelectorString,
+  scaleToHuman,
+} from "../shared/metric-selector.js";
+import {
+  resolveBridgedTokenAddress,
+  resolveTokenAddress,
+  resolveTokenDecimals,
+} from "../shared/token-registry.js";
 
 export interface AcrossAdapterConfig {
   integratorId?: `0x${string}`;
@@ -41,6 +52,7 @@ export function createAcrossAdapter(config: AcrossAdapterConfig = {}): VenueAdap
     supportsQuote: true,
     supportsSimulation: true,
     supportsPreviewCommit: true,
+    metricSurfaces: ["quote_out"],
     dataEndpoints: ["quote", "deposit_simulation"],
     description: "Across Protocol bridge adapter",
   };
@@ -51,6 +63,60 @@ export function createAcrossAdapter(config: AcrossAdapterConfig = {}): VenueAdap
 
   return {
     meta,
+    async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
+      if (request.surface !== "quote_out") {
+        throw new Error(`Across does not support metric surface '${request.surface}'`);
+      }
+      if (!request.asset) {
+        throw new Error("Across quote_out metric requires asset as the third argument");
+      }
+
+      const selector = parseMetricSelector(request.selector);
+      const destinationChainId = readMetricSelectorInt(
+        selector,
+        ["to_chain", "destination_chain", "chain", "to"],
+        { required: true, label: "to_chain" }
+      );
+      if (destinationChainId === undefined) {
+        throw new Error("Across quote_out metric requires selector to_chain");
+      }
+      const outputAsset =
+        readMetricSelectorString(selector, ["asset_out", "output_asset"], {
+          fallback: request.asset,
+          label: "asset_out",
+        }) ?? request.asset;
+
+      const originDecimals = safeResolveTokenDecimals(request.asset, ctx.chainId, 18);
+      const defaultAmount = 10n ** BigInt(originDecimals);
+      const amount =
+        readMetricSelectorBigInt(selector, ["amount", "amount_in", "in"], {
+          fallback: defaultAmount,
+          label: "amount",
+        }) ?? defaultAmount;
+
+      const inputToken = resolveAssetAddress(request.asset, ctx.chainId, assets);
+      const outputToken = resolveAssetAddress(
+        outputAsset,
+        destinationChainId,
+        assets,
+        inputToken,
+        ctx.chainId
+      );
+      const quote = await getQuoteImpl({
+        route: {
+          originChainId: ctx.chainId,
+          destinationChainId,
+          inputToken,
+          outputToken,
+        },
+        inputAmount: amount,
+        apiUrl: config.apiUrl,
+        recipient: ctx.walletAddress,
+      });
+
+      const outDecimals = safeResolveTokenDecimals(outputAsset, destinationChainId, originDecimals);
+      return scaleToHuman(quote.deposit.outputAmount, outDecimals);
+    },
     async buildAction(action, ctx) {
       assertSupportedConstraints(meta, action);
 
@@ -262,6 +328,17 @@ function resolveAssetAddress(
   }
 
   throw new Error(`No Across asset mapping for ${asset} on chain ${chainId}`);
+}
+
+function safeResolveTokenDecimals(asset: string, chainId: number, fallback: number): number {
+  try {
+    return resolveTokenDecimals(asset, chainId, {
+      defaultDecimals: fallback,
+      treatEthAsWrapped: true,
+    });
+  } catch {
+    return fallback;
+  }
 }
 
 async function resolveAcrossHandoffStatus(

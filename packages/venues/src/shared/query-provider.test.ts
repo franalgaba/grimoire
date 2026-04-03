@@ -3,7 +3,12 @@
  */
 
 import { describe, expect, mock, test } from "bun:test";
-import { createAlchemyQueryProvider, extractAlchemyKey } from "./query-provider.js";
+import type { VenueAdapter } from "@grimoirelabs/core";
+import {
+  createAlchemyQueryProvider,
+  createCompositeQueryProvider,
+  extractAlchemyKey,
+} from "./query-provider.js";
 
 // =============================================================================
 // extractAlchemyKey
@@ -147,6 +152,78 @@ describe("createAlchemyQueryProvider", () => {
       rpcUrl: "https://eth-mainnet.g.alchemy.com/v2/my-secret-key",
     });
     expect(qp.meta.supportedQueries).toContain("price");
+  });
+});
+
+describe("createCompositeQueryProvider", () => {
+  test("exposes metric in supportedQueries when adapters provide readMetric", () => {
+    const mockProvider = createMockProvider();
+    const adapter: VenueAdapter = {
+      meta: {
+        name: "aave_v3",
+        supportedChains: [1],
+        actions: [],
+        supportedConstraints: [],
+        metricSurfaces: ["apy"],
+      },
+      readMetric: async () => 420,
+    };
+
+    const qp = createCompositeQueryProvider({
+      provider: mockProvider,
+      chainId: 1,
+      vault: "0x0000000000000000000000000000000000000001" as `0x${string}`,
+      adapters: [adapter],
+      venueAliases: [
+        {
+          alias: "aave_v3",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000002",
+          label: "aave",
+        },
+      ],
+    });
+
+    expect(qp.meta.supportedQueries).toContain("metric");
+    expect(qp.meta.supportedMetrics).toContain("apy");
+  });
+
+  test("delegates queryMetric using venue label resolution", async () => {
+    const mockProvider = createMockProvider();
+    const readMetric = mock(async () => 450);
+    const adapter: VenueAdapter = {
+      meta: {
+        name: "aave_v3",
+        supportedChains: [1],
+        actions: [],
+        supportedConstraints: [],
+        metricSurfaces: ["apy"],
+      },
+      readMetric,
+    };
+
+    const qp = createCompositeQueryProvider({
+      provider: mockProvider,
+      chainId: 1,
+      vault: "0x0000000000000000000000000000000000000001" as `0x${string}`,
+      adapters: [adapter],
+      venueAliases: [
+        {
+          alias: "aave_v3",
+          chain: 1,
+          address: "0x0000000000000000000000000000000000000002",
+          label: "aave",
+        },
+      ],
+    });
+
+    const value = await qp.queryMetric?.({
+      surface: "apy",
+      venue: "aave",
+      asset: "USDC",
+    });
+    expect(value).toBe(450);
+    expect(readMetric).toHaveBeenCalled();
   });
 });
 

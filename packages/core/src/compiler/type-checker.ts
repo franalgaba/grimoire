@@ -108,10 +108,22 @@ const BUILTIN_SIGNATURES: Record<string, BuiltinSig> = {
     optionalArgs: [["source", "string"]],
     returns: "number",
   },
-  get_apy: {
+  apy: {
     args: [
       ["venue", "any"],
       ["asset", "asset"],
+    ],
+    optionalArgs: [["selector", "string"]],
+    returns: "number",
+  },
+  metric: {
+    args: [
+      ["surface", "string"],
+      ["venue", "any"],
+    ],
+    optionalArgs: [
+      ["asset", "asset"],
+      ["selector", "string"],
     ],
     returns: "number",
   },
@@ -488,6 +500,8 @@ function inferExprType(
         if (i < sig.args.length) {
           // For variadic functions, extra args use the type of the last required arg
           sigArg = sig.variadic ? sig.args[Math.min(i, sig.args.length - 1)] : sig.args[i];
+        } else if (sig.variadic) {
+          sigArg = sig.args[sig.args.length - 1] as [string, SpellType];
         } else {
           // Optional arg
           sigArg = (sig.optionalArgs ?? [])[i - sig.args.length];

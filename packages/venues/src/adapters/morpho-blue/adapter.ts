@@ -1,4 +1,10 @@
-import type { Action, Address, VenueAdapter } from "@grimoirelabs/core";
+import type {
+  Action,
+  Address,
+  MetricRequest,
+  VenueAdapter,
+  VenueAdapterContext,
+} from "@grimoirelabs/core";
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi, MetaMorphoAction } from "@morpho-org/blue-sdk-viem";
 import { encodeFunctionData } from "viem";
@@ -7,12 +13,15 @@ import { buildApprovalIfNeeded } from "../../shared/erc20.js";
 import { resolveTokenAddress } from "../../shared/token-registry.js";
 import { buildMorphoMetadata, toBigInt } from "./helpers.js";
 import {
+  getMorphoBlueMarketId,
   MORPHO_BLUE_DEFAULT_MARKETS,
   type MorphoBlueAdapterConfig,
   resolveExplicitMarketId,
   resolveMarket,
 } from "./markets.js";
 import { preflightBorrowReadiness } from "./preflight.js";
+
+const MORPHO_GRAPHQL_ENDPOINT = "https://blue-api.morpho.org/graphql" as const;
 
 export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueAdapter {
   const meta: VenueAdapter["meta"] = {
@@ -32,12 +41,28 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
     supportsQuote: false,
     supportsSimulation: false,
     supportsPreviewCommit: true,
+    metricSurfaces: ["apy"],
     dataEndpoints: ["info", "addresses", "vaults", "markets"],
     description: "Morpho Blue adapter",
   };
 
   return {
     meta,
+    async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
+      if (request.surface !== "apy") {
+        throw new Error(`Morpho Blue does not support metric surface '${request.surface}'`);
+      }
+
+      const scopedMarkets = config.markets.filter(
+        (market) => market.chainId === undefined || market.chainId === ctx.chainId
+      );
+      const marketId = resolveMetricMarketId(request.selector, scopedMarkets);
+      return await fetchMorphoApyBps({
+        chainId: ctx.chainId,
+        asset: request.asset,
+        marketId,
+      });
+    },
     async buildAction(action, ctx) {
       assertSupportedConstraints(meta, action);
 
@@ -251,6 +276,143 @@ async function buildVaultAction(
       },
     },
   ];
+}
+
+function resolveMetricMarketId(
+  selector: string | undefined,
+  markets: MorphoBlueAdapterConfig["markets"]
+): string | undefined {
+  if (!selector) {
+    return undefined;
+  }
+  if (selector.startsWith("0x")) {
+    return selector.toLowerCase();
+  }
+
+  const byConfigId = markets.find((market) => market.id === selector);
+  if (!byConfigId) {
+    throw new Error(`Morpho Blue market selector '${selector}' not found in configured markets`);
+  }
+  return getMorphoBlueMarketId(byConfigId).toLowerCase();
+}
+
+type MorphoMarketsResponse = {
+  markets?: {
+    items?: Array<{
+      marketId?: string;
+      chain?: { id?: number };
+      loanAsset?: { symbol?: string };
+      state?: { supplyApy?: number; supplyAssetsUsd?: number };
+    }>;
+  };
+};
+
+async function fetchMorphoApyBps(input: {
+  chainId: number;
+  asset?: string;
+  marketId?: string;
+}): Promise<number> {
+  const query = `
+    query ($first: Int!, $where: MarketFilters) {
+      markets(first: $first, where: $where) {
+        items {
+          marketId
+          chain { id }
+          loanAsset { symbol }
+          state { supplyApy supplyAssetsUsd }
+        }
+      }
+    }
+  `;
+
+  const where = input.marketId
+    ? { uniqueKey_in: [input.marketId] }
+    : { chainId_in: [input.chainId] };
+  const payload = await fetchMorphoMarkets(query, { first: 200, where });
+  const items = payload.markets?.items ?? [];
+  const candidate = pickMorphoMarketCandidate(items, input);
+  if (!candidate?.state || candidate.state.supplyApy === undefined) {
+    if (input.marketId) {
+      throw new Error(
+        `Morpho Blue APY metric unavailable for market_id '${input.marketId}' on chain ${input.chainId}`
+      );
+    }
+    throw new Error(`Morpho Blue APY metric unavailable for asset '${input.asset ?? "unknown"}'`);
+  }
+  return normalizeApyToBps(candidate.state.supplyApy);
+}
+
+function pickMorphoMarketCandidate(
+  items: Array<{
+    marketId?: string;
+    chain?: { id?: number };
+    loanAsset?: { symbol?: string };
+    state?: { supplyApy?: number; supplyAssetsUsd?: number };
+  }>,
+  input: {
+    chainId: number;
+    asset?: string;
+    marketId?: string;
+  }
+): {
+  marketId?: string;
+  chain?: { id?: number };
+  loanAsset?: { symbol?: string };
+  state?: { supplyApy?: number; supplyAssetsUsd?: number };
+} | null {
+  if (input.marketId) {
+    const match = items.find((item) => item.marketId?.toLowerCase() === input.marketId);
+    return match ?? null;
+  }
+
+  if (!input.asset) {
+    throw new Error("Morpho Blue APY metric requires an asset when market_id is omitted");
+  }
+
+  const needle = input.asset.toUpperCase();
+  const chainMatches = items.filter((item) => item.chain?.id === input.chainId);
+  const assetMatches = chainMatches.filter(
+    (item) => item.loanAsset?.symbol?.toUpperCase() === needle
+  );
+  if (assetMatches.length === 0) {
+    return null;
+  }
+
+  assetMatches.sort((a, b) => (b.state?.supplyAssetsUsd ?? 0) - (a.state?.supplyAssetsUsd ?? 0));
+  return assetMatches[0] ?? null;
+}
+
+async function fetchMorphoMarkets(
+  query: string,
+  variables: Record<string, unknown>
+): Promise<MorphoMarketsResponse> {
+  const response = await fetch(MORPHO_GRAPHQL_ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!response.ok) {
+    throw new Error(`Morpho API error: ${response.status} ${response.statusText}`);
+  }
+
+  const payload = (await response.json()) as {
+    data?: MorphoMarketsResponse;
+    errors?: Array<{ message?: string }>;
+  };
+  if (payload.errors?.length) {
+    throw new Error(payload.errors.map((error) => error.message ?? "Unknown error").join("; "));
+  }
+  return payload.data ?? {};
+}
+
+function normalizeApyToBps(value: number): number {
+  if (value <= 1) {
+    return value * 10000;
+  }
+  if (value <= 200) {
+    return value * 100;
+  }
+  return value;
 }
 
 export function isMorphoAction(action: Action): action is Extract<

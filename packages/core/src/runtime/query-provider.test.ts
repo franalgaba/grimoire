@@ -12,7 +12,7 @@ import { describe, expect, test } from "bun:test";
 import { compile } from "../compiler/index.js";
 import type { SpellIR } from "../types/ir.js";
 import type { Address } from "../types/primitives.js";
-import type { QueryProvider } from "../types/query-provider.js";
+import type { MetricRequest, QueryProvider } from "../types/query-provider.js";
 import { createContext } from "./context.js";
 import { createEvalContext, evaluateAsync } from "./expression-evaluator.js";
 import { preview } from "./interpreter.js";
@@ -37,7 +37,8 @@ function createMockQueryProvider(overrides?: Partial<QueryProvider>): QueryProvi
   return {
     meta: {
       name: "mock",
-      supportedQueries: ["balance", "price"],
+      supportedQueries: ["balance", "price", "metric"],
+      supportedMetrics: ["apy"],
     },
     async queryBalance(asset: string, _address?: string): Promise<bigint> {
       if (asset === "ETH") return 1000000000000000000n; // 1 ETH
@@ -48,6 +49,12 @@ function createMockQueryProvider(overrides?: Partial<QueryProvider>): QueryProvi
       if (base === "ETH" && (quote === "USDC" || quote === "USD")) return 3000;
       if (base === "USDC" && quote === "ETH") return 1 / 3000;
       return 1;
+    },
+    async queryMetric(request: MetricRequest): Promise<number> {
+      if (request.surface === "apy" && request.venue === "aave_v3" && request.asset === "USDC") {
+        return 420;
+      }
+      return 0;
     },
     ...overrides,
   };
@@ -85,8 +92,10 @@ describe("createEvalContext + queryProvider", () => {
     const evalCtx = createEvalContext(ctx);
     expect(evalCtx.queryBalance).toBeDefined();
     expect(evalCtx.queryPrice).toBeDefined();
+    expect(evalCtx.queryMetric).toBeDefined();
     expect(typeof evalCtx.queryBalance).toBe("function");
     expect(typeof evalCtx.queryPrice).toBe("function");
+    expect(typeof evalCtx.queryMetric).toBe("function");
   });
 
   test("query functions are undefined when no queryProvider", () => {
@@ -114,6 +123,7 @@ describe("createEvalContext + queryProvider", () => {
     const evalCtx = createEvalContext(ctx);
     expect(evalCtx.queryBalance).toBeUndefined();
     expect(evalCtx.queryPrice).toBeUndefined();
+    expect(evalCtx.queryMetric).toBeUndefined();
   });
 
   test("queryPrice returns expected value through EvalContext", async () => {
@@ -311,6 +321,34 @@ describe("preview() with QueryProvider", () => {
 
   on manual: {
     bal = balance(ETH)
+  }
+}`;
+    const compileResult = compile(source);
+    assertIR(compileResult);
+
+    const mockQp = createMockQueryProvider();
+    const result = await preview({
+      spell: compileResult.ir,
+      vault: VAULT,
+      chain: 1,
+      queryProvider: mockQp,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  test("apy() works end-to-end via preview()", async () => {
+    const source = `spell ApyTest {
+  version: "1.0.0"
+
+  assets: [USDC]
+
+  venues: {
+    aave: @aave_v3
+  }
+
+  on manual: {
+    a = apy(aave, USDC)
   }
 }`;
     const compileResult = compile(source);

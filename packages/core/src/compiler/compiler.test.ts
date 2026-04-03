@@ -78,6 +78,19 @@ describe("Expression Parser", () => {
     });
   });
 
+  test("parses apy function calls", () => {
+    const expr = parseExpression("apy(aave, USDC)");
+    if (expr.kind !== "call") {
+      throw new Error("Expected call expression");
+    }
+    expect(expr.fn).toBe("apy");
+    expect(expr.args).toHaveLength(2);
+  });
+
+  test("throws migration error for removed get_apy", () => {
+    expect(() => parseExpression("get_apy(aave, USDC)")).toThrow("Function 'get_apy' was removed");
+  });
+
   test("parses nested function calls", () => {
     const expr = parseExpression("min(balance(USDC), 1000)");
     if (expr.kind !== "call") {

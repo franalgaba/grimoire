@@ -1,5 +1,5 @@
 import { Wallet } from "@ethersproject/wallet";
-import type { Action, VenueAdapter } from "@grimoirelabs/core";
+import type { Action, MetricRequest, VenueAdapter } from "@grimoirelabs/core";
 import {
   ClobClient,
   type CreateOrderOptions,
@@ -10,6 +10,7 @@ import {
 } from "@polymarket/clob-client";
 import { zeroAddress } from "viem";
 import { assertSupportedConstraints } from "../../shared/constraints.js";
+import { parseMetricSelector, readMetricSelectorString } from "../../shared/metric-selector.js";
 import {
   readApiCredsFromEnv,
   readEnv,
@@ -44,6 +45,7 @@ export function createPolymarketAdapter(config: PolymarketAdapterConfig = {}): V
     ...POLYMARKET_META_BASE,
     supportedChains: config.supportedChains ?? DEFAULT_SUPPORTED_CHAINS,
     requiredEnv: config.requiredEnv ?? DEFAULT_REQUIRED_ENV,
+    metricSurfaces: ["mid_price"],
   };
 
   let cachedClientPromise: Promise<PolymarketExecutionClient> | undefined;
@@ -62,6 +64,28 @@ export function createPolymarketAdapter(config: PolymarketAdapterConfig = {}): V
 
   return {
     meta,
+    async readMetric(request: MetricRequest, ctx) {
+      if (request.surface !== "mid_price") {
+        throw new Error(`Polymarket does not support metric surface '${request.surface}'`);
+      }
+
+      const selector = parseMetricSelector(request.selector);
+      const tokenId =
+        readMetricSelectorString(selector, ["token_id", "tokenid", "market_id", "id"], {
+          fallback: request.asset,
+          required: true,
+          label: "token_id",
+        }) ?? "";
+      const host =
+        resolveString(config.host, readEnv(env, ["POLYMARKET_CLOB_HOST", "CLOB_API_URL"])) ??
+        DEFAULT_HOST;
+      const chainId = resolveNumber(
+        config.clobChainId,
+        readEnv(env, ["POLYMARKET_CLOB_CHAIN_ID", "CLOB_CHAIN_ID"]),
+        ctx.chainId
+      );
+      return await readPolymarketMidPrice(host, chainId, tokenId);
+    },
     async buildAction(action, ctx) {
       assertSupportedConstraints(meta, action);
       assertChainSupported(meta, ctx.chainId);
@@ -302,4 +326,61 @@ export function normalizeCustomOp(op: string): SupportedCustomOp {
 
 export function isSupportedCustomOp(value: string): value is SupportedCustomOp {
   return SUPPORTED_CUSTOM_OPS.includes(value as SupportedCustomOp);
+}
+
+async function readPolymarketMidPrice(
+  host: string,
+  chainId: number,
+  tokenId: string
+): Promise<number> {
+  const client = new ClobClient(host, chainId);
+  const payload = await client.getMidpoint(tokenId);
+  if (payload && typeof payload === "object") {
+    const status = (payload as { status?: unknown }).status;
+    const error = (payload as { error?: unknown }).error;
+    if ((typeof status === "number" && status >= 400) || typeof error === "string") {
+      throw new Error(
+        `Polymarket midpoint query failed for token '${tokenId}': ${String(error ?? `status ${status}`)}`
+      );
+    }
+  }
+  const price = pickFiniteNumber(payload);
+  if (price === null) {
+    throw new Error(`Polymarket midpoint unavailable for token '${tokenId}'`);
+  }
+  return price;
+}
+
+function pickFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const candidate = pickFiniteNumber(item);
+      if (candidate !== null) return candidate;
+    }
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const priorityKeys = ["mid", "midpoint", "price", "value", "result"];
+  for (const key of priorityKeys) {
+    if (key in record) {
+      const candidate = pickFiniteNumber(record[key]);
+      if (candidate !== null) return candidate;
+    }
+  }
+  for (const nested of Object.values(record)) {
+    const candidate = pickFiniteNumber(nested);
+    if (candidate !== null) return candidate;
+  }
+  return null;
 }

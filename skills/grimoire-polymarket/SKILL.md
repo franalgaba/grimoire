@@ -109,6 +109,17 @@ The adapter does not support runtime constraints (`max_slippage`, etc.). Order r
 - `GTC`/`GTD` → limit order (`createAndPostOrder`)
 - `FOK`/`FAK` → market order (`createAndPostMarketOrder`)
 
+## Metric Surface (Spell Comparisons)
+
+Polymarket exposes `mid_price` for CLOB token midpoint comparisons:
+
+```spell
+poly_mid = metric("mid_price", polymarket, USDC, "token_id=<clobTokenId>")
+```
+
+Selector keys accepted: `token_id`, `tokenid`, `market_id`, `id`.
+If selector is omitted, the metric falls back to the 3rd argument value.
+
 ## Adapter Notes
 
 - Adapter name: `polymarket`

@@ -244,7 +244,8 @@ Query provider:
 
 - When `--rpc-url` points to an Alchemy RPC (e.g. `https://eth-mainnet.g.alchemy.com/v2/<key>`), the API key is auto-extracted and used to enable `price()` queries via the Alchemy Token Prices API.
 - `balance()` queries work with any RPC provider (reads on-chain ERC20 balanceOf).
-- Non-Alchemy RPC URLs support `balance()` only; `price()` will error with a clear message.
+- `apy()` / `metric()` queries are delegated to venue adapters that implement metric surfaces.
+- Non-Alchemy RPC URLs still support `balance()` and adapter-backed `apy()` / `metric()`; only `price()` requires Alchemy.
 
 Behavior notes:
 
@@ -304,7 +305,7 @@ Runtime mode selection in command logic:
 
 Query provider:
 
-- Same behavior as `simulate`: Alchemy RPC URLs auto-enable `price()` queries; any RPC supports `balance()`.
+- Same behavior as `simulate`: Alchemy RPC URLs auto-enable `price()`; any RPC supports `balance()` and adapter-backed `apy()` / `metric()`.
 
 Behavior notes:
 

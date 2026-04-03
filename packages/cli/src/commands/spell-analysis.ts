@@ -9,7 +9,8 @@ import type { Expression, SpellIR } from "@grimoirelabs/core";
 const QUERY_FNS = new Set([
   "balance",
   "price",
-  "get_apy",
+  "apy",
+  "metric",
   "get_health_factor",
   "get_position",
   "get_debt",

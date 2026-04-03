@@ -77,6 +77,19 @@ Pendle requires a market-first approach. **Do NOT write a Pendle spell without f
 | `mint_sy` | Wrap underlying into SY | Underlying | SY |
 | `redeem_sy` | Unwrap SY to underlying | SY | Underlying |
 
+## Metric Surface (Spell Comparisons)
+
+Pendle exposes `quote_out` for route output comparisons:
+
+```spell
+pendle_out = metric("quote_out", pendle, USDC, "asset_out=DAI,amount=1000000,slippage_bps=1000")
+```
+
+Selector fields:
+
+- required: `asset_out`
+- optional: `amount` (defaults to 1 unit of input asset), `slippage_bps`, `enable_aggregator`
+
 ## Spell Constraints
 
 When writing Pendle actions in `.spell` files, use `with` clauses:

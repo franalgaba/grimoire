@@ -58,6 +58,21 @@ grimoire venue uniswap pools-snapshot --chain 1 --token0 USDC --token1 WETH --rp
 
 Use `tokens-snapshot` or `pools-snapshot` to emit a `params:` block for spell inputs. These are agent-only commands (output suppressed in interactive mode).
 
+## Metric Surface (Spell Comparisons)
+
+Uniswap V3 and V4 expose `quote_out` for protocol comparison:
+
+```spell
+v3_out = metric("quote_out", uni_v3, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000")
+v4_out = metric("quote_out", uni_v4, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000,tick_spacing=60")
+```
+
+Selector fields:
+
+- required: `asset_out`
+- optional: `amount` (defaults to 1 unit of input asset), `fee_tier`
+- V4 optional: `tick_spacing`
+
 ## Spell Constraints
 
 When writing swap actions in `.spell` files targeting Uniswap, use `with` clauses to set constraints:

@@ -33,6 +33,8 @@ Then incrementally add venues/actions/guards/advisory blocks.
 
 - Need a price? Use `price(BASE, QUOTE)`. Do NOT use an advisory to fetch prices.
 - Need a balance? Use `balance(ASSET)` or `balance(ASSET, address)`. Do NOT use an advisory.
+- Need lending APY from a venue? Use `apy(VENUE, ASSET[, selector])`.
+- Need cross-venue protocol comparison (quotes/mids/custom surfaces)? Use `metric(SURFACE, VENUE[, ASSET[, selector]])`.
 - Need LLM judgment, reasoning, or interpretation? Use `advise`.
 
 Query functions are deterministic, fast, and free. Advisory calls invoke an LLM and should only be used when human-like reasoning is required.

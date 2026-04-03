@@ -3,7 +3,9 @@ import type { VenueAdapter } from "@grimoirelabs/core";
 export { discoverBuiltinVenues } from "./shared/discovery.js";
 export {
   type AlchemyQueryProviderConfig,
+  type CompositeQueryProviderConfig,
   createAlchemyQueryProvider,
+  createCompositeQueryProvider,
   extractAlchemyKey,
 } from "./shared/query-provider.js";
 export {

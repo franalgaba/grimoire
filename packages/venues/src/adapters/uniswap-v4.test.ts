@@ -41,6 +41,24 @@ const ctx: VenueAdapterContext = {
 };
 
 describe("Uniswap V4 adapter", () => {
+  test("reads quote_out metric for pair + amount selector", async () => {
+    const adapter = createUniswapV4Adapter();
+    if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+    const quoteOut = await adapter.readMetric(
+      {
+        surface: "quote_out",
+        venue: "uniswap_v4",
+        asset: "USDC",
+        selector: "asset_out=ETH,amount=1000000,fee_tier=3000",
+      },
+      ctx
+    );
+
+    expect(Number.isFinite(quoteOut)).toBe(true);
+    expect(quoteOut).toBeGreaterThan(0);
+  });
+
   test("builds single-tx swap for native ETH input (no wrapping)", async () => {
     const adapter = createUniswapV4Adapter();
     if (!adapter.buildAction) throw new Error("Missing buildAction");

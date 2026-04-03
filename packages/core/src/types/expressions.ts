@@ -25,7 +25,8 @@ export type UnaryOp = "NOT" | "-" | "ABS";
 export type BuiltinFn =
   | "balance"
   | "price"
-  | "get_apy"
+  | "apy"
+  | "metric"
   | "get_health_factor"
   | "get_position"
   | "get_debt"

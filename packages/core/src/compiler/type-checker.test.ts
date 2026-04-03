@@ -1620,6 +1620,91 @@ describe("Type Checker — Conversion Builtins", () => {
     expectErrorCode(result, "WRONG_ARG_COUNT");
   });
 
+  test("apy(venue, asset) with 2 args is well-typed", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "r",
+            expression: {
+              kind: "call",
+              fn: "apy",
+              args: [
+                { kind: "literal", value: "aave_v3", type: "string" },
+                { kind: "param", name: "token" },
+              ],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectClean(result);
+  });
+
+  test("apy(venue, asset, selector) with 3 args is well-typed", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "r",
+            expression: {
+              kind: "call",
+              fn: "apy",
+              args: [
+                { kind: "literal", value: "morpho_blue", type: "string" },
+                { kind: "param", name: "token" },
+                {
+                  kind: "literal",
+                  value: "0xfff517c4ca7bb55befaacc7a17633d1e95dc748df37b92304fdeb019a17214ba",
+                  type: "string",
+                },
+              ],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectClean(result);
+  });
+
+  test("metric(surface, venue, asset, selector) with 4 args is well-typed", () => {
+    const ir = createBaseIR();
+    ir.steps = [
+      {
+        kind: "compute",
+        id: "c1",
+        assignments: [
+          {
+            variable: "r",
+            expression: {
+              kind: "call",
+              fn: "metric",
+              args: [
+                { kind: "literal", value: "apy", type: "string" },
+                { kind: "literal", value: "morpho_blue", type: "string" },
+                { kind: "param", name: "token" },
+                { kind: "literal", value: "morpho-market-id", type: "string" },
+              ],
+            },
+          },
+        ],
+        dependsOn: [],
+      },
+    ];
+    const result = typeCheckIR(ir);
+    expectClean(result);
+  });
+
   test("price optional arg with wrong type produces TYPE_MISMATCH", () => {
     const ir = createBaseIR();
     ir.steps = [

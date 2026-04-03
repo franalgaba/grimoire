@@ -30,6 +30,7 @@ export const myVenueAdapter: VenueAdapter = {
     supportedChains: [1, 8453],
     actions: ["swap"],
     supportedConstraints: ["max_slippage"],
+    metricSurfaces: ["quote_out"],
     executionType: "evm",
     description: "My venue adapter",
   },
@@ -37,10 +38,58 @@ export const myVenueAdapter: VenueAdapter = {
     // Build and return BuiltTransaction(s)
     throw new Error("Not implemented");
   },
+  async readMetric(request, ctx) {
+    // Implement protocol comparison surfaces for metric()/apy()
+    throw new Error("Not implemented");
+  },
 };
 ```
 
 The `meta` object drives CLI listing, constraint validation, and doctor checks. Fill in every field that applies.
+
+### 1b. Add Metric Comparison Surfaces (Recommended)
+
+If your venue should participate in spell-level comparisons, implement:
+
+- `meta.metricSurfaces` to declare supported surfaces (for example `["apy"]`, `["quote_out"]`, `["mid_price"]`)
+- `readMetric(request, ctx)` to return a numeric value for `apy()` and `metric()`
+
+Minimal pattern:
+
+```ts
+import type { MetricRequest } from "@grimoirelabs/core";
+
+async function readMyMetric(request: MetricRequest): Promise<number> {
+  if (request.surface !== "quote_out") {
+    throw new Error(`my_venue does not support metric surface '${request.surface}'`);
+  }
+  if (!request.asset) {
+    throw new Error("my_venue quote_out metric requires asset as the third argument");
+  }
+
+  // request.selector is a free-form string. Parse and validate required fields.
+  // Example selector: "asset_out=WETH,amount=1000000,fee_tier=3000"
+  const amountOut = 1.23; // replace with venue quote result
+  return amountOut;
+}
+```
+
+Selector guidance:
+
+- Use key/value selectors (`k=v` comma-separated) for venue-specific params.
+- Validate required keys with clear errors.
+- Provide sensible defaults for optional keys (for example, default amount = 1 token unit).
+- Keep return units explicit in docs (decimal vs raw integer).
+
+Spell-side usage examples:
+
+```spell
+# APY surface
+best_apy = apy(my_venue, USDC)
+
+# Generic surface
+out = metric("quote_out", my_venue, USDC, "asset_out=WETH,amount=1000000")
+```
 
 ### 2. Register in the Adapter Bundle
 
@@ -159,11 +208,15 @@ const gmxAdapter: VenueAdapter = {
     supportedChains: [42161],
     actions: ["swap"],
     supportedConstraints: ["max_slippage"],
+    metricSurfaces: ["quote_out"],
     executionType: "evm",
     description: "GMX perpetuals adapter",
   },
   async buildAction(action, ctx) {
     // ...
+  },
+  async readMetric(request, ctx) {
+    // Optional but recommended for metric()/apy() support
   },
 };
 
@@ -231,11 +284,13 @@ interface VenueAdapter {
   meta: VenueAdapterMeta;
   buildAction?(action: Action, ctx: VenueAdapterContext): Promise<VenueBuildResult>;
   executeAction?(action: Action, ctx: VenueAdapterContext): Promise<OffchainExecutionResult>;
+  readMetric?(request: MetricRequest, ctx: VenueAdapterContext): Promise<number>;
 }
 ```
 
 - `buildAction` — for EVM venues that produce transactions
 - `executeAction` — for offchain venues (APIs, order books)
+- `readMetric` — for adapter-backed query surfaces used by `apy()` / `metric()`
 - Implement one or both depending on your venue's execution type
 
 See `docs/reference/venues.md` for the full type definitions and constraint matrix.

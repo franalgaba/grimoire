@@ -202,7 +202,7 @@ spell YieldOptimizer {
 | Block/Do | `block` / `do` | `block add(a,b) {` |
 | Comments | `# comment` | `# Calculate rates` |
 | Method calls | `obj.method(args)` | `venue.deposit(asset, amount)` |
-| Assignment | `x = expr` | `rate = get_apy("aave_v3", asset)` |
+| Assignment | `x = expr` | `rate = apy(aave_v3, asset)` |
 | Using skill | `using name` | `swap(...) using dex` |
 | Constraints | `with k=v` or `with (k=v, ...)` | `with max_slippage=50` or multi-line `with (\n  slippage=50,\n  deadline=300,\n)` |
 | Logical ops | `and`, `or`, `not` | `if a > 0 and b < 10 {` |

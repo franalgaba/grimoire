@@ -1,7 +1,21 @@
-import type { Action, Address, VenueAdapter, VenueAdapterContext } from "@grimoirelabs/core";
+import type {
+  Action,
+  Address,
+  MetricRequest,
+  VenueAdapter,
+  VenueAdapterContext,
+} from "@grimoirelabs/core";
 import { assertSupportedConstraints, validateGasConstraints } from "../../shared/constraints.js";
+import {
+  parseMetricSelector,
+  readMetricSelectorBigInt,
+  readMetricSelectorInt,
+  readMetricSelectorString,
+  scaleToHuman,
+} from "../../shared/metric-selector.js";
+import { resolveTokenDecimals } from "../../shared/token-registry.js";
 import { requestConvert } from "./api.js";
-import { toConvertRequest } from "./convert.js";
+import { resolveAssetAddress, toConvertRequest } from "./convert.js";
 import {
   applyBps,
   buildPendleApprovals,
@@ -66,6 +80,7 @@ export function createPendleAdapter(config: PendleAdapterConfig = {}): VenueAdap
     supportsQuote: true,
     supportsSimulation: false,
     supportsPreviewCommit: true,
+    metricSurfaces: ["quote_out"],
     dataEndpoints: ["chains", "supported-aggregators", "markets", "assets", "market-tokens"],
     requiredEnv: [
       "KYBERSWAP-API-KEY",
@@ -80,6 +95,76 @@ export function createPendleAdapter(config: PendleAdapterConfig = {}): VenueAdap
 
   return {
     meta,
+    async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
+      if (request.surface !== "quote_out") {
+        throw new Error(`Pendle does not support metric surface '${request.surface}'`);
+      }
+      if (!request.asset) {
+        throw new Error("Pendle quote_out metric requires assetIn as the third argument");
+      }
+      if (!meta.supportedChains.includes(ctx.chainId)) {
+        throw new Error(`Pendle adapter is not configured for chain ${ctx.chainId}`);
+      }
+
+      const selector = parseMetricSelector(request.selector);
+      const outputAsset =
+        readMetricSelectorString(selector, ["asset_out", "out", "to"], {
+          required: true,
+          label: "asset_out",
+        }) ?? "";
+      const inDecimals = safeResolveTokenDecimals(request.asset, ctx.chainId, 18);
+      const defaultAmount = 10n ** BigInt(inDecimals);
+      const amount =
+        readMetricSelectorBigInt(selector, ["amount", "amount_in", "in"], {
+          fallback: defaultAmount,
+          label: "amount",
+        }) ?? defaultAmount;
+      const slippageBps =
+        readMetricSelectorInt(selector, ["slippage_bps", "max_slippage", "slippage"], {
+          fallback: config.slippageBps ?? DEFAULT_SLIPPAGE_BPS,
+          label: "slippage_bps",
+        }) ??
+        config.slippageBps ??
+        DEFAULT_SLIPPAGE_BPS;
+      const enableAggregator = parseSelectorBoolean(
+        selector.enable_aggregator ?? selector.enableaggregator,
+        true
+      );
+
+      const tokenIn = resolveAssetAddress(request.asset, ctx.chainId, config.tokenMap);
+      const tokenOut = resolveAssetAddress(outputAsset, ctx.chainId, config.tokenMap);
+      const zeroAddress = "0x0000000000000000000000000000000000000000";
+      const preferredReceiver = (ctx.vault ?? ctx.walletAddress) as string | undefined;
+      const receiver =
+        preferredReceiver && preferredReceiver.toLowerCase() !== zeroAddress
+          ? preferredReceiver
+          : undefined;
+
+      const convert = await requestConvert({
+        baseUrl,
+        chainId: ctx.chainId,
+        request: {
+          ...(receiver ? { receiver } : {}),
+          slippage: slippageBps / 10_000,
+          enableAggregator,
+          inputs: [{ token: tokenIn, amount: amount.toString() }],
+          outputs: [tokenOut],
+        },
+        fetchFn,
+        enableV2Fallback,
+      });
+      const route = convert.response.routes?.[0];
+      if (!route) {
+        throw new Error("Pendle metric quote returned no routes");
+      }
+      const rawOut = toBigIntIfPossible(route.outputs?.[0]?.amount);
+      if (rawOut === undefined) {
+        throw new Error("Pendle metric quote did not return output amount");
+      }
+
+      const outDecimals = safeResolveTokenDecimals(outputAsset, ctx.chainId, inDecimals);
+      return scaleToHuman(rawOut, outDecimals);
+    },
     async buildAction(action, ctx) {
       assertSupportedConstraints(meta, action);
 
@@ -235,6 +320,27 @@ export function isSupportedPendleAction(action: Action): boolean {
     return true;
   }
   return action.type === "custom" && action.op === "convert";
+}
+
+function parseSelectorBoolean(raw: string | undefined, fallback: boolean): boolean {
+  if (raw === undefined) {
+    return fallback;
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return fallback;
+}
+
+function safeResolveTokenDecimals(asset: string, chainId: number, fallback: number): number {
+  try {
+    return resolveTokenDecimals(asset, chainId, {
+      defaultDecimals: fallback,
+      treatEthAsWrapped: true,
+    });
+  } catch {
+    return fallback;
+  }
 }
 
 /**

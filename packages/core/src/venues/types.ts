@@ -10,6 +10,7 @@ import type {
   CrossChainTrackRole,
 } from "../types/cross-chain.js";
 import type { Address, AssetDef } from "../types/primitives.js";
+import type { MetricRequest } from "../types/query-provider.js";
 import type { Provider } from "../wallet/provider.js";
 import type { BuiltTransaction } from "../wallet/tx-builder.js";
 
@@ -48,6 +49,7 @@ export interface VenueAdapterMeta {
   supportsSimulation?: boolean;
   requiredEnv?: string[];
   supportsPreviewCommit?: boolean;
+  metricSurfaces?: string[];
   dataEndpoints?: string[];
   description?: string;
   executionType?: "evm" | "offchain";
@@ -93,6 +95,7 @@ export type VenueBuildResult =
 export interface VenueAdapter {
   meta: VenueAdapterMeta;
   buildAction?: (action: Action, ctx: VenueAdapterContext) => Promise<VenueBuildResult>;
+  readMetric?: (request: MetricRequest, ctx: VenueAdapterContext) => Promise<number>;
   executeAction?: (action: Action, ctx: VenueAdapterContext) => Promise<OffchainExecutionResult>;
   bridgeLifecycle?: BridgeLifecycleAdapter;
   resolveHandoffStatus?: (

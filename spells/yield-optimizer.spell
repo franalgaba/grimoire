@@ -31,9 +31,9 @@ spell YieldOptimizer {
       if wallet_balance < params.min_rebalance_amount {
         emit low_balance(asset=asset, balance=wallet_balance)
       } else {
-        aave_apy = get_apy(aave, asset)
-        morpho_apy = get_apy(morpho, asset)
-        compound_apy = get_apy(compound, asset)
+        aave_apy = apy(aave, asset)
+        morpho_apy = apy(morpho, asset)
+        compound_apy = apy(compound, asset)
 
         best_apy = max(aave_apy, morpho_apy, compound_apy)
 

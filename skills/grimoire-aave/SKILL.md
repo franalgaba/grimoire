@@ -62,6 +62,17 @@ aave_v3.borrow(USDC, params.amount)
 aave_v3.repay(USDC, params.amount)
 ```
 
+## Metric Surface (Spell Comparisons)
+
+Aave exposes the `apy` metric surface for comparisons:
+
+```spell
+aave_apy = apy(aave, USDC)
+aave_apy_generic = metric("apy", aave, USDC)
+```
+
+Use this in conditional logic (for example, compare against Morpho APY before reallocating).
+
 ## Amount Format
 
 The `@aave/client` SDK uses different amount formats per action:
