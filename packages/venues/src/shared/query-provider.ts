@@ -132,6 +132,9 @@ export function createCompositeQueryProvider(config: CompositeQueryProviderConfi
   const adapters = config.adapters ?? [];
   const aliasMap = buildVenueAliasMap(config.venueAliases ?? []);
   const metricAdapters = adapters.filter(hasReadMetric);
+  const metricAdaptersByName = new Map(
+    metricAdapters.map((adapter) => [adapter.meta.name, adapter])
+  );
   const supportedMetrics = dedupe(
     metricAdapters.flatMap((adapter) => adapter.meta.metricSurfaces ?? [])
   );
@@ -150,7 +153,7 @@ export function createCompositeQueryProvider(config: CompositeQueryProviderConfi
     async queryMetric(request: MetricRequest): Promise<number> {
       const venueInput = request.venue;
       const canonicalVenue = aliasMap.get(venueInput) ?? venueInput;
-      const adapter = metricAdapters.find((candidate) => candidate.meta.name === canonicalVenue);
+      const adapter = metricAdaptersByName.get(canonicalVenue);
       if (!adapter?.readMetric) {
         throw new Error(
           `Metric '${request.surface}' not available for venue '${venueInput}' (resolved '${canonicalVenue}')`

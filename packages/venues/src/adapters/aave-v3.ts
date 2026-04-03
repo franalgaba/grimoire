@@ -57,6 +57,14 @@ export function createAaveV3Adapter(
     description: "Aave V3 adapter",
   };
 
+  function getMarketForChain(chain: number): Address {
+    const market = config.markets[chain];
+    if (!market) {
+      throw new Error(`No Aave V3 market configured for chain ${chain}`);
+    }
+    return market;
+  }
+
   return {
     meta,
     async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
@@ -67,11 +75,7 @@ export function createAaveV3Adapter(
         throw new Error("Aave V3 APY metric requires an asset");
       }
 
-      const market = config.markets[ctx.chainId];
-      if (!market) {
-        throw new Error(`No Aave V3 market configured for chain ${ctx.chainId}`);
-      }
-
+      const market = getMarketForChain(ctx.chainId);
       const assetAddress = resolveTokenAddress(request.asset, ctx.chainId, {
         treatEthAsWrapped: true,
       });
@@ -92,10 +96,7 @@ export function createAaveV3Adapter(
     async buildAction(action, ctx) {
       assertSupportedConstraints(meta, action);
 
-      const market = config.markets[ctx.chainId];
-      if (!market) {
-        throw new Error(`No Aave V3 market configured for chain ${ctx.chainId}`);
-      }
+      const market = getMarketForChain(ctx.chainId);
 
       if (!isAaveAction(action)) {
         throw new Error(`Unsupported Aave action: ${action.type}`);
@@ -321,16 +322,18 @@ function extractAaveApyBps(payload: Record<string, unknown>): number | null {
   return null;
 }
 
+const MAX_TRAVERSAL_DEPTH = 10;
+
 function collectNumericValues(node: unknown, targetKey: string): number[] {
   const out: number[] = [];
 
-  const visit = (value: unknown): void => {
-    if (!value || typeof value !== "object") {
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > MAX_TRAVERSAL_DEPTH || !value || typeof value !== "object") {
       return;
     }
     if (Array.isArray(value)) {
       for (const item of value) {
-        visit(item);
+        visit(item, depth + 1);
       }
       return;
     }
@@ -342,11 +345,11 @@ function collectNumericValues(node: unknown, targetKey: string): number[] {
           out.push(numeric);
         }
       }
-      visit(next);
+      visit(next, depth + 1);
     }
   };
 
-  visit(node);
+  visit(node, 0);
   return out;
 }
 
@@ -384,20 +387,27 @@ function toFiniteNumber(value: unknown): number | null {
   return null;
 }
 
+// Aave SDK returns rates in different scales depending on the payload shape:
+// - Ray-scaled (1e27): raw on-chain liquidityRate / variableBorrowRate
+// - Ratio (0–1): some SDK wrappers normalize to decimal fraction
+// - Percent (0–200): client-side formatted values like liquidityApy
+// - Basis points (>200): pre-converted values
+const AAVE_RAY = 1e27;
+const RAY_DETECTION_THRESHOLD = 1e12;
+const BPS_PER_UNIT = 10_000;
+const BPS_PER_PERCENT = 100;
+const MAX_PERCENT_VALUE = 200;
+
 function normalizeApyToBps(value: number): number {
-  // Aave can return ray-scaled rates in some SDK payloads.
-  if (value > 1e12) {
-    return normalizeApyToBps(value / 1e27);
+  if (value > RAY_DETECTION_THRESHOLD) {
+    return normalizeApyToBps(value / AAVE_RAY);
   }
-  // ratio (0.0432) -> bps (432)
   if (value <= 1) {
-    return value * 10000;
+    return value * BPS_PER_UNIT;
   }
-  // percent (4.32) -> bps (432)
-  if (value <= 200) {
-    return value * 100;
+  if (value <= MAX_PERCENT_VALUE) {
+    return value * BPS_PER_PERCENT;
   }
-  // already in bps
   return value;
 }
 
