@@ -1,5 +1,61 @@
 # @grimoirelabs/cli
 
+## 0.16.0
+
+### Minor Changes
+
+- 76b248b: Add deterministic spell formatting support and a new `grimoire format` command.
+
+  - Add `formatGrimoire()` to core for canonical `.spell` formatting with parser diagnostics.
+  - Add CLI `format` command with `--write`, `--check`, `--diff`, `--json`, and stdin modes.
+  - Enforce formatter exit codes for check/parse/usage paths and add formatter test coverage.
+
+### Patch Changes
+
+- Updated dependencies [76b248b]
+  - @grimoirelabs/core@0.18.0
+  - @grimoirelabs/venues@0.10.18
+
+## 0.15.18
+
+### Patch Changes
+
+- Updated dependencies [fa20ce9]
+  - @grimoirelabs/venues@0.10.17
+
+## 0.15.17
+
+### Patch Changes
+
+- Updated dependencies [6cdb24a]
+  - @grimoirelabs/venues@0.10.16
+
+## 0.15.16
+
+### Patch Changes
+
+- e93d428: Fix `grimoire venue` passthrough argument routing for both positional and structured invocation modes. This includes proper handling of string/array passthrough args and prevents argv fallback from corrupting adapter commands (notably affecting Hyperliquid and Polymarket flows).
+
+## 0.15.15
+
+### Patch Changes
+
+- 356c511: Improve Polymarket offchain execution wiring and venue CLI coverage.
+
+  - Reuse the loaded wallet-manager key for Polymarket adapter configuration in `cast`/`resume` wallet paths (matching Hyperliquid behavior), avoiding a separate Polymarket private key requirement in those flows.
+  - Expose first-class Polymarket `markets` and `data` command namespaces in the venue CLI wrapper with JSON passthrough and optional auth flags.
+  - Fix `search-markets` validation to allow boolean-only filters (`open-only`, `active-only`, `tradable-only`) and add regression test coverage.
+
+- Updated dependencies [356c511]
+  - @grimoirelabs/venues@0.10.15
+
+## 0.15.14
+
+### Patch Changes
+
+- Updated dependencies [d6e76eb]
+  - @grimoirelabs/venues@0.10.14
+
 ## 0.15.13
 
 ### Patch Changes

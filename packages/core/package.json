@@ -1,6 +1,6 @@
 {
   "name": "@grimoirelabs/core",
-  "version": "0.17.5",
+  "version": "0.18.0",
   "description": "Core compiler and runtime for Grimoire",
   "type": "module",
   "main": "./dist/index.js",

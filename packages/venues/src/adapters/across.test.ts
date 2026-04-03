@@ -287,6 +287,45 @@ describe("Across adapter", () => {
     await expect(emptyAdapter.buildAction(action, ctx)).rejects.toThrow("No Across asset mapping");
   });
 
+  test("resolves spell-defined chain-scoped assets for bridge routes", async () => {
+    const spellAssetAdapter = createAcrossAdapter({
+      integratorId: "0x0000",
+      assets: {},
+      getQuote: async () => quote,
+    });
+
+    if (!spellAssetAdapter.buildAction) throw new Error("Missing buildAction");
+
+    const action = {
+      type: "bridge",
+      venue: "across",
+      asset: "USDC_ETH",
+      amount: 5n,
+      toChain: 42161,
+    } as unknown as Action;
+
+    const result = await spellAssetAdapter.buildAction(action, {
+      ...ctx,
+      assets: [
+        {
+          symbol: "USDC_ETH",
+          chain: 1,
+          address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
+        },
+        {
+          symbol: "USDC_ARB",
+          chain: 42161,
+          address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as Address,
+        },
+      ],
+    });
+    const built = Array.isArray(result) ? result : [result];
+    const route = built[built.length - 1]?.metadata?.route as Record<string, unknown> | undefined;
+
+    expect(route?.inputToken).toBe("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48");
+    expect(route?.outputToken).toBe("0xaf88d065e77c8cC2239327C5EDb3A432268e5831");
+  });
+
   test("handles number, string, and literal amounts", async () => {
     if (!adapter.buildAction) throw new Error("Missing buildAction");
 

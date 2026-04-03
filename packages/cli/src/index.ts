@@ -8,6 +8,7 @@ import { Cli, z } from "incur";
 import { castCommand } from "./commands/cast.js";
 import { compileCommand } from "./commands/compile.js";
 import { compileAllCommand } from "./commands/compile-all.js";
+import { formatCommandFromArgv } from "./commands/format.js";
 import { historyCommand } from "./commands/history.js";
 import { initCommand } from "./commands/init.js";
 import { logCommand } from "./commands/log.js";
@@ -104,6 +105,8 @@ const morphoOptions = {
   morphoMarketMap: z.string().optional().describe("JSON file mapping actionRef -> marketId"),
 };
 
+const venuePassThroughArgsSchema = z.union([z.string(), z.array(z.string())]);
+
 // ── CLI ────────────────────────────────────────────────────────────
 
 const cli = Cli.create("grimoire", {
@@ -184,6 +187,26 @@ const cli = Cli.create("grimoire", {
       return c.ok(result, {
         cta: { commands: ["cast <spell> --dry-run", "venue doctor"] },
       });
+    },
+  })
+
+  // ── Format ───────────────────────────────────────────────────────
+  .command("format", {
+    description: "Format .spell source files",
+    options: z.object({
+      write: z.boolean().optional().describe("Write formatted output in place"),
+      check: z.boolean().optional().describe("Check whether files are already canonical"),
+      diff: z.boolean().optional().describe("Print unified diff for changed files"),
+      stdin: z.boolean().optional().describe("Read source from stdin"),
+      stdinFilepath: z.string().optional().describe("Virtual filepath label for stdin"),
+    }),
+    async run() {
+      const exitCode = await formatCommandFromArgv(process.argv);
+      if (exitCode !== 0) {
+        process.exitCode = exitCode;
+        throw new Error(`Format failed (exit ${exitCode})`);
+      }
+      return { success: true };
     },
   })
 
@@ -328,14 +351,20 @@ const cli = Cli.create("grimoire", {
     description: "Run venue metadata commands (proxy to @grimoirelabs/venues CLIs)",
     args: z.object({
       adapter: z.string().optional().describe("Venue adapter name"),
+      venue: z.string().optional().describe("Alias for adapter (agent/JSON mode)"),
+      args: venuePassThroughArgsSchema.optional().describe("Pass-through arguments for venue CLI"),
+    }),
+    options: z.object({
+      adapter: z.string().optional().describe("Venue adapter name"),
+      venue: z.string().optional().describe("Alias for adapter"),
+      args: venuePassThroughArgsSchema.optional().describe("Pass-through arguments for venue CLI"),
     }),
     hint: "Pass additional arguments after the adapter name, e.g.: grimoire venue uniswap tokens --chain 1",
     async run(c) {
-      // Collect remaining argv after 'venue <adapter>' as pass-through args
-      const argv = process.argv;
-      const venueIdx = argv.indexOf("venue");
-      const passArgs = venueIdx >= 0 ? argv.slice(venueIdx + 2) : [];
-      await venueCommand(c.args.adapter ?? "", passArgs);
+      const adapter = resolveVenueAdapter(c.args, c.options);
+      const passArgs = getVenuePassArgsFromArgv(process.argv);
+      const structuredArgs = resolveStructuredVenueArgs(c.args, c.options);
+      await venueCommand(adapter, passArgs.length > 0 ? passArgs : structuredArgs);
       return c.ok({ success: true });
     },
   })
@@ -405,9 +434,22 @@ const cli = Cli.create("grimoire", {
 // Bypass incur's parser for `venue` — it rejects unknown flags that
 // are actually meant for the proxied venue CLI (e.g. --query, --chain).
 const firstArg = process.argv[2];
-if (firstArg === "venue") {
+const secondArg = process.argv[3] ?? "";
+const shouldBypassFormatParser = firstArg === "format";
+const shouldBypassVenueParser = firstArg === "venue" && isPositionalVenueAdapter(secondArg);
+if (shouldBypassFormatParser) {
+  formatCommandFromArgv(process.argv)
+    .then((exitCode) => {
+      process.exitCode = exitCode;
+    })
+    .catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`${msg}`);
+      process.exitCode = 3;
+    });
+} else if (shouldBypassVenueParser) {
   const adapter = process.argv[3] ?? "";
-  const passArgs = process.argv.slice(4);
+  const passArgs = getVenuePassArgsFromArgv(process.argv);
   venueCommand(adapter, passArgs).catch((err) => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`${msg}`);
@@ -415,4 +457,30 @@ if (firstArg === "venue") {
   });
 } else {
   cli.serve();
+}
+
+function getVenuePassArgsFromArgv(argv: string[]): string[] {
+  const venueIdx = argv.indexOf("venue");
+  if (venueIdx < 0) return [];
+  const adapterToken = argv[venueIdx + 1];
+  if (!isPositionalVenueAdapter(adapterToken)) return [];
+  return argv.slice(venueIdx + 2);
+}
+
+function resolveVenueAdapter(
+  args: { adapter?: string; venue?: string },
+  options: { adapter?: string; venue?: string }
+): string {
+  return args.adapter ?? args.venue ?? options.adapter ?? options.venue ?? "";
+}
+
+function resolveStructuredVenueArgs(
+  args: { args?: string | string[] },
+  options: { args?: string | string[] }
+): string | string[] {
+  return args.args ?? options.args ?? [];
+}
+
+function isPositionalVenueAdapter(token: string | undefined): boolean {
+  return Boolean(token && !token.startsWith("-"));
 }

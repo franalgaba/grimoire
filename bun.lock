@@ -15,13 +15,13 @@
     },
     "packages/cli": {
       "name": "@grimoirelabs/cli",
-      "version": "0.15.1",
+      "version": "0.15.17",
       "bin": {
         "grimoire": "dist/index.js",
       },
       "dependencies": {
-        "@grimoirelabs/core": "0.17.1",
-        "@grimoirelabs/venues": "0.10.1",
+        "@grimoirelabs/core": "0.17.5",
+        "@grimoirelabs/venues": "0.10.16",
         "@mariozechner/pi-coding-agent": "0.62.0",
         "chalk": "^5.6.2",
         "incur": "^0.3.8",
@@ -34,7 +34,7 @@
     },
     "packages/core": {
       "name": "@grimoirelabs/core",
-      "version": "0.17.1",
+      "version": "0.17.5",
       "dependencies": {
         "ethers": "^6.16.0",
         "viem": "^2.47.6",
@@ -53,7 +53,7 @@
     },
     "packages/venues": {
       "name": "@grimoirelabs/venues",
-      "version": "0.10.1",
+      "version": "0.10.16",
       "bin": {
         "grimoire-across": "dist/cli/across.js",
         "grimoire-aave": "dist/cli/aave.js",
@@ -67,7 +67,7 @@
         "@aave/client": "^0.9.2",
         "@across-protocol/app-sdk": "^0.5.0",
         "@ethersproject/wallet": "5.8.0",
-        "@grimoirelabs/core": "0.17.1",
+        "@grimoirelabs/core": "0.17.5",
         "@morpho-org/blue-sdk": "^5.20.0",
         "@morpho-org/blue-sdk-viem": "^4.6.0",
         "@nktkas/hyperliquid": "^0.32.1",
@@ -81,6 +81,7 @@
     },
   },
   "overrides": {
+    "axios": "1.13.5",
     "cookie": "^0.7.0",
     "tmp": "^0.2.4",
     "undici": "^6.23.0",

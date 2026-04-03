@@ -76,9 +76,10 @@ grimoire-hyperliquid l2-book --coin BTC
 grimoire-polymarket status
 grimoire-polymarket markets list --limit 10 --format json
 grimoire-polymarket markets search "bitcoin" --limit 10 --format json
+grimoire-polymarket data positions <address> --limit 10 --format json
 grimoire-polymarket search-markets --category sports --league "la liga" --open-only true --format json
-grimoire-polymarket clob book <token_id> --format json
-grimoire-polymarket clob price <token_id> --side buy --format json
+grimoire-polymarket book --token-id <token_id> --format json
+grimoire-polymarket price --token-id <token_id> --side buy --format json
 ```
 
 Polymarket note:

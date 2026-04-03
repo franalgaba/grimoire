@@ -6,6 +6,7 @@
 
 export * from "./ast.js";
 export * from "./errors.js";
+export * from "./formatter.js";
 export { Parser, parse } from "./parser.js";
 export * from "./tokenizer.js";
 export { Transformer, transform } from "./transformer.js";

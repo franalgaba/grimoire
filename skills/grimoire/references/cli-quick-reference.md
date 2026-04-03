@@ -13,6 +13,8 @@ Assume `<grimoire-cmd>` is one of:
 ```bash
 <grimoire-cmd> init [--force] [--runtime-quickstart]
 <grimoire-cmd> setup [--chain <id>] [--rpc-url <url>] [--adapter <name>] [--keystore <path>] [--password-env <name>] [--key-env <name>] [--import-key] [--no-save-password-env] [--no-doctor] [--non-interactive] [--json]
+<grimoire-cmd> format <paths...> [--write|--check] [--diff] [--json]
+<grimoire-cmd> format --stdin --stdin-filepath <virtual-path> [--json]
 <grimoire-cmd> compile <spell> [-o <file>] [--pretty]
 <grimoire-cmd> compile-all [dir] [--fail-fast] [--json]
 <grimoire-cmd> validate <spell> [--strict] [--json]

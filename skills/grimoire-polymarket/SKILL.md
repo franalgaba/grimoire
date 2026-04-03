@@ -29,13 +29,7 @@ Canonical agent commands:
 Allowed passthrough groups (official CLI surface, restricted by wrapper policy):
 
 - `markets` (`list|get|search|tags`)
-- `events` (`list|get|tags`)
-- `tags` (`list|get|related|related-tags`)
-- `series` (`list|get`)
-- `sports` (`list|market-types|teams`)
-- `clob` (book/prices/markets/orders/trades/etc.)
 - `data` (positions/value/leaderboards/etc.)
-- `status`
 
 Blocked groups in this wrapper (intentionally not exposed for agents):
 
@@ -63,26 +57,26 @@ grimoire venue polymarket search-markets --category sports --league "la liga" --
 # Official passthrough discovery/data
 grimoire venue polymarket markets list --limit 25 --format json
 grimoire venue polymarket markets search "atleti" --limit 25 --format json
-grimoire venue polymarket events list --limit 25 --format json
-grimoire venue polymarket clob book <token_id> --format json
-grimoire venue polymarket clob midpoint <token_id> --format json
-grimoire venue polymarket clob price <token_id> --side buy --format json
+grimoire venue polymarket data positions <address> --limit 25 --format json
+grimoire venue polymarket data trades <address> --limit 25 --format json
+grimoire venue polymarket data leaderboard --period week --order-by vol --limit 25 --format json
 
-# Authenticated order-management reads
-grimoire venue polymarket clob order <order_id> --format json
-grimoire venue polymarket clob trades --market <condition_id> --format json
-grimoire venue polymarket clob orders --market <condition_id> --format json
-grimoire venue polymarket clob balance --asset-type conditional --token <token_id> --format json
+# Legacy compatibility aliases (still supported)
+grimoire venue polymarket book --token-id <token_id> --format json
+grimoire venue polymarket price --token-id <token_id> --side buy --format json
+grimoire venue polymarket order --order-id <order_id> --format json
+grimoire venue polymarket open-orders --market <condition_id> --format json
 ```
 
 ## Runtime Configuration
 
-Adapter/runtime auth (for spell execution and authenticated CLOB operations):
+Adapter/runtime auth (for spell execution):
 
-- required: `POLYMARKET_PRIVATE_KEY`
+- required by default: `POLYMARKET_PRIVATE_KEY`
 - optional API creds: `POLYMARKET_API_KEY`, `POLYMARKET_API_SECRET`, `POLYMARKET_API_PASSPHRASE`
 - optional derive toggle (default true): `POLYMARKET_DERIVE_API_KEY=true|false`
 - optional signature routing: `POLYMARKET_SIGNATURE_TYPE` (`0` EOA, `1` POLY_PROXY, `2` GNOSIS_SAFE), `POLYMARKET_FUNDER`
+- `grimoire cast` / `grimoire resume` key-based flows inject the same wallet-manager key into the Polymarket adapter, so a separate `POLYMARKET_PRIVATE_KEY` env is not required there.
 
 Venue CLI backend:
 

@@ -120,7 +120,7 @@ Implementation notes:
 
 - Type: `evm`
 - Actions: `swap`
-- Data endpoints: `info`, `routers`, `tokens`, `pools`
+- Data endpoints: none on adapter metadata (use `grimoire venue uniswap ...` for token/pool discovery)
 
 Implementation notes:
 
@@ -222,9 +222,10 @@ Implementation notes:
   - Install: `brew tap Polymarket/polymarket-cli && brew install polymarket`
   - Optional override: `POLYMARKET_OFFICIAL_CLI=/path/to/polymarket`
 - `polymarketAdapter` resolves auth from env by default:
-  - required: `POLYMARKET_PRIVATE_KEY`
+  - required: `POLYMARKET_PRIVATE_KEY` (when adapter is not key-configured programmatically)
   - optional API creds: `POLYMARKET_API_KEY`, `POLYMARKET_API_SECRET`, `POLYMARKET_API_PASSPHRASE`
   - optional derive toggle: `POLYMARKET_DERIVE_API_KEY` (default: true)
+- `grimoire cast` / `grimoire resume` key-based paths inject the same loaded wallet key into the Polymarket adapter factory, so a separate `POLYMARKET_PRIVATE_KEY` env is not required there.
 - Advanced users can inject a prebuilt client with `createPolymarketAdapter({ client })`.
 
 ## QueryProvider
@@ -410,12 +411,12 @@ Commands:
 Commands:
 
 - Official passthrough command groups:
-`markets`, `events`, `tags`, `series`, `sports`, `clob`, `data`, `status`.
+`markets`, `data`.
 - Canonical agent commands:
-`info`, `search-markets`.
+`info`, `status`, `search-markets`.
 - Blocked groups (not exposed by wrapper):
 `wallet`, `bridge`, `approve`, `ctf`, `setup`, `upgrade`, `shell`.
-- Legacy aliases remain for backward compatibility (`market`, `book`, `midpoint`, `spread`, `price`, `last-trade-price`, `tick-size`, `neg-risk`, `fee-rate`, `events`, `order`, `trades`, `open-orders`, `balance-allowance`, `closed-only-mode`) but should not be used for new agent flows.
+- Legacy aliases remain for backward compatibility (`server-time`, `market`, `book`, `midpoint`, `spread`, `price`, `last-trade-price`, `tick-size`, `neg-risk`, `fee-rate`, `price-history`, `order`, `trades`, `open-orders`, `balance-allowance`, `closed-only-mode`) but should not be used for new agent flows.
 
 `search-markets` supports cross-category discovery filters: `--query`, `--slug`, `--question`,
 `--event`, `--tag`, `--category`, `--league`, `--sport`, plus pagination controls including

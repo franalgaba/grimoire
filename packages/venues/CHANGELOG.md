@@ -1,5 +1,47 @@
 # @grimoirelabs/venues
 
+## 0.10.18
+
+### Patch Changes
+
+- Updated dependencies [76b248b]
+  - @grimoirelabs/core@0.18.0
+
+## 0.10.17
+
+### Patch Changes
+
+- fa20ce9: Pin axios to 1.13.5 and add minimumReleaseAge policy to mitigate supply-chain compromise
+
+## 0.10.16
+
+### Patch Changes
+
+- 6cdb24a: Fix Across bridge asset resolution for chain-scoped spell symbols (for example `USDC_ETH`).
+
+  The Across adapter now merges spell-defined `ctx.assets` mappings and can derive the destination token address from the resolved source token address when direct symbol resolution is unavailable. This prevents `No Across asset mapping` failures for valid chain-specific asset aliases.
+
+## 0.10.15
+
+### Patch Changes
+
+- 356c511: Improve Polymarket offchain execution wiring and venue CLI coverage.
+
+  - Reuse the loaded wallet-manager key for Polymarket adapter configuration in `cast`/`resume` wallet paths (matching Hyperliquid behavior), avoiding a separate Polymarket private key requirement in those flows.
+  - Expose first-class Polymarket `markets` and `data` command namespaces in the venue CLI wrapper with JSON passthrough and optional auth flags.
+  - Fix `search-markets` validation to allow boolean-only filters (`open-only`, `active-only`, `tradable-only`) and add regression test coverage.
+
+## 0.10.14
+
+### Patch Changes
+
+- d6e76eb: Fix Uniswap venue pool discovery and alias routing for Base workflows.
+
+  - Fallback to on-chain pool lookups when Graph config is not usable (for example, no API key), using default chain RPCs when available.
+  - Add Base (8453) Uniswap V3 factory default for metadata pool discovery.
+  - Add underscore aliases like `uniswap_v4`/`uniswap_v3` in built-in venue discovery.
+  - Remove `dataEndpoints` from `uniswap_v4` adapter metadata to avoid mismatched metadata endpoint routing.
+
 ## 0.10.13
 
 ### Patch Changes
