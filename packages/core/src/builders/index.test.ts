@@ -247,7 +247,7 @@ describe("ComputeBuilder", () => {
   test("creates a compute step", () => {
     const computeStep = compute("compute1")
       .assign("balance", binding("wallet.balance"))
-      .assign("rate", call("get_apy", [binding("asset")]));
+      .assign("rate", call("apy", [binding("venue"), binding("asset")]));
 
     const step = computeStep.build();
     expect(step.kind).toBe("compute");
@@ -421,7 +421,7 @@ describe("Complex Example", () => {
         assignments: [
           {
             variable: "rates",
-            expression: call("get_apy", [binding("asset")]),
+            expression: call("apy", [binding("aave"), binding("asset")]),
           },
         ],
         dependsOn: [],

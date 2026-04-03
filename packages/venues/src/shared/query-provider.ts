@@ -1,16 +1,17 @@
 /**
- * Alchemy-backed QueryProvider
- *
- * Provides:
- * - queryBalance: on-chain ERC20.balanceOf() via the RPC provider
- * - queryPrice: Alchemy Token Prices API (requires Alchemy API key)
- *
- * The Alchemy API key is extracted automatically from the RPC URL
- * (pattern: https://{network}.g.alchemy.com/v2/{key}), so no extra
- * CLI flags are needed.
+ * Query provider helpers:
+ * - createAlchemyQueryProvider: balance + price (Alchemy-backed)
+ * - createCompositeQueryProvider: balance + price + adapter-backed metric surfaces
  */
 
-import type { Address, Provider, QueryProvider } from "@grimoirelabs/core";
+import type {
+  Address,
+  MetricRequest,
+  Provider,
+  QueryProvider,
+  VenueAdapter,
+  VenueAlias,
+} from "@grimoirelabs/core";
 import { resolveTokenAddress } from "./token-registry.js";
 
 const ERC20_BALANCE_ABI: import("viem").Abi = [
@@ -31,6 +32,11 @@ export interface AlchemyQueryProviderConfig {
   alchemyApiKey?: string;
   /** Used to extract API key if alchemyApiKey is not set */
   rpcUrl?: string;
+}
+
+export interface CompositeQueryProviderConfig extends AlchemyQueryProviderConfig {
+  adapters?: VenueAdapter[];
+  venueAliases?: VenueAlias[];
 }
 
 /**
@@ -57,6 +63,7 @@ export function createAlchemyQueryProvider(config: AlchemyQueryProviderConfig): 
     meta: {
       name: "alchemy",
       supportedQueries: ["balance", ...(apiKey ? (["price"] as const) : [])],
+      supportedMetrics: [],
     },
 
     async queryBalance(asset: string, address?: string): Promise<bigint> {
@@ -113,4 +120,89 @@ export function createAlchemyQueryProvider(config: AlchemyQueryProviderConfig): 
       return basePrice / quotePrice;
     },
   };
+}
+
+/**
+ * Create a venue-aware QueryProvider by composing:
+ * - Alchemy query functions for balance/price
+ * - Venue adapter readMetric() for protocol surfaces (e.g. apy)
+ */
+export function createCompositeQueryProvider(config: CompositeQueryProviderConfig): QueryProvider {
+  const base = createAlchemyQueryProvider(config);
+  const adapters = config.adapters ?? [];
+  const aliasMap = buildVenueAliasMap(config.venueAliases ?? []);
+  const metricAdapters = adapters.filter(hasReadMetric);
+  const metricAdaptersByName = new Map(
+    metricAdapters.map((adapter) => [adapter.meta.name, adapter])
+  );
+  const supportedMetrics = dedupe(
+    metricAdapters.flatMap((adapter) => adapter.meta.metricSurfaces ?? [])
+  );
+
+  return {
+    ...base,
+    meta: {
+      name: "composite",
+      supportedQueries: [
+        ...base.meta.supportedQueries,
+        ...(metricAdapters.length > 0 ? (["metric"] as const) : []),
+      ],
+      supportedMetrics,
+      description: "Alchemy balance/price + venue adapter metric surfaces",
+    },
+    async queryMetric(request: MetricRequest): Promise<number> {
+      const venueInput = request.venue;
+      const canonicalVenue = aliasMap.get(venueInput) ?? venueInput;
+      const adapter = metricAdaptersByName.get(canonicalVenue);
+      if (!adapter?.readMetric) {
+        throw new Error(
+          `Metric '${request.surface}' not available for venue '${venueInput}' (resolved '${canonicalVenue}')`
+        );
+      }
+
+      if (
+        adapter.meta.metricSurfaces &&
+        adapter.meta.metricSurfaces.length > 0 &&
+        !adapter.meta.metricSurfaces.includes(request.surface)
+      ) {
+        throw new Error(
+          `Venue '${canonicalVenue}' does not expose metric surface '${request.surface}'`
+        );
+      }
+
+      return adapter.readMetric(
+        {
+          ...request,
+          venue: canonicalVenue,
+        },
+        {
+          provider: config.provider,
+          walletAddress: config.vault,
+          chainId: config.chainId,
+          vault: config.vault,
+        }
+      );
+    },
+  };
+}
+
+function hasReadMetric(
+  adapter: VenueAdapter
+): adapter is VenueAdapter & { readMetric: NonNullable<VenueAdapter["readMetric"]> } {
+  return typeof adapter.readMetric === "function";
+}
+
+function buildVenueAliasMap(aliases: VenueAlias[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const alias of aliases) {
+    map.set(alias.alias, alias.alias);
+    if (alias.label && !map.has(alias.label)) {
+      map.set(alias.label, alias.alias);
+    }
+  }
+  return map;
+}
+
+function dedupe(values: string[]): string[] {
+  return [...new Set(values)];
 }

@@ -123,7 +123,9 @@ Built-in signatures include:
 - chain queries:
   - `balance(asset[, address])` — optional `address` parameter to query a specific wallet
   - `price(base, quote[, source])` — optional `source` string parameter (e.g. `"chainlink"`)
-  - `get_apy`, `get_health_factor`, `get_position`, `get_debt`
+  - `apy(venue, asset[, selector])` — optional `selector` to target venue-specific markets/vaults
+  - `metric(surface, venue[, asset[, selector]])` — extensible protocol metric queries
+  - `get_health_factor`, `get_position`, `get_debt`
 - conversion: `to_number`, `to_bigint`
 
 The checker validates:

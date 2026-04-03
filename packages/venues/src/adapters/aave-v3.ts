@@ -1,10 +1,12 @@
 import { AaveClient, chainId, evmAddress } from "@aave/client";
-import { borrow, repay, supply, withdraw } from "@aave/client/actions";
+import { borrow, repay, reserve, supply, withdraw } from "@aave/client/actions";
 import type {
   Action,
   Address,
   BuiltTransaction,
+  MetricRequest,
   VenueAdapter,
+  VenueAdapterContext,
   VenueBuildMetadata,
 } from "@grimoirelabs/core";
 import { assertSupportedConstraints } from "../shared/constraints.js";
@@ -14,12 +16,13 @@ import { resolveTokenAddress, resolveTokenDecimals } from "../shared/token-regis
 export interface AaveV3AdapterConfig {
   markets: Record<number, Address>;
   client?: AaveClient;
-  actions?: {
+  actions?: Partial<{
     supply: typeof supply;
     withdraw: typeof withdraw;
     borrow: typeof borrow;
     repay: typeof repay;
-  };
+    reserve: typeof reserve;
+  }>;
 }
 
 const DEFAULT_MARKETS: Record<number, Address> = {
@@ -33,7 +36,14 @@ export function createAaveV3Adapter(
   config: AaveV3AdapterConfig = { markets: DEFAULT_MARKETS }
 ): VenueAdapter {
   const client = config.client ?? AaveClient.create();
-  const actions = config.actions ?? { supply, withdraw, borrow, repay };
+  const actions = {
+    supply,
+    withdraw,
+    borrow,
+    repay,
+    reserve,
+    ...config.actions,
+  };
   const meta: VenueAdapter["meta"] = {
     name: "aave_v3",
     supportedChains: Object.keys(config.markets).map((id) => Number.parseInt(id, 10)),
@@ -42,19 +52,51 @@ export function createAaveV3Adapter(
     supportsQuote: false,
     supportsSimulation: false,
     supportsPreviewCommit: true,
+    metricSurfaces: ["apy"],
     dataEndpoints: ["health", "chains", "markets", "market", "reserve", "reserves"],
     description: "Aave V3 adapter",
   };
 
+  function getMarketForChain(chain: number): Address {
+    const market = config.markets[chain];
+    if (!market) {
+      throw new Error(`No Aave V3 market configured for chain ${chain}`);
+    }
+    return market;
+  }
+
   return {
     meta,
+    async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
+      if (request.surface !== "apy") {
+        throw new Error(`Aave V3 does not support metric surface '${request.surface}'`);
+      }
+      if (!request.asset) {
+        throw new Error("Aave V3 APY metric requires an asset");
+      }
+
+      const market = getMarketForChain(ctx.chainId);
+      const assetAddress = resolveTokenAddress(request.asset, ctx.chainId, {
+        treatEthAsWrapped: true,
+      });
+      const reserveResult = await actions.reserve(client, {
+        chainId: chainId(ctx.chainId),
+        market: evmAddress(market),
+        underlyingToken: evmAddress(assetAddress),
+      } as unknown as Parameters<typeof reserve>[1]);
+      const payload = unwrapAaveResult<Record<string, unknown>>(reserveResult);
+      const apy = extractAaveApyBps(payload);
+      if (apy === null) {
+        throw new Error(
+          `Aave V3 APY metric unavailable for asset '${request.asset}' on chain ${ctx.chainId}`
+        );
+      }
+      return apy;
+    },
     async buildAction(action, ctx) {
       assertSupportedConstraints(meta, action);
 
-      const market = config.markets[ctx.chainId];
-      if (!market) {
-        throw new Error(`No Aave V3 market configured for chain ${ctx.chainId}`);
-      }
+      const market = getMarketForChain(ctx.chainId);
 
       if (!isAaveAction(action)) {
         throw new Error(`Unsupported Aave action: ${action.type}`);
@@ -247,6 +289,126 @@ function extractExecutionPlan(planResult: unknown): AaveExecutionPlan {
   }
 
   return planResult as AaveExecutionPlan;
+}
+
+function unwrapAaveResult<T>(result: unknown): T {
+  if (result && typeof result === "object" && "isErr" in result) {
+    const wrapped = result as {
+      isErr?: () => boolean;
+      error?: { message?: string };
+      value?: unknown;
+    };
+    if (wrapped.isErr?.()) {
+      throw new Error(wrapped.error?.message ?? "Aave request failed");
+    }
+    if (wrapped.value !== undefined) {
+      return wrapped.value as T;
+    }
+  }
+
+  return result as T;
+}
+
+function extractAaveApyBps(payload: Record<string, unknown>): number | null {
+  const preferredKeys = ["liquidityApy", "supplyApy", "depositApy", "liquidityRate", "apy"];
+  for (const key of preferredKeys) {
+    const values = collectNumericValues(payload, key);
+    for (const value of values) {
+      if (Number.isFinite(value)) {
+        return normalizeApyToBps(value);
+      }
+    }
+  }
+  return null;
+}
+
+const MAX_TRAVERSAL_DEPTH = 10;
+
+function collectNumericValues(node: unknown, targetKey: string): number[] {
+  const out: number[] = [];
+
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > MAX_TRAVERSAL_DEPTH || !value || typeof value !== "object") {
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        visit(item, depth + 1);
+      }
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    for (const [key, next] of Object.entries(record)) {
+      if (key === targetKey) {
+        const numeric = extractMetricNumber(next);
+        if (numeric !== null) {
+          out.push(numeric);
+        }
+      }
+      visit(next, depth + 1);
+    }
+  };
+
+  visit(node, 0);
+  return out;
+}
+
+function extractMetricNumber(value: unknown): number | null {
+  const direct = toFiniteNumber(value);
+  if (direct !== null) {
+    return direct;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const nested = [record.value, record.formatted, record.raw]
+      .map((entry) => toFiniteNumber(entry))
+      .find((entry) => entry !== null);
+    if (nested !== undefined) {
+      return nested as number;
+    }
+  }
+
+  return null;
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (typeof value === "bigint") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+// Aave SDK returns rates in different scales depending on the payload shape:
+// - Ray-scaled (1e27): raw on-chain liquidityRate / variableBorrowRate
+// - Ratio (0–1): some SDK wrappers normalize to decimal fraction
+// - Percent (0–200): client-side formatted values like liquidityApy
+// - Basis points (>200): pre-converted values
+const AAVE_RAY = 1e27;
+const RAY_DETECTION_THRESHOLD = 1e12;
+const BPS_PER_UNIT = 10_000;
+const BPS_PER_PERCENT = 100;
+const MAX_PERCENT_VALUE = 200;
+
+function normalizeApyToBps(value: number): number {
+  if (value > RAY_DETECTION_THRESHOLD) {
+    return normalizeApyToBps(value / AAVE_RAY);
+  }
+  if (value <= 1) {
+    return value * BPS_PER_UNIT;
+  }
+  if (value <= MAX_PERCENT_VALUE) {
+    return value * BPS_PER_PERCENT;
+  }
+  return value;
 }
 
 function buildAaveTransactions(

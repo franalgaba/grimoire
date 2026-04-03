@@ -104,6 +104,26 @@ describe("Execution Context", () => {
     expect(assets).toEqual(["USDC", "DAI"]);
   });
 
+  test("binds venue aliases and labels for metric calls", () => {
+    const ctx = createContext({
+      spell: createMinimalSpell({
+        aliases: [
+          {
+            alias: "aave_v3",
+            chain: 1,
+            address: "0x0000000000000000000000000000000000000001",
+            label: "aave",
+          },
+        ],
+      }),
+      vault: "0x0000000000000000000000000000000000000000" as Address,
+      chain: 1,
+    });
+
+    expect(ctx.bindings.get("aave_v3")).toBe("aave_v3");
+    expect(ctx.bindings.get("aave")).toBe("aave_v3");
+  });
+
   test("binds limits object from limit_ params", () => {
     const ctx = createContext({
       spell: createMinimalSpell({

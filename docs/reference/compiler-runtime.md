@@ -224,7 +224,7 @@ interface QueryProvider {
   meta: QueryProviderMeta;
   queryBalance?: (asset: string, address?: string) => Promise<bigint>;
   queryPrice?: (base: string, quote: string, source?: string) => Promise<number>;
-  queryApy?: (venue: string, asset: string) => Promise<number>;
+  queryMetric?: (request: MetricRequest) => Promise<number>;
   queryHealthFactor?: (venue: string) => Promise<number>;
   queryPosition?: (venue: string, asset: string) => Promise<unknown>;
   queryDebt?: (venue: string, asset: string) => Promise<bigint>;
@@ -238,7 +238,8 @@ All query methods are optional. The provider declares which queries it supports 
 ```ts
 interface QueryProviderMeta {
   name: string;
-  supportedQueries: Array<"balance" | "price" | "apy" | "health_factor" | "position" | "debt">;
+  supportedQueries: Array<"balance" | "price" | "metric" | "health_factor" | "position" | "debt">;
+  supportedMetrics?: string[];
   description?: string;
 }
 ```
@@ -248,7 +249,7 @@ interface QueryProviderMeta {
 1. Caller passes `queryProvider` on `PreviewOptions` or `ExecuteOptions`.
 2. `createContext()` copies it onto `ExecutionContext.queryProvider`.
 3. `createEvalContext()` binds each provider method onto the `EvalContext`.
-4. Expression evaluator maps spell functions (`balance()`, `price()`, `get_apy()`, `health_factor()`, `position()`, `debt()`) to the corresponding `query*` method on `EvalContext`.
+4. Expression evaluator maps spell functions (`balance()`, `price()`, `apy()`, `metric()`, `health_factor()`, `position()`, `debt()`) to the corresponding `query*` method on `EvalContext`.
 
 If a spell calls a query function and no provider (or no matching method) is available, the evaluator throws at runtime.
 

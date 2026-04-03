@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import type { Expression } from "../types/expressions.js";
 import type { SpellIR } from "../types/ir.js";
 import type { Address } from "../types/primitives.js";
+import type { MetricRequest } from "../types/query-provider.js";
 import { createContext } from "./context.js";
 import type { EvalContext } from "./expression-evaluator.js";
 import { createEvalContext, evaluate, evaluateAsync } from "./expression-evaluator.js";
@@ -125,7 +126,7 @@ describe("Expression Evaluator", () => {
       ...baseCtx,
       queryBalance: async () => 123n,
       queryPrice: async () => 2000,
-      queryApy: async () => 0.05,
+      queryMetric: async (request: MetricRequest) => (request.surface === "apy" ? 0.05 : 0),
       queryHealthFactor: async () => 1.1,
       queryPosition: async () => ({ amount: 10n }),
       queryDebt: async () => 50n,
@@ -151,7 +152,7 @@ describe("Expression Evaluator", () => {
 
     const apyExpr: Expression = {
       kind: "call",
-      fn: "get_apy",
+      fn: "apy",
       args: [
         { kind: "literal", value: "aave", type: "string" },
         { kind: "literal", value: "USDC", type: "string" },

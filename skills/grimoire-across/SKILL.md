@@ -59,6 +59,19 @@ The `quote` command returns:
 - `fees.lpFee` / `fees.relayerGasFee` / `fees.relayerCapitalFee` / `fees.totalRelayFee`
 - `route.spokePoolAddress` — spoke pool contract used
 
+## Metric Surface (Spell Comparisons)
+
+Across exposes `quote_out` for bridge output comparisons:
+
+```spell
+across_out = metric("quote_out", across, USDC, "to_chain=8453,amount=1000000")
+```
+
+Selector fields:
+
+- required: `to_chain`
+- optional: `amount` (defaults to 1 unit of input asset), `asset_out` (defaults to input asset)
+
 ## Spell Constraints
 
 When writing bridge actions in `.spell` files targeting Across, use `with` clauses:

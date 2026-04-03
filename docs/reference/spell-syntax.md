@@ -381,6 +381,8 @@ Expression forms:
 - function calls (`min`, `max`, `balance`, `price`, ...)
   - `price(base, quote)` or `price(base, quote, source?)` where `source` is an optional string (e.g. `"chainlink"`)
   - `balance(asset)` or `balance(asset, address?)` where `address` is an optional address
+  - `apy(venue, asset)` or `apy(venue, asset, selector?)` where `selector` can target venue-specific markets/vaults
+  - `metric(surface, venue)` or `metric(surface, venue, asset?, selector?)` for extensible protocol comparison surfaces
 
 ## Constraints Clause
 

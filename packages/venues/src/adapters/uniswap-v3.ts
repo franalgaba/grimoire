@@ -1,4 +1,4 @@
-import type { Address, VenueAdapter } from "@grimoirelabs/core";
+import type { Address, MetricRequest, VenueAdapter, VenueAdapterContext } from "@grimoirelabs/core";
 import { CurrencyAmount, Percent, Token, TradeType } from "@uniswap/sdk-core";
 import {
   computePoolAddress,
@@ -14,6 +14,13 @@ import { BPS_DENOMINATOR } from "../shared/bps.js";
 import { assertSupportedConstraints, validateGasConstraints } from "../shared/constraints.js";
 import { buildApprovalIfNeeded } from "../shared/erc20.js";
 import { estimateGasIfSupported } from "../shared/gas.js";
+import {
+  parseMetricSelector,
+  readMetricSelectorBigInt,
+  readMetricSelectorInt,
+  readMetricSelectorString,
+  scaleToHuman,
+} from "../shared/metric-selector.js";
 import { resolveToken as resolveVenueToken } from "../shared/token-registry.js";
 
 export interface UniswapV3AdapterConfig {
@@ -78,12 +85,86 @@ export function createUniswapV3Adapter(
     supportsQuote: true,
     supportsSimulation: true,
     supportsPreviewCommit: true,
+    metricSurfaces: ["quote_out"],
     dataEndpoints: ["info", "routers", "tokens", "pools"],
     description: "Uniswap V3 swap adapter",
   };
 
   return {
     meta,
+    async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
+      if (request.surface !== "quote_out") {
+        throw new Error(`Uniswap V3 does not support metric surface '${request.surface}'`);
+      }
+      if (!request.asset) {
+        throw new Error("Uniswap V3 quote_out metric requires assetIn as the third argument");
+      }
+
+      const selector = parseMetricSelector(request.selector);
+      const tokenIn = resolveToken(request.asset, ctx.chainId);
+      const assetOut = readMetricSelectorString(
+        selector,
+        ["asset_out", "out", "quote", "assetout", "to"],
+        { required: true, label: "asset_out" }
+      );
+      if (!assetOut) {
+        throw new Error("Uniswap V3 quote_out metric requires selector asset_out");
+      }
+      const tokenOut = resolveToken(assetOut, ctx.chainId);
+      const defaultAmount = 10n ** BigInt(tokenIn.decimals);
+      const amountIn =
+        readMetricSelectorBigInt(selector, ["amount", "amount_in", "in"], {
+          fallback: defaultAmount,
+          label: "amount",
+        }) ?? defaultAmount;
+      const fee =
+        readMetricSelectorInt(selector, ["fee_tier", "fee", "fee_bps"], {
+          fallback: config.defaultFee ?? _DEFAULT_FEE,
+          label: "fee_tier",
+        }) ??
+        config.defaultFee ??
+        _DEFAULT_FEE;
+
+      const factory = factories[ctx.chainId] ?? DEFAULT_FACTORY;
+      const poolAddress = computePoolAddress({
+        factoryAddress: factory,
+        tokenA: tokenIn,
+        tokenB: tokenOut,
+        fee: fee as FeeAmount,
+      });
+
+      const [slot0Result, liquidityResult] = await Promise.all([
+        ctx.provider.readContract<
+          readonly [bigint, number, number, number, number, number, boolean]
+        >({
+          address: poolAddress as Address,
+          abi: POOL_ABI,
+          functionName: "slot0",
+        }),
+        ctx.provider.readContract<bigint>({
+          address: poolAddress as Address,
+          abi: POOL_ABI,
+          functionName: "liquidity",
+        }),
+      ]);
+
+      const pool = new Pool(
+        tokenIn,
+        tokenOut,
+        fee as FeeAmount,
+        slot0Result[0].toString(),
+        liquidityResult.toString(),
+        Number(slot0Result[1])
+      );
+
+      const feePips = BigInt(fee);
+      const FEE_DENOMINATOR = 1_000_000n;
+      const amountAfterFee = (amountIn * (FEE_DENOMINATOR - feePips)) / FEE_DENOMINATOR;
+      const inputAmount = CurrencyAmount.fromRawAmount(tokenIn, amountAfterFee.toString());
+      const outputAmount = pool.priceOf(tokenIn).quote(inputAmount);
+      const rawOut = BigInt(outputAmount.quotient.toString());
+      return scaleToHuman(rawOut, tokenOut.decimals);
+    },
     async buildAction(action, ctx) {
       assertSupportedConstraints(meta, action);
 

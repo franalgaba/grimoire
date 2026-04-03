@@ -48,7 +48,8 @@ const _UNARY_OPS: UnaryOp[] = ["NOT", "-", "ABS"];
 const BUILTIN_FNS: BuiltinFn[] = [
   "balance",
   "price",
-  "get_apy",
+  "apy",
+  "metric",
   "get_health_factor",
   "get_position",
   "get_debt",
@@ -501,6 +502,10 @@ class ExpressionParser {
         // Check if it's a builtin
         if (BUILTIN_FNS.includes(name as BuiltinFn)) {
           return { kind: "call", fn: name as BuiltinFn, args };
+        }
+
+        if (name === "get_apy") {
+          throw new Error("Function 'get_apy' was removed. Use 'apy(venue, asset[, selector])'");
         }
 
         throw new Error(`Unknown function '${name}'`);

@@ -598,4 +598,97 @@ describe("Aave V3 adapter", () => {
       "Unsupported Aave execution plan"
     );
   });
+
+  test("reads APY metric from reserve data", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: { 1: market },
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({}),
+        withdraw: async () => ({}),
+        borrow: async () => ({}),
+        repay: async () => ({}),
+        reserve: async () => ({
+          value: {
+            reserveData: {
+              liquidityApy: 4.25,
+            },
+          },
+        }),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+    const value = await adapter.readMetric(
+      {
+        surface: "apy",
+        venue: "aave_v3",
+        asset: "USDC",
+      },
+      ctx
+    );
+    expect(value).toBe(425);
+  });
+
+  test("reads APY metric from PercentValue payload shape", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: { 1: market },
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({}),
+        withdraw: async () => ({}),
+        borrow: async () => ({}),
+        repay: async () => ({}),
+        reserve: async () => ({
+          value: {
+            supplyInfo: {
+              apy: {
+                value: "0.0275",
+              },
+            },
+          },
+        }),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+    const value = await adapter.readMetric(
+      {
+        surface: "apy",
+        venue: "aave_v3",
+        asset: "USDC",
+      },
+      ctx
+    );
+    expect(value).toBe(275);
+  });
+
+  test("rejects unsupported metric surfaces", async () => {
+    const adapter = createAaveV3Adapter({
+      markets: { 1: market },
+      client: {} as AaveClient,
+      actions: {
+        supply: async () => ({}),
+        withdraw: async () => ({}),
+        borrow: async () => ({}),
+        repay: async () => ({}),
+        reserve: async () => ({}),
+      } as unknown as AaveV3AdapterConfig["actions"],
+    });
+
+    if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+    await expect(
+      adapter.readMetric(
+        {
+          surface: "borrow_apr",
+          venue: "aave_v3",
+          asset: "USDC",
+        },
+        ctx
+      )
+    ).rejects.toThrow("does not support metric surface");
+  });
 });

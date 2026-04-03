@@ -138,13 +138,18 @@ Use `references/cli-quick-reference.md` for concise command signatures and safet
 - `simulate` supports explicit `--rpc-url`, with precedence: `--rpc-url` -> `RPC_URL_<chainId>` -> `RPC_URL`.
 - Phase 1 cross-chain execution uses two-spell orchestration (`--destination-spell`) with one logical run id and resume support.
 
-## Query Functions (price / balance)
+## Query Functions (price / balance / apy / metric)
 
-**Always prefer `price()` and `balance()` over advisory for data fetching.** These are deterministic, fast, and don't require LLM calls.
+**Always prefer query functions over advisory for structured data fetching.** These are deterministic, fast, and don't require LLM calls.
 
-- `price(BASE, QUOTE)` — live token price via query provider (requires Alchemy RPC URL)
-- `balance(ASSET)` — on-chain token balance via RPC (any RPC URL)
-- Never use an advisory (`advise`) just to fetch a price, balance, or other structured data
+- `price(BASE, QUOTE[, SOURCE])` — live token price via query provider (requires Alchemy RPC URL)
+- `balance(ASSET[, ADDRESS])` — on-chain token balance via RPC (any RPC URL)
+- `apy(VENUE, ASSET[, SELECTOR])` — venue-backed APY surface (for example Aave and Morpho)
+- `metric(SURFACE, VENUE[, ASSET[, SELECTOR]])` — generic protocol metric surface
+- Selector guidance:
+- market/vault id selector: `apy(morpho, USDC, "wbtc-usdc-86")`
+- key/value selector: `metric("quote_out", uni_v3, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000")`
+- Never use an advisory (`advise`) just to fetch prices, balances, APYs, or other structured metrics
 
 Use advisory only when the task requires LLM judgment, reasoning, or interpretation.
 
@@ -183,6 +188,7 @@ Formatting policy for venue CLI output:
 - `docs/how-to/simulate-on-anvil-fork.md`
 - `docs/how-to/use-wallet-commands-end-to-end.md`
 - `docs/how-to/use-advisory-decisions.md`
+- `docs/how-to/compare-protocol-metrics.md`
 - `docs/explanation/advisory-decision-flow.md`
 - `docs/reference/cli.md`
 - `docs/reference/spell-syntax.md`

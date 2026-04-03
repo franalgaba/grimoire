@@ -35,6 +35,54 @@ const ctx: VenueAdapterContext = {
 };
 
 describe("Uniswap V3 adapter", () => {
+  test("reads quote_out metric for pair + amount selector", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.readMetric) {
+      throw new Error("Adapter does not support readMetric");
+    }
+
+    const quoteOut = await adapter.readMetric(
+      {
+        surface: "quote_out",
+        venue: "uniswap_v3",
+        asset: "USDC",
+        selector: "asset_out=WETH,amount=1000000,fee_tier=3000",
+      },
+      ctx
+    );
+
+    expect(Number.isFinite(quoteOut)).toBe(true);
+    expect(quoteOut).toBeGreaterThan(0);
+  });
+
+  test("quote_out metric reflects fee tier", async () => {
+    const adapter = createUniswapV3Adapter();
+    if (!adapter.readMetric) {
+      throw new Error("Adapter does not support readMetric");
+    }
+
+    const lowFeeQuote = await adapter.readMetric(
+      {
+        surface: "quote_out",
+        venue: "uniswap_v3",
+        asset: "USDC",
+        selector: "asset_out=WETH,amount=1000000,fee_tier=500",
+      },
+      ctx
+    );
+    const highFeeQuote = await adapter.readMetric(
+      {
+        surface: "quote_out",
+        venue: "uniswap_v3",
+        asset: "USDC",
+        selector: "asset_out=WETH,amount=1000000,fee_tier=3000",
+      },
+      ctx
+    );
+
+    expect(lowFeeQuote).toBeGreaterThan(highFeeQuote);
+  });
+
   test("adds approval before swap when allowance is insufficient", async () => {
     const adapter = createUniswapV3Adapter();
 

@@ -34,6 +34,7 @@ docs/
 - `docs/how-to/use-wallet-commands-end-to-end.md`
 - `docs/how-to/run-tests.md`
 - `docs/how-to/bridge-with-across.md`
+- `docs/how-to/compare-protocol-metrics.md`
 - `docs/how-to/use-advisory-decisions.md`
 - `docs/how-to/use-state-persistence.md`
 - `docs/how-to/publish.md`

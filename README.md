@@ -83,6 +83,11 @@ Advisory docs:
 - `docs/explanation/advisory-decision-flow.md`
 - `docs/reference/spell-syntax.md#advisory-syntax`
 
+Protocol comparison docs:
+
+- `docs/how-to/compare-protocol-metrics.md`
+- `docs/reference/venues.md#metric-surfaces`
+
 See `grimoire --help` for all CLI commands.
 
 ### Library entry point (`@grimoirelabs/core`)

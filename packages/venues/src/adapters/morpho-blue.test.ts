@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import type {
   Action,
   Address,
@@ -674,5 +674,104 @@ describe("Morpho Blue adapter", () => {
     const result = await adapter.buildAction(action, crossChainCtx);
     const built = Array.isArray(result) ? result : [result];
     expect(built[0]?.description).toContain("Morpho Blue borrow");
+  });
+
+  test("readMetric selects highest-liquidity market for asset when selector is omitted", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock(async () => {
+      return new Response(
+        JSON.stringify({
+          data: {
+            markets: {
+              items: [
+                {
+                  marketId: "0x01",
+                  chain: { id: 1 },
+                  loanAsset: { symbol: "USDC" },
+                  state: { supplyApy: 3.5, supplyAssetsUsd: 1000 },
+                },
+                {
+                  marketId: "0x02",
+                  chain: { id: 1 },
+                  loanAsset: { symbol: "USDC" },
+                  state: { supplyApy: 4.1, supplyAssetsUsd: 5000 },
+                },
+              ],
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as unknown as typeof fetch;
+
+    try {
+      const value = await adapter.readMetric(
+        {
+          surface: "apy",
+          venue: "morpho_blue",
+          asset: "USDC",
+        },
+        createCtx()
+      );
+      expect(value).toBeCloseTo(410, 6);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("readMetric uses explicit market selector", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+    const originalFetch = globalThis.fetch;
+    let capturedWhere: unknown;
+    globalThis.fetch = mock(async (_url: string | URL | Request, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as {
+        variables?: { where?: unknown };
+      };
+      capturedWhere = payload.variables?.where;
+      return new Response(
+        JSON.stringify({
+          data: {
+            markets: {
+              items: [
+                {
+                  marketId: "0xabc",
+                  chain: { id: 1 },
+                  loanAsset: { symbol: "USDC" },
+                  state: { supplyApy: 420 },
+                },
+              ],
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as unknown as typeof fetch;
+
+    try {
+      const value = await adapter.readMetric(
+        {
+          surface: "apy",
+          venue: "morpho_blue",
+          asset: "USDC",
+          selector: "0xabc",
+        },
+        createCtx()
+      );
+      expect(value).toBe(420);
+      expect(capturedWhere).toEqual({ uniqueKey_in: ["0xabc"] });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

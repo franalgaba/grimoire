@@ -1,10 +1,26 @@
-import type { Address, BuiltTransaction, VenueAdapter } from "@grimoirelabs/core";
+import type {
+  Address,
+  BuiltTransaction,
+  MetricRequest,
+  VenueAdapter,
+  VenueAdapterContext,
+} from "@grimoirelabs/core";
 import { encodeAbiParameters, encodeFunctionData } from "viem";
 import { toBigInt } from "../../shared/bigint.js";
 import { BPS_DENOMINATOR } from "../../shared/bps.js";
 import { assertSupportedConstraints, validateGasConstraints } from "../../shared/constraints.js";
 import { estimateGasIfSupported } from "../../shared/gas.js";
-import { resolveTokenAddress as resolveVenueTokenAddress } from "../../shared/token-registry.js";
+import {
+  parseMetricSelector,
+  readMetricSelectorBigInt,
+  readMetricSelectorInt,
+  readMetricSelectorString,
+  scaleToHuman,
+} from "../../shared/metric-selector.js";
+import {
+  resolveTokenAddress as resolveVenueTokenAddress,
+  resolveTokenDecimals as resolveVenueTokenDecimals,
+} from "../../shared/token-registry.js";
 import {
   Commands,
   DEFAULT_QUOTERS,
@@ -66,11 +82,96 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
     supportsQuote: true,
     supportsSimulation: true,
     supportsPreviewCommit: true,
+    metricSurfaces: ["quote_out"],
+    dataEndpoints: ["info", "routers", "tokens", "pools"],
     description: "Uniswap V4 swap adapter (Universal Router v2)",
   };
 
   return {
     meta,
+    async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
+      if (request.surface !== "quote_out") {
+        throw new Error(`Uniswap V4 does not support metric surface '${request.surface}'`);
+      }
+      if (!request.asset) {
+        throw new Error("Uniswap V4 quote_out metric requires assetIn as the third argument");
+      }
+
+      const selector = parseMetricSelector(request.selector);
+      const assetIn = request.asset;
+      const assetOut = readMetricSelectorString(
+        selector,
+        ["asset_out", "out", "quote", "assetout", "to"],
+        { required: true, label: "asset_out" }
+      );
+      if (!assetOut) {
+        throw new Error("Uniswap V4 quote_out metric requires selector asset_out");
+      }
+      const inDecimals = resolveVenueTokenDecimals(assetIn, ctx.chainId, {
+        treatEthAsWrapped: true,
+        defaultDecimals: 18,
+      });
+      const outDecimals = resolveVenueTokenDecimals(assetOut, ctx.chainId, {
+        treatEthAsWrapped: true,
+        defaultDecimals: 18,
+      });
+      const defaultAmount = 10n ** BigInt(inDecimals);
+      const amountIn =
+        readMetricSelectorBigInt(selector, ["amount", "amount_in", "in"], {
+          fallback: defaultAmount,
+          label: "amount",
+        }) ?? defaultAmount;
+      const fee =
+        readMetricSelectorInt(selector, ["fee_tier", "fee", "fee_bps"], {
+          fallback: config.defaultFee ?? _DEFAULT_FEE,
+          label: "fee_tier",
+        }) ??
+        config.defaultFee ??
+        _DEFAULT_FEE;
+      const tickSpacing =
+        readMetricSelectorInt(selector, ["tick_spacing", "spacing"], {
+          fallback: config.defaultTickSpacing ?? FEE_TO_TICK_SPACING[fee] ?? DEFAULT_TICK_SPACING,
+          label: "tick_spacing",
+        }) ??
+        config.defaultTickSpacing ??
+        FEE_TO_TICK_SPACING[fee] ??
+        DEFAULT_TICK_SPACING;
+
+      const quoter = quoters[ctx.chainId];
+      if (!quoter) {
+        throw new Error(`No Uniswap V4 quoter configured for chain ${ctx.chainId}`);
+      }
+
+      const isNativeEthIn = assetIn.toUpperCase() === "ETH";
+      const isNativeEthOut = assetOut.toUpperCase() === "ETH";
+      const currencyIn = isNativeEthIn ? NATIVE_ETH : resolveTokenAddress(assetIn, ctx.chainId);
+      const currencyOut = isNativeEthOut ? NATIVE_ETH : resolveTokenAddress(assetOut, ctx.chainId);
+      const [currency0, currency1] = sortCurrencies(currencyIn, currencyOut);
+      const zeroForOne = currency0.toLowerCase() === currencyIn.toLowerCase();
+      const poolKey: PoolKey = {
+        currency0,
+        currency1,
+        fee,
+        tickSpacing,
+        hooks: ZERO_HOOKS,
+      };
+
+      const quote = await ctx.provider.readContract<readonly [bigint, bigint]>({
+        address: quoter,
+        abi: QUOTER_ABI,
+        functionName: "quoteExactInputSingle",
+        args: [
+          {
+            poolKey,
+            zeroForOne,
+            exactAmount: amountIn,
+            hookData: "0x",
+          },
+        ],
+      });
+
+      return scaleToHuman(quote[0], outDecimals);
+    },
 
     async buildAction(action, ctx) {
       assertSupportedConstraints(meta, action);

@@ -297,15 +297,22 @@ export async function runFormatCommand(
       };
     }
   } else {
-    for (const path of args.paths) {
-      try {
-        const source = await readFile(path, "utf8");
-        sources.push({ path, source, writeBack: args.mode === "write" });
-      } catch (error) {
-        const message = (error as Error).message;
-        stderrLines.push(`[ERR_FORMAT_IO] ${path}: ${message}`);
-        sources.push({ path, source: null, writeBack: false, readError: message });
+    const readResults = await Promise.all(
+      args.paths.map(async (path) => {
+        try {
+          const source = await readFile(path, "utf8");
+          return { path, source, writeBack: args.mode === "write" } as FormatSourceEntry;
+        } catch (error) {
+          const message = (error as Error).message;
+          return { path, source: null, writeBack: false, readError: message } as FormatSourceEntry;
+        }
+      })
+    );
+    for (const entry of readResults) {
+      if (entry.source === null) {
+        stderrLines.push(`[ERR_FORMAT_IO] ${entry.path}: ${entry.readError}`);
       }
+      sources.push(entry);
     }
   }
 

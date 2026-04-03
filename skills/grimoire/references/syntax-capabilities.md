@@ -324,18 +324,22 @@ Expression forms:
 - identifiers
 - property access and indexing
 - function calls (`min`, `max`, `sum`, `avg`, `to_number`, `to_bigint`, etc.)
-- query functions: `price(base, quote, source?)`, `balance(asset, address?)`
+- query functions: `price(base, quote, source?)`, `balance(asset, address?)`, `apy(venue, asset, selector?)`, `metric(surface, venue, asset?, selector?)`
 
 ### Query Functions vs Advisory
 
-**Always prefer `price()` and `balance()` over advisory calls for data fetching.**
+**Always prefer query functions over advisory calls for structured data fetching.**
 
 - `price(WBTC, USDC)` — returns a live price from the query provider (Alchemy API). Deterministic, fast, no LLM cost.
 - `balance(USDC)` — returns on-chain token balance via RPC. No LLM needed.
 - `balance(USDC, 0xaddr)` — balance of a specific address.
 - `price(ETH, USDC, "chainlink")` — with explicit source hint.
+- `apy(aave, USDC)` — venue-backed APY query for lending comparison.
+- `apy(morpho, USDC, "wbtc-usdc-86")` — APY query with explicit market selector.
+- `metric("quote_out", uni_v3, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000")` — DEX quote comparison.
+- `metric("mid_price", polymarket, USDC, "token_id=<clobTokenId>")` — offchain midpoint comparison.
 
-Use advisory (`advise`) **only** when the task requires LLM judgment, reasoning, or interpretation — not for fetching prices, balances, or other structured data that query functions handle natively.
+Use advisory (`advise`) **only** when the task requires LLM judgment, reasoning, or interpretation — not for fetching prices, balances, APYs, or other structured metrics that query functions handle natively.
 
 **Anti-pattern (do NOT do this):**
 
@@ -352,6 +356,7 @@ btc_price = price(WBTC, USDC)
 ```
 
 Requires `--rpc-url` with an Alchemy URL for `price()`; any RPC works for `balance()`.
+`apy()` and `metric()` are adapter-backed and do not require Alchemy.
 
 ## Constraint Clause Capabilities
 

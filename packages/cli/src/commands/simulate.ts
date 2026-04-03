@@ -10,7 +10,7 @@ import {
   execute,
   type SpellIR,
 } from "@grimoirelabs/core";
-import { adapters, createAlchemyQueryProvider } from "@grimoirelabs/venues";
+import { adapters, createCompositeQueryProvider } from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import { hydrateParamsFromEnsProfile, resolveEnsProfile } from "../lib/ens-profile.js";
@@ -161,7 +161,14 @@ export async function simulateCommand(
     const provider = needsProvider ? createProvider(chain, rpcUrl) : undefined;
 
     const queryProvider = provider
-      ? createAlchemyQueryProvider({ provider, chainId: chain, vault, rpcUrl })
+      ? createCompositeQueryProvider({
+          provider,
+          chainId: chain,
+          vault,
+          rpcUrl,
+          adapters,
+          venueAliases: spell.aliases,
+        })
       : undefined;
 
     const dataPolicy = resolveDataPolicy({

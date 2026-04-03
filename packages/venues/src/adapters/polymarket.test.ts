@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Action, Address, Provider, VenueAdapterContext } from "@grimoirelabs/core";
+import { ClobClient } from "@polymarket/clob-client";
 import type { PolymarketExecutionClient } from "./polymarket/index.js";
 import { createPolymarketAdapter, polymarketAdapter } from "./polymarket/index.js";
 
@@ -23,6 +24,28 @@ const orderAction: Action = {
 };
 
 describe("Polymarket adapter", () => {
+  test("reads mid_price metric for token id", async () => {
+    const original = ClobClient.prototype.getMidpoint;
+    ClobClient.prototype.getMidpoint = async () => ({ midpoint: "0.62" });
+    try {
+      const adapter = createPolymarketAdapter();
+      if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+      const value = await adapter.readMetric(
+        {
+          surface: "mid_price",
+          venue: "polymarket",
+          asset: "12345",
+        },
+        adapterContext
+      );
+
+      expect(value).toBe(0.62);
+    } finally {
+      ClobClient.prototype.getMidpoint = original;
+    }
+  });
+
   test("builds offchain custom order description", async () => {
     const adapter = createPolymarketAdapter();
 

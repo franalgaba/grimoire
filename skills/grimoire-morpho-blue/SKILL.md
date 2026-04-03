@@ -53,6 +53,25 @@ Example provenance output fields to preserve:
 - `snapshot_source`
 - `units` (for example `net_apy=decimal`, `net_apy_pct=percent`, `tvl_usd=usd`)
 
+## Metric Surface (Spell Comparisons)
+
+Morpho exposes the `apy` metric surface and supports selector-based market targeting:
+
+```spell
+morpho_apy_default = apy(morpho, USDC)
+morpho_apy_market = apy(morpho, USDC, "weth-usdc-86")
+morpho_apy_market_id = apy(morpho, USDC, "0x...")
+morpho_apy_generic = metric("apy", morpho, USDC, "wbtc-usdc-86")
+```
+
+Selector behavior:
+
+- no selector: resolves by `asset` on the active chain and picks the highest-TVL match
+- config market selector: use known market ids from adapter config (for example `weth-usdc-86`)
+- onchain market id selector: use raw market id (`0x...`)
+
+When multiple vaults/markets exist for one asset, pass an explicit selector for deterministic comparisons.
+
 ## Spell Constraints
 
 Morpho Blue actions do not support runtime constraints (`max_slippage`, etc.). The adapter resolves markets by loan token and optional collateral.

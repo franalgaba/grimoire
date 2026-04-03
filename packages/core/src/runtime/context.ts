@@ -87,6 +87,15 @@ export function createContext(options: CreateContextOptions): ExecutionContext {
     spell.assets.map((a) => a.symbol)
   );
 
+  // Make venue aliases available in expressions (e.g. apy(aave, USDC)).
+  // Label bindings point to canonical alias names.
+  for (const venue of spell.aliases) {
+    bindings.set(venue.alias, venue.alias);
+    if (venue.label && !bindings.has(venue.label)) {
+      bindings.set(venue.label, venue.alias);
+    }
+  }
+
   // Make limits available as a "limits" object binding so `limits.x` property
   // access works at runtime (limits are stored as params with "limit_" prefix)
   const limitsObj: Record<string, unknown> = {};

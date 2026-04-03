@@ -141,7 +141,7 @@ export type {
 } from "./primitives.js";
 export { CHAINS } from "./primitives.js";
 // Query Provider
-export type { QueryProvider, QueryProviderMeta } from "./query-provider.js";
+export type { MetricRequest, QueryProvider, QueryProviderMeta } from "./query-provider.js";
 // Receipt / Value-Flow
 export type {
   AccountingSummary,

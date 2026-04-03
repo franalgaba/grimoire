@@ -71,6 +71,16 @@ The adapter does not support runtime constraints (`max_slippage`, etc.). Order p
 
 Supported TIF values: `Gtc`, `Ioc`, `Alo`, `FrontendMarket`.
 
+## Metric Surface (Spell Comparisons)
+
+Hyperliquid exposes `mid_price` for symbol midpoint comparisons:
+
+```spell
+hl_mid = metric("mid_price", hyperliquid, ETH)
+```
+
+The third argument is the Hyperliquid symbol to read (for example `ETH`, `BTC`, `SOL`).
+
 ## Notes
 
 - `withdraw` is stateful and requires explicit user confirmation plus keystore credentials.

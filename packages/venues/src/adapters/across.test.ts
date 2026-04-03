@@ -72,6 +72,25 @@ describe("Across adapter", () => {
     getQuote: async () => quote,
   });
 
+  test("reads quote_out metric for bridge route selector", async () => {
+    if (!adapter.readMetric) {
+      throw new Error("Missing readMetric");
+    }
+
+    const quoteOut = await adapter.readMetric(
+      {
+        surface: "quote_out",
+        venue: "across",
+        asset: "USDC",
+        selector: "to_chain=10,amount=1000000",
+      },
+      ctx
+    );
+
+    expect(Number.isFinite(quoteOut)).toBe(true);
+    expect(quoteOut).toBeGreaterThan(0);
+  });
+
   test("builds approval + bridge transactions", async () => {
     if (!adapter.buildAction) {
       throw new Error("Missing buildAction");
