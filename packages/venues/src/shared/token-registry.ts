@@ -268,3 +268,14 @@ function makeReverseKey(address: string, chainId: number): string {
 function normalizeSymbol(symbol: string): string {
   return symbol.trim().toUpperCase();
 }
+
+export function safeResolveTokenDecimals(asset: string, chainId: number, fallback: number): number {
+  try {
+    return resolveTokenDecimals(asset, chainId, {
+      defaultDecimals: fallback,
+      treatEthAsWrapped: true,
+    });
+  } catch {
+    return fallback;
+  }
+}

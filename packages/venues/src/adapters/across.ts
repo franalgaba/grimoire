@@ -10,7 +10,11 @@ import type {
 import { zeroAddress } from "viem";
 import { toBigInt, toBigIntIfPossible } from "../shared/bigint.js";
 import { applyBps } from "../shared/bps.js";
-import { assertSupportedConstraints, validateGasConstraints } from "../shared/constraints.js";
+import {
+  assertSupportedConstraints,
+  assertSupportedMetricSurface,
+  validateGasConstraints,
+} from "../shared/constraints.js";
 import { buildApprovalIfNeeded } from "../shared/erc20.js";
 import { estimateGasIfSupported } from "../shared/gas.js";
 import {
@@ -23,7 +27,7 @@ import {
 import {
   resolveBridgedTokenAddress,
   resolveTokenAddress,
-  resolveTokenDecimals,
+  safeResolveTokenDecimals,
   tryResolveTokenByAddress,
 } from "../shared/token-registry.js";
 
@@ -71,9 +75,7 @@ export function createAcrossAdapter(config: AcrossAdapterConfig = {}): VenueAdap
   return {
     meta,
     async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
-      if (request.surface !== "quote_out") {
-        throw new Error(`Across does not support metric surface '${request.surface}'`);
-      }
+      assertSupportedMetricSurface(meta, request);
       if (!request.asset) {
         throw new Error("Across quote_out metric requires asset as the third argument");
       }
@@ -336,17 +338,6 @@ function resolveAssetAddress(
   }
 
   throw new Error(`No Across asset mapping for ${asset} on chain ${chainId}`);
-}
-
-function safeResolveTokenDecimals(asset: string, chainId: number, fallback: number): number {
-  try {
-    return resolveTokenDecimals(asset, chainId, {
-      defaultDecimals: fallback,
-      treatEthAsWrapped: true,
-    });
-  } catch {
-    return fallback;
-  }
 }
 
 function mergeSpellAssets(

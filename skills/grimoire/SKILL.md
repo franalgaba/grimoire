@@ -99,16 +99,18 @@ Setup security/runtime expectations:
 13. For cross-chain Morpho actions, require explicit market mapping via:
    - `--morpho-market-id <actionRef>=<marketId>` (repeatable), or
    - `--morpho-market-map <path>`
-14. For Morpho collateral lifecycle, prefer explicit actions:
-   - `morpho_blue.supply_collateral(asset, amount[, market_id])`
-   - `morpho_blue.withdraw_collateral(asset, amount[, market_id])`
-15. Use bare `0x...` address literals in action token fields; quoted address-like strings trigger `QUOTED_ADDRESS_LITERAL`.
-16. For Morpho doctor readiness checks, set wallet env explicitly (`GRIMOIRE_WALLET_ADDRESS` preferred, fallback `WALLET_ADDRESS`).
-17. If a cross-chain run is left waiting, continue with `resume <runId>` (use `--watch` to poll settlement).
-18. Never place passwords/private keys in agent prompts or inline command assignments.
-19. Prefer keystore + `--password-env` over `--private-key` for dry-run/live casts.
-20. Treat `.grimoire/setup.env` as plaintext secret material: keep local-only and rotate/remove when no longer needed.
-21. For commands run outside the project tree, set `GRIMOIRE_SETUP_ENV_FILE=/abs/path/to/.grimoire/setup.env` when needed.
+14. For Morpho supply-only strategies, prefer `vault_deposit` / `vault_withdraw` (explicit vault address).
+   - If vault address is missing, list candidate vaults and require user to pick one; never auto-select.
+15. For Morpho market strategies (borrow/collateral/lend), require explicit `market_id` and use explicit actions:
+   - `morpho_blue.supply_collateral(asset, amount, market_id)`
+   - `morpho_blue.withdraw_collateral(asset, amount, market_id)`
+16. Use bare `0x...` address literals in action token fields; quoted address-like strings trigger `QUOTED_ADDRESS_LITERAL`.
+17. For Morpho doctor readiness checks, set wallet env explicitly (`GRIMOIRE_WALLET_ADDRESS` preferred, fallback `WALLET_ADDRESS`).
+18. If a cross-chain run is left waiting, continue with `resume <runId>` (use `--watch` to poll settlement).
+19. Never place passwords/private keys in agent prompts or inline command assignments.
+20. Prefer keystore + `--password-env` over `--private-key` for dry-run/live casts.
+21. Treat `.grimoire/setup.env` as plaintext secret material: keep local-only and rotate/remove when no longer needed.
+22. For commands run outside the project tree, set `GRIMOIRE_SETUP_ENV_FILE=/abs/path/to/.grimoire/setup.env` when needed.
 
 ## Command Surface (Core)
 
@@ -148,6 +150,8 @@ Use `references/cli-quick-reference.md` for concise command signatures and safet
 - `metric(SURFACE, VENUE[, ASSET[, SELECTOR]])` — generic protocol metric surface
 - Selector guidance:
 - market/vault id selector: `apy(morpho, USDC, "wbtc-usdc-86")`
+- vault selector (Morpho): `metric("vault_net_apy", morpho, USDC, "vault=0xVaultAddress")`
+- Morpho `vault_apy` / `vault_net_apy` require explicit selector; do not rely on implicit defaults.
 - key/value selector: `metric("quote_out", uni_v3, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000")`
 - Never use an advisory (`advise`) just to fetch prices, balances, APYs, or other structured metrics
 

@@ -11,7 +11,11 @@ import {
 import { type Abi, encodeFunctionData, parseAbi } from "viem";
 import { toBigInt } from "../shared/bigint.js";
 import { BPS_DENOMINATOR } from "../shared/bps.js";
-import { assertSupportedConstraints, validateGasConstraints } from "../shared/constraints.js";
+import {
+  assertSupportedConstraints,
+  assertSupportedMetricSurface,
+  validateGasConstraints,
+} from "../shared/constraints.js";
 import { buildApprovalIfNeeded } from "../shared/erc20.js";
 import { estimateGasIfSupported } from "../shared/gas.js";
 import {
@@ -93,9 +97,7 @@ export function createUniswapV3Adapter(
   return {
     meta,
     async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
-      if (request.surface !== "quote_out") {
-        throw new Error(`Uniswap V3 does not support metric surface '${request.surface}'`);
-      }
+      assertSupportedMetricSurface(meta, request);
       if (!request.asset) {
         throw new Error("Uniswap V3 quote_out metric requires assetIn as the third argument");
       }

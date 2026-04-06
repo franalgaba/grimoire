@@ -2,7 +2,7 @@ import type { Action, MetricRequest, VenueAdapter, VenueAdapterContext } from "@
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import { zeroAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { assertSupportedConstraints } from "../shared/constraints.js";
+import { assertSupportedConstraints, assertSupportedMetricSurface } from "../shared/constraints.js";
 
 export interface HyperliquidAdapterConfig {
   privateKey: `0x${string}`;
@@ -304,9 +304,7 @@ async function readHyperliquidMetric(
   request: MetricRequest,
   info: Pick<InfoClient, "allMids">
 ): Promise<number> {
-  if (request.surface !== "mid_price") {
-    throw new Error(`Hyperliquid does not support metric surface '${request.surface}'`);
-  }
+  assertSupportedMetricSurface(HYPERLIQUID_META, request);
   if (!request.asset) {
     throw new Error("Hyperliquid mid_price metric requires asset as the third argument");
   }

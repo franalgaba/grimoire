@@ -256,131 +256,176 @@ export async function runFormatCommand(
 ): Promise<RunFormatResult> {
   const readStdin = ioOverrides?.readStdin ?? DEFAULT_IO.readStdin;
 
-  const sources: FormatSourceEntry[] = [];
+  const loadResult = await loadSources(args, readStdin);
+  if (loadResult.earlyReturn) {
+    return loadResult.earlyReturn;
+  }
+
+  const { files, diffOutput, stdout, ioFailures, stderrLines } = await processSources(
+    loadResult.sources,
+    loadResult.stderrLines,
+    args
+  );
+
+  const result = buildFormatResult(args.mode, files);
+  const exitCode = computeExitCode(files, ioFailures, args.mode);
+
+  return { exitCode, result, stdout, stderrLines, diffOutput };
+}
+
+async function loadSources(
+  args: ParsedFormatArgs,
+  readStdin: () => Promise<string>
+): Promise<{
+  sources: FormatSourceEntry[];
+  stderrLines: string[];
+  earlyReturn?: RunFormatResult;
+}> {
   const stderrLines: string[] = [];
 
   if (args.mode === "stdin") {
     try {
       const source = await readStdin();
-      sources.push({
-        path: args.stdinFilepath ?? "<stdin>",
-        source,
-        writeBack: false,
-      });
+      return {
+        sources: [{ path: args.stdinFilepath ?? "<stdin>", source, writeBack: false }],
+        stderrLines,
+      };
     } catch (error) {
       const message = (error as Error).message;
-      const result: FormatCommandResult = {
-        success: false,
-        mode: args.mode,
-        files: [
-          {
-            path: args.stdinFilepath ?? "<stdin>",
-            changed: false,
-            formatted: false,
-            error: {
-              code: "ERR_FORMAT_IO",
-              message,
-            },
+      const path = args.stdinFilepath ?? "<stdin>";
+      return {
+        sources: [],
+        stderrLines,
+        earlyReturn: {
+          exitCode: 3,
+          result: {
+            success: false,
+            mode: args.mode,
+            files: [
+              { path, changed: false, formatted: false, error: { code: "ERR_FORMAT_IO", message } },
+            ],
+            summary: { total: 1, changed: 0, failed: 1 },
           },
-        ],
-        summary: {
-          total: 1,
-          changed: 0,
-          failed: 1,
+          stderrLines: [`[ERR_FORMAT_IO] ${message}`],
+          diffOutput: [],
         },
       };
-      return {
-        exitCode: 3,
-        result,
-        stderrLines: [`[ERR_FORMAT_IO] ${message}`],
-        diffOutput: [],
-      };
-    }
-  } else {
-    const readResults = await Promise.all(
-      args.paths.map(async (path) => {
-        try {
-          const source = await readFile(path, "utf8");
-          return { path, source, writeBack: args.mode === "write" } as FormatSourceEntry;
-        } catch (error) {
-          const message = (error as Error).message;
-          return { path, source: null, writeBack: false, readError: message } as FormatSourceEntry;
-        }
-      })
-    );
-    for (const entry of readResults) {
-      if (entry.source === null) {
-        stderrLines.push(`[ERR_FORMAT_IO] ${entry.path}: ${entry.readError}`);
-      }
-      sources.push(entry);
     }
   }
 
+  const sources = await Promise.all(
+    args.paths.map(async (path) => {
+      try {
+        const source = await readFile(path, "utf8");
+        return { path, source, writeBack: args.mode === "write" } as FormatSourceEntry;
+      } catch (error) {
+        const message = (error as Error).message;
+        return { path, source: null, writeBack: false, readError: message } as FormatSourceEntry;
+      }
+    })
+  );
+  for (const entry of sources) {
+    if (entry.source === null) {
+      stderrLines.push(`[ERR_FORMAT_IO] ${entry.path}: ${entry.readError}`);
+    }
+  }
+  return { sources, stderrLines };
+}
+
+interface FormatEntryResult {
+  file: FormatFileResult;
+  isIoFailure: boolean;
+  formattedContent?: string;
+}
+
+function formatSingleSource(
+  entry: FormatSourceEntry,
+  args: ParsedFormatArgs,
+  stderrLines: string[],
+  diffOutput: string[]
+): FormatEntryResult {
+  if (entry.source === null) {
+    return {
+      file: {
+        path: entry.path,
+        changed: false,
+        formatted: false,
+        error: { code: "ERR_FORMAT_IO", message: entry.readError ?? "Failed to read file" },
+      },
+      isIoFailure: true,
+    };
+  }
+
+  const formattedResult = formatGrimoire(entry.source);
+  if (!formattedResult.success || !formattedResult.formatted) {
+    const parseError = formattedResult.error;
+    const file: FormatFileResult = {
+      path: entry.path,
+      changed: false,
+      formatted: false,
+      error: {
+        code: "ERR_FORMAT_PARSE",
+        message: parseError?.message ?? "Unable to parse source",
+        line: parseError?.line,
+        column: parseError?.column,
+      },
+    };
+    const location =
+      parseError?.line !== undefined && parseError.column !== undefined
+        ? ` (${parseError.line}:${parseError.column})`
+        : "";
+    stderrLines.push(`[ERR_FORMAT_PARSE] ${entry.path}: ${file.error?.message}${location}`);
+    return { file, isIoFailure: false };
+  }
+
+  const formatted = formattedResult.formatted;
+  const changed = entry.source !== formatted;
+
+  if (args.diff && changed) {
+    diffOutput.push(createUnifiedDiff(entry.path, entry.source, formatted));
+  }
+
+  return {
+    file: { path: entry.path, changed, formatted: true, error: null },
+    isIoFailure: false,
+    formattedContent: formatted,
+  };
+}
+
+async function processSources(
+  sources: FormatSourceEntry[],
+  stderrLines: string[],
+  args: ParsedFormatArgs
+): Promise<{
+  files: FormatFileResult[];
+  diffOutput: string[];
+  stdout: string | undefined;
+  ioFailures: number;
+  stderrLines: string[];
+}> {
   const files: FormatFileResult[] = [];
   const diffOutput: string[] = [];
   let stdout: string | undefined;
   let ioFailures = 0;
 
   for (const entry of sources) {
-    if (entry.source === null) {
-      const report: FormatFileResult = {
-        path: entry.path,
-        changed: false,
-        formatted: false,
-        error: {
-          code: "ERR_FORMAT_IO",
-          message: entry.readError ?? "Failed to read file",
-        },
-      };
-      files.push(report);
+    const result = formatSingleSource(entry, args, stderrLines, diffOutput);
+    if (result.isIoFailure) {
       ioFailures += 1;
+      files.push(result.file);
       continue;
     }
 
-    const formattedResult = formatGrimoire(entry.source);
-    if (!formattedResult.success || !formattedResult.formatted) {
-      const parseError = formattedResult.error;
-      const report: FormatFileResult = {
-        path: entry.path,
-        changed: false,
-        formatted: false,
-        error: {
-          code: "ERR_FORMAT_PARSE",
-          message: parseError?.message ?? "Unable to parse source",
-          line: parseError?.line,
-          column: parseError?.column,
-        },
-      };
-      files.push(report);
-      const location =
-        parseError?.line !== undefined && parseError.column !== undefined
-          ? ` (${parseError.line}:${parseError.column})`
-          : "";
-      const parseMessage = report.error?.message ?? "Unable to parse source";
-      stderrLines.push(`[ERR_FORMAT_PARSE] ${entry.path}: ${parseMessage}${location}`);
-      continue;
-    }
-
-    const formatted = formattedResult.formatted;
-    const changed = entry.source !== formatted;
-
-    if (args.diff && changed) {
-      diffOutput.push(createUnifiedDiff(entry.path, entry.source, formatted));
-    }
-
-    if (entry.writeBack && changed) {
+    if (entry.writeBack && result.file.changed && result.formattedContent) {
       try {
-        await writeFile(entry.path, formatted, "utf8");
+        await writeFile(entry.path, result.formattedContent, "utf8");
       } catch (error) {
         const message = (error as Error).message;
         files.push({
           path: entry.path,
-          changed,
+          changed: result.file.changed,
           formatted: false,
-          error: {
-            code: "ERR_FORMAT_IO",
-            message,
-          },
+          error: { code: "ERR_FORMAT_IO", message },
         });
         ioFailures += 1;
         stderrLines.push(`[ERR_FORMAT_IO] ${entry.path}: ${message}`);
@@ -388,50 +433,34 @@ export async function runFormatCommand(
       }
     }
 
-    if (args.mode === "stdout" || args.mode === "stdin") {
-      stdout = formatted;
+    if ((args.mode === "stdout" || args.mode === "stdin") && result.formattedContent) {
+      stdout = result.formattedContent;
     }
-
-    files.push({
-      path: entry.path,
-      changed,
-      formatted: true,
-      error: null,
-    });
+    files.push(result.file);
   }
 
+  return { files, diffOutput, stdout, ioFailures, stderrLines };
+}
+
+function buildFormatResult(mode: FormatMode, files: FormatFileResult[]): FormatCommandResult {
   const failed = files.filter((file) => file.error !== null).length;
   const changed = files.filter((file) => file.changed).length;
 
-  const result: FormatCommandResult = {
-    success: failed === 0 && !(args.mode === "check" && changed > 0),
-    mode: args.mode,
-    files,
-    summary: {
-      total: files.length,
-      changed,
-      failed,
-    },
-  };
-
-  const parseFailures = files.filter((file) => file.error?.code === "ERR_FORMAT_PARSE").length;
-
-  let exitCode = 0;
-  if (ioFailures > 0) {
-    exitCode = 3;
-  } else if (parseFailures > 0) {
-    exitCode = 2;
-  } else if (args.mode === "check" && changed > 0) {
-    exitCode = 1;
-  }
-
   return {
-    exitCode,
-    result,
-    stdout,
-    stderrLines,
-    diffOutput,
+    success: failed === 0 && !(mode === "check" && changed > 0),
+    mode,
+    files,
+    summary: { total: files.length, changed, failed },
   };
+}
+
+function computeExitCode(files: FormatFileResult[], ioFailures: number, mode: FormatMode): number {
+  if (ioFailures > 0) return 3;
+  const parseFailures = files.filter((file) => file.error?.code === "ERR_FORMAT_PARSE").length;
+  if (parseFailures > 0) return 2;
+  const changed = files.filter((file) => file.changed).length;
+  if (mode === "check" && changed > 0) return 1;
+  return 0;
 }
 
 function emitRunOutput(

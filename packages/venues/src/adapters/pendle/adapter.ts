@@ -5,7 +5,11 @@ import type {
   VenueAdapter,
   VenueAdapterContext,
 } from "@grimoirelabs/core";
-import { assertSupportedConstraints, validateGasConstraints } from "../../shared/constraints.js";
+import {
+  assertSupportedConstraints,
+  assertSupportedMetricSurface,
+  validateGasConstraints,
+} from "../../shared/constraints.js";
 import {
   parseMetricSelector,
   readMetricSelectorBigInt,
@@ -13,7 +17,7 @@ import {
   readMetricSelectorString,
   scaleToHuman,
 } from "../../shared/metric-selector.js";
-import { resolveTokenDecimals } from "../../shared/token-registry.js";
+import { safeResolveTokenDecimals } from "../../shared/token-registry.js";
 import { requestConvert } from "./api.js";
 import { resolveAssetAddress, toConvertRequest } from "./convert.js";
 import {
@@ -96,9 +100,7 @@ export function createPendleAdapter(config: PendleAdapterConfig = {}): VenueAdap
   return {
     meta,
     async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
-      if (request.surface !== "quote_out") {
-        throw new Error(`Pendle does not support metric surface '${request.surface}'`);
-      }
+      assertSupportedMetricSurface(meta, request);
       if (!request.asset) {
         throw new Error("Pendle quote_out metric requires assetIn as the third argument");
       }
@@ -330,17 +332,6 @@ function parseSelectorBoolean(raw: string | undefined, fallback: boolean): boole
   if (normalized === "true") return true;
   if (normalized === "false") return false;
   return fallback;
-}
-
-function safeResolveTokenDecimals(asset: string, chainId: number, fallback: number): number {
-  try {
-    return resolveTokenDecimals(asset, chainId, {
-      defaultDecimals: fallback,
-      treatEthAsWrapped: true,
-    });
-  } catch {
-    return fallback;
-  }
 }
 
 /**

@@ -1037,6 +1037,11 @@ export class Transformer {
           action.fee_tier = this.exprToValue(value);
           continue;
         }
+        // market_id is an action parameter (for Morpho), not a runtime constraint
+        if (key === "market_id") {
+          action.market_id = this.exprToValue(value);
+          continue;
+        }
         const constraintKey =
           key === "slippage"
             ? "max_slippage"

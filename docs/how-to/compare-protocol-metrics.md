@@ -38,6 +38,29 @@ spell LendingCompare {
 }
 ```
 
+### Compare Morpho vault APY surfaces
+
+```spell
+spell MorphoVaultCompare {
+  assets: [USDC]
+  params: {
+    vault_a: "vault=0xVaultAddressA"
+    vault_b: "vault=0xVaultAddressB"
+  }
+  venues: {
+    morpho: @morpho_blue
+  }
+  on manual: {
+    vault_a_net = metric("vault_net_apy", morpho, USDC, params.vault_a)
+    vault_b_net = metric("vault_net_apy", morpho, USDC, params.vault_b)
+    edge = vault_a_net - vault_b_net
+    emit morpho_vault_compare_done(vault_a_net=vault_a_net, vault_b_net=vault_b_net, edge=edge)
+  }
+}
+```
+
+`vault_apy` / `vault_net_apy` require explicit vault selector (for example `vault=0x...`).
+
 ## 3. Compare Quote Output Surfaces (DEX + Bridge)
 
 ```spell

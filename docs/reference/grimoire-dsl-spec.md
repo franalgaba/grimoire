@@ -73,9 +73,9 @@ Constraint key normalization in action transform:
 
 Morpho-specific action mappings include:
 
-- `morpho_blue.supply_collateral(asset, amount[, market_id])` -> `type: "supply_collateral"`
-- `morpho_blue.withdraw_collateral(asset, amount[, market_id])` -> `type: "withdraw_collateral"`
-- Optional `market_id` is also mapped for `lend`, `withdraw`, `repay`, and `borrow`.
+- `morpho_blue.supply_collateral(asset, amount, market_id)` -> `type: "supply_collateral"`
+- `morpho_blue.withdraw_collateral(asset, amount, market_id)` -> `type: "withdraw_collateral"`
+- `market_id` is required for Morpho value-moving actions (`lend`, `withdraw`, `borrow`, `repay`, `supply_collateral`, `withdraw_collateral`) and can be provided as positional arg or `with (market_id=...)`.
 
 ## IR (`SpellIR`) Structure
 

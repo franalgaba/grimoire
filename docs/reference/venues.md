@@ -65,7 +65,7 @@ These surfaces are available through spell expressions:
 | Adapter | Surfaces | Selector examples |
 |---------|----------|-------------------|
 | `aave_v3` | `apy` | `apy(aave, USDC)` |
-| `morpho_blue` | `apy` | `apy(morpho, USDC, "wbtc-usdc-1")` |
+| `morpho_blue` | `apy`, `vault_apy`, `vault_net_apy` | `apy(morpho, USDC, "wbtc-usdc-1")`, `metric("vault_apy", morpho, USDC, "vault=0x...")` |
 | `uniswap_v3` | `quote_out` | `metric("quote_out", uni_v3, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000")` |
 | `uniswap_v4` | `quote_out` | `metric("quote_out", uni_v4, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000")` |
 | `across` | `quote_out` | `metric("quote_out", across, USDC, "to_chain=8453,amount=1000000")` |
@@ -138,8 +138,13 @@ Implementation notes:
 Implementation notes:
 
 - Encodes Blue contract calls with `blueAbi`.
-- Uses market resolution by loan token and optional collateral.
-- `supply_collateral` / `withdraw_collateral` resolve by collateral token.
+- Requires explicit `market_id` for `lend`, `withdraw`, `borrow`, `repay`, `supply_collateral`, and `withdraw_collateral`.
+- Validates that action asset/collateral aligns with the selected `market_id`.
+- Metric surfaces:
+  - `apy`: market supply APY (`selector` = market config id or onchain market id `0x...`).
+  - `vault_apy`: vault APY (`selector` = vault address, name, symbol, or `vault=<...>`).
+  - `vault_net_apy`: vault net APY (same selector behavior as `vault_apy`).
+  - `vault_apy` / `vault_net_apy` require explicit vault selector (no implicit fallback).
 - Approval path for `lend`, `repay`, and `supply_collateral`.
 - Borrow preflight checks in preview/dry-run fail fast for:
   - zero position collateral

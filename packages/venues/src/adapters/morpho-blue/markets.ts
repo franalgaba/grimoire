@@ -90,12 +90,13 @@ export function resolveMarket(
   options: {
     explicitMarketId?: string;
     isCrossChain: boolean;
-    onWarning?: (message: string) => void;
   }
 ): MorphoBlueMarketConfig {
   const scopedMarkets = markets.filter(
     (market) => market.chainId === undefined || market.chainId === chainId
   );
+
+  const candidateIds = scopedMarkets.map((market) => market.id);
 
   if (options.explicitMarketId) {
     const byId = scopedMarkets.find((market) => market.id === options.explicitMarketId);
@@ -104,79 +105,13 @@ export function resolveMarket(
         `Morpho Blue market_id '${options.explicitMarketId}' not configured. Candidates: ${scopedMarkets.map((m) => m.id).join(", ")}`
       );
     }
+    assertActionMatchesExplicitMarket(action, byId, chainId);
     return byId;
   }
 
-  if (action.type === "supply_collateral" || action.type === "withdraw_collateral") {
-    const collateralToken = resolveAssetAddress(action.asset, chainId);
-    const matches = scopedMarkets.filter((market) => market.collateralToken === collateralToken);
-
-    if (options.isCrossChain) {
-      const candidateIds = matches.map((market) => market.id);
-      throw new Error(
-        `Morpho Blue cross-chain action '${action.type}' requires explicit market_id. Candidates: ${candidateIds.join(", ") || "none"}`
-      );
-    }
-
-    if (matches.length > 1) {
-      const candidateIds = matches.map((market) => market.id);
-      throw new Error(
-        `Morpho Blue action '${action.type}' matched ${matches.length} markets. Set explicit market_id to resolve ambiguity. Candidates: ${candidateIds.join(", ")}`
-      );
-    }
-    if (matches.length === 1) {
-      const [market] = matches;
-      return market as MorphoBlueMarketConfig;
-    }
-
-    throw new Error(
-      `Morpho Blue market not configured for collateral asset ${action.asset} on chain ${chainId}`
-    );
-  }
-
-  const loanToken = resolveAssetAddress("asset" in action ? action.asset : undefined, chainId);
-  const collateral =
-    "collateral" in action && action.collateral
-      ? resolveAssetAddress(action.collateral, chainId)
-      : undefined;
-
-  const matches = scopedMarkets.filter((market) => market.loanToken === loanToken);
-  if (collateral) {
-    const match = matches.find((market) => market.collateralToken === collateral);
-    if (match) return match;
-  }
-
-  if (options.isCrossChain) {
-    const candidateIds = matches.map((market) => market.id);
-    throw new Error(
-      `Morpho Blue cross-chain action '${action.type}' requires explicit market_id. Candidates: ${candidateIds.join(", ") || "none"}`
-    );
-  }
-
-  if (matches.length > 1) {
-    if (!collateral) {
-      // Auto-select first market and warn — better than failing for the "golden path"
-      const selected = matches[0] as MorphoBlueMarketConfig;
-      const candidateIds = matches.map((market) => market.id);
-      options.onWarning?.(
-        `Morpho Blue action '${action.type}' matched ${matches.length} markets (${candidateIds.join(", ")}). Auto-selected '${selected.id}'. Set explicit market_id to override.`
-      );
-      return selected;
-    }
-    const candidateIds = matches.map((market) => market.id);
-    throw new Error(
-      `Morpho Blue action '${action.type}' matched ${matches.length} markets. Set explicit market_id to resolve ambiguity. Candidates: ${candidateIds.join(", ")}`
-    );
-  }
-  if (matches.length === 1) {
-    const [market] = matches;
-    return market as MorphoBlueMarketConfig;
-  }
-
+  const crossChainPrefix = options.isCrossChain ? "cross-chain " : "";
   throw new Error(
-    `Morpho Blue market not configured for asset ${
-      "asset" in action ? action.asset : "unknown"
-    } on chain ${chainId}`
+    `Morpho Blue ${crossChainPrefix}action '${action.type}' requires explicit market_id. Candidates: ${candidateIds.join(", ") || "none"}`
   );
 }
 
@@ -192,6 +127,40 @@ export function resolveExplicitMarketId(
     return undefined;
   }
   return ctx.crossChain?.morphoMarketIds?.[actionRef];
+}
+
+function assertActionMatchesExplicitMarket(
+  action: Action,
+  market: MorphoBlueMarketConfig,
+  chainId: number
+): void {
+  if (action.type === "supply_collateral" || action.type === "withdraw_collateral") {
+    const collateralAsset = resolveAssetAddress(action.asset, chainId);
+    if (collateralAsset !== market.collateralToken) {
+      throw new Error(
+        `Morpho Blue action '${action.type}' asset '${action.asset}' does not match collateral token for market_id '${market.id}'.`
+      );
+    }
+    return;
+  }
+
+  if ("asset" in action) {
+    const loanAsset = resolveAssetAddress(action.asset, chainId);
+    if (loanAsset !== market.loanToken) {
+      throw new Error(
+        `Morpho Blue action '${action.type}' asset '${action.asset}' does not match loan token for market_id '${market.id}'.`
+      );
+    }
+  }
+
+  if (action.type === "borrow" && action.collateral) {
+    const collateralAsset = resolveAssetAddress(action.collateral, chainId);
+    if (collateralAsset !== market.collateralToken) {
+      throw new Error(
+        `Morpho Blue action '${action.type}' collateral '${action.collateral}' does not match collateral token for market_id '${market.id}'.`
+      );
+    }
+  }
 }
 
 function resolveAssetAddress(asset?: string, chainId?: number): Address {
