@@ -144,7 +144,7 @@ export async function executeActionStep(
       step.id,
       options
     );
-    maybeWarnMorphoImplicitMarket(crossChainAdjustedAction, step.id, options);
+    enforceMorphoExplicitMarket(crossChainAdjustedAction, step.id);
 
     const mergedConstraints = applySkillDefaults(step.constraints, skill);
     const resolvedConstraints = await resolveConstraints(mergedConstraints, evalCtx);
@@ -755,15 +755,8 @@ function applyCrossChainActionOverrides(
   return { ...action, marketId } as Action;
 }
 
-function maybeWarnMorphoImplicitMarket(
-  action: Action,
-  stepId: string,
-  options: ActionExecutionOptions
-): void {
+function enforceMorphoExplicitMarket(action: Action, stepId: string): void {
   if (!isMorphoValueMovingAction(action)) {
-    return;
-  }
-  if (options.crossChain?.enabled) {
     return;
   }
   const hasExplicitMarket =
@@ -771,8 +764,8 @@ function maybeWarnMorphoImplicitMarket(
   if (hasExplicitMarket) {
     return;
   }
-  options.warningCallback?.(
-    `Step '${stepId}' uses Morpho without explicit market_id. Set market_id to avoid ambiguous market routing.`
+  throw new Error(
+    `Step '${stepId}' uses Morpho action '${action.type}' without explicit market_id.`
   );
 }
 
@@ -1302,7 +1295,7 @@ export async function previewActionStep(
       step.id,
       options
     );
-    maybeWarnMorphoImplicitMarket(crossChainAdjustedAction, step.id, options);
+    enforceMorphoExplicitMarket(crossChainAdjustedAction, step.id);
 
     const mergedConstraints = applySkillDefaults(step.constraints, skill);
     const resolvedConstraints = await resolveConstraints(mergedConstraints, evalCtx);

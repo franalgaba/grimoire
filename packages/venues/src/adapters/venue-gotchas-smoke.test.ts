@@ -41,6 +41,7 @@ describe("Venue gotchas smoke suite", () => {
       venue: "morpho_blue",
       asset: "USDC",
       amount: 1n,
+      marketId: "smoke-market",
     };
 
     const ctx: VenueAdapterContext = {

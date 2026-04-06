@@ -8,7 +8,11 @@ import type {
 import { encodeAbiParameters, encodeFunctionData } from "viem";
 import { toBigInt } from "../../shared/bigint.js";
 import { BPS_DENOMINATOR } from "../../shared/bps.js";
-import { assertSupportedConstraints, validateGasConstraints } from "../../shared/constraints.js";
+import {
+  assertSupportedConstraints,
+  assertSupportedMetricSurface,
+  validateGasConstraints,
+} from "../../shared/constraints.js";
 import { estimateGasIfSupported } from "../../shared/gas.js";
 import {
   parseMetricSelector,
@@ -90,9 +94,7 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
   return {
     meta,
     async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
-      if (request.surface !== "quote_out") {
-        throw new Error(`Uniswap V4 does not support metric surface '${request.surface}'`);
-      }
+      assertSupportedMetricSurface(meta, request);
       if (!request.asset) {
         throw new Error("Uniswap V4 quote_out metric requires assetIn as the third argument");
       }

@@ -15,7 +15,7 @@ spell TestMorphoWithdraw {
 
   }
   on manual: {
-    morpho_blue.withdraw(USDC, params.amount)
+    morpho_blue.withdraw(USDC, params.amount, "weth-usdc-86")
     emit withdraw_done(venue="morpho_blue", asset=USDC, amount=params.amount)
 
   }

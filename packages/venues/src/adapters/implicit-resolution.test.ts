@@ -2,8 +2,8 @@
  * Integration tests: validate implicit resolution elimination
  *
  * These tests verify that:
- * 1. Morpho Blue throws on ambiguous market (2+ matches, no market_id)
- * 2. Morpho Blue resolves implicitly when exactly 1 market matches
+ * 1. Morpho Blue requires explicit market_id when multiple markets match
+ * 2. Morpho Blue requires explicit market_id even when exactly 1 market matches
  * 3. Morpho Blue resolves with explicit market_id when multiple match
  * 4. Uniswap V3 throws without fee_tier
  * 5. Uniswap V4 throws without fee_tier
@@ -70,7 +70,7 @@ const marketB = {
 
 describe("Implicit resolution elimination", () => {
   describe("Morpho Blue market ambiguity", () => {
-    test("auto-selects first market with warning when 2+ markets match and no market_id", async () => {
+    test("throws when 2+ markets match and market_id is omitted", async () => {
       const adapter = createMorphoBlueAdapter({ markets: [marketA, marketB] });
       if (!adapter.buildAction) throw new Error("Missing buildAction");
 
@@ -81,13 +81,12 @@ describe("Implicit resolution elimination", () => {
         amount,
       } as unknown as Action;
 
-      // Should succeed by auto-selecting first market instead of throwing
-      const result = await adapter.buildAction(action, createMorphoCtx());
-      const built = Array.isArray(result) ? result : [result];
-      expect(built[built.length - 1]?.description).toContain("Morpho Blue lend");
+      await expect(adapter.buildAction(action, createMorphoCtx())).rejects.toThrow(
+        "requires explicit market_id"
+      );
     });
 
-    test("resolves implicitly when exactly 1 market matches", async () => {
+    test("throws when 1 market matches and market_id is omitted", async () => {
       const adapter = createMorphoBlueAdapter({ markets: [marketA] });
       if (!adapter.buildAction) throw new Error("Missing buildAction");
 
@@ -98,10 +97,9 @@ describe("Implicit resolution elimination", () => {
         amount,
       } as unknown as Action;
 
-      const result = await adapter.buildAction(action, createMorphoCtx());
-      const built = Array.isArray(result) ? result : [result];
-      expect(built.length).toBeGreaterThanOrEqual(1);
-      expect(built[built.length - 1]?.description).toContain("Morpho Blue lend");
+      await expect(adapter.buildAction(action, createMorphoCtx())).rejects.toThrow(
+        "requires explicit market_id"
+      );
     });
 
     test("resolves with explicit market_id when multiple match", async () => {

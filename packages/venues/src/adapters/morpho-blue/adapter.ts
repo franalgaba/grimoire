@@ -8,8 +8,16 @@ import type {
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi, MetaMorphoAction } from "@morpho-org/blue-sdk-viem";
 import { encodeFunctionData } from "viem";
-import { assertSupportedConstraints } from "../../shared/constraints.js";
+import {
+  assertSupportedConstraints,
+  assertSupportedMetricSurface,
+} from "../../shared/constraints.js";
 import { buildApprovalIfNeeded } from "../../shared/erc20.js";
+import {
+  normalizeApyToBps,
+  parseMetricSelector,
+  readMetricSelectorString,
+} from "../../shared/metric-selector.js";
 import { resolveTokenAddress } from "../../shared/token-registry.js";
 import { buildMorphoMetadata, toBigInt } from "./helpers.js";
 import {
@@ -41,7 +49,7 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
     supportsQuote: false,
     supportsSimulation: false,
     supportsPreviewCommit: true,
-    metricSurfaces: ["apy"],
+    metricSurfaces: ["apy", "vault_apy", "vault_net_apy"],
     dataEndpoints: ["info", "addresses", "vaults", "markets"],
     description: "Morpho Blue adapter",
   };
@@ -49,8 +57,16 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
   return {
     meta,
     async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
-      if (request.surface !== "apy") {
-        throw new Error(`Morpho Blue does not support metric surface '${request.surface}'`);
+      assertSupportedMetricSurface(meta, request);
+
+      if (request.surface === "vault_apy" || request.surface === "vault_net_apy") {
+        const vaultSelector = resolveMetricVaultSelector(request.selector);
+        return await fetchMorphoVaultApyBps({
+          chainId: ctx.chainId,
+          asset: request.asset,
+          selector: vaultSelector,
+          useNetApy: request.surface === "vault_net_apy",
+        });
       }
 
       const scopedMarkets = config.markets.filter(
@@ -83,7 +99,6 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
       const market = resolveMarket(config.markets, action, ctx.chainId, {
         explicitMarketId,
         isCrossChain: ctx.crossChain?.enabled === true,
-        onWarning: ctx.onWarning,
       });
       const amount = toBigInt(action.amount);
 
@@ -296,6 +311,34 @@ function resolveMetricMarketId(
   return getMorphoBlueMarketId(byConfigId).toLowerCase();
 }
 
+function resolveMetricVaultSelector(selector: string | undefined): string {
+  if (!selector) {
+    throw new Error(
+      "Morpho Blue vault APY metrics require explicit vault selector (vault address/name/symbol)"
+    );
+  }
+  if (selector.startsWith("0x")) {
+    return selector.toLowerCase();
+  }
+
+  const parsed = parseMetricSelector(selector);
+  if (Object.keys(parsed).length === 0) {
+    return selector.toLowerCase();
+  }
+
+  const candidate = readMetricSelectorString(
+    parsed,
+    ["vault", "vault_address", "address", "id", "name", "symbol"],
+    { label: "vault", required: true }
+  );
+  if (!candidate) {
+    throw new Error(
+      "Morpho Blue vault APY metrics require explicit vault selector (vault address/name/symbol)"
+    );
+  }
+  return candidate.toLowerCase();
+}
+
 type MorphoMarketsResponse = {
   markets?: {
     items?: Array<{
@@ -303,6 +346,19 @@ type MorphoMarketsResponse = {
       chain?: { id?: number };
       loanAsset?: { symbol?: string };
       state?: { supplyApy?: number; supplyAssetsUsd?: number };
+    }>;
+  };
+};
+
+type MorphoVaultsResponse = {
+  vaults?: {
+    items?: Array<{
+      address?: string;
+      name?: string;
+      symbol?: string;
+      chain?: { id?: number };
+      asset?: { symbol?: string };
+      state?: { apy?: number; netApy?: number; totalAssetsUsd?: number };
     }>;
   };
 };
@@ -382,6 +438,80 @@ function pickMorphoMarketCandidate(
   return assetMatches[0] ?? null;
 }
 
+async function fetchMorphoVaultApyBps(input: {
+  chainId: number;
+  asset?: string;
+  selector: string;
+  useNetApy: boolean;
+}): Promise<number> {
+  const query = `
+    query ($first: Int!, $where: VaultFilters) {
+      vaults(first: $first, where: $where) {
+        items {
+          address
+          name
+          symbol
+          chain { id }
+          asset { symbol }
+          state { apy netApy totalAssetsUsd }
+        }
+      }
+    }
+  `;
+
+  const where: Record<string, unknown> = { chainId_in: [input.chainId] };
+  if (input.asset) {
+    where.assetSymbol_in = [input.asset.toUpperCase()];
+  }
+
+  const payload = await fetchMorphoVaults(query, { first: 200, where });
+  const items = payload.vaults?.items ?? [];
+  const candidate = pickMorphoVaultCandidate(items, input);
+  const apy = input.useNetApy ? candidate?.state?.netApy : candidate?.state?.apy;
+
+  if (apy === undefined) {
+    const metric = input.useNetApy ? "vault_net_apy" : "vault_apy";
+    throw new Error(
+      `Morpho Blue ${metric} metric unavailable for vault selector '${input.selector}' on chain ${input.chainId}`
+    );
+  }
+
+  return normalizeApyToBps(apy);
+}
+
+function pickMorphoVaultCandidate(
+  items: Array<{
+    address?: string;
+    name?: string;
+    symbol?: string;
+    chain?: { id?: number };
+    asset?: { symbol?: string };
+    state?: { apy?: number; netApy?: number; totalAssetsUsd?: number };
+  }>,
+  input: {
+    chainId: number;
+    asset?: string;
+    selector: string;
+  }
+): {
+  address?: string;
+  name?: string;
+  symbol?: string;
+  chain?: { id?: number };
+  asset?: { symbol?: string };
+  state?: { apy?: number; netApy?: number; totalAssetsUsd?: number };
+} | null {
+  const chainMatches = items.filter((item) => item.chain?.id === input.chainId);
+  const needle = input.selector.toLowerCase();
+  const match = chainMatches.find(
+    (item) =>
+      item.address?.toLowerCase() === needle ||
+      item.name?.toLowerCase() === needle ||
+      item.symbol?.toLowerCase() === needle
+  );
+  return match ?? null;
+}
+
 async function fetchMorphoMarkets(
   query: string,
   variables: Record<string, unknown>
@@ -405,14 +535,27 @@ async function fetchMorphoMarkets(
   return payload.data ?? {};
 }
 
-function normalizeApyToBps(value: number): number {
-  if (value <= 1) {
-    return value * 10000;
+async function fetchMorphoVaults(
+  query: string,
+  variables: Record<string, unknown>
+): Promise<MorphoVaultsResponse> {
+  const response = await fetch(MORPHO_GRAPHQL_ENDPOINT, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!response.ok) {
+    throw new Error(`Morpho API error: ${response.status} ${response.statusText}`);
   }
-  if (value <= 200) {
-    return value * 100;
+
+  const payload = (await response.json()) as {
+    data?: MorphoVaultsResponse;
+    errors?: Array<{ message?: string }>;
+  };
+  if (payload.errors?.length) {
+    throw new Error(payload.errors.map((error) => error.message ?? "Unknown error").join("; "));
   }
-  return value;
+  return payload.data ?? {};
 }
 
 export function isMorphoAction(action: Action): action is Extract<

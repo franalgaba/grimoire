@@ -1,4 +1,4 @@
-import type { Action, VenueAdapterMeta, VenueConstraint } from "@grimoirelabs/core";
+import type { Action, MetricRequest, VenueAdapterMeta, VenueConstraint } from "@grimoirelabs/core";
 
 export function getActiveConstraints(action: Action): VenueConstraint[] {
   const constraints = action.constraints;
@@ -24,6 +24,13 @@ export function assertSupportedConstraints(meta: VenueAdapterMeta, action: Actio
     throw new Error(
       `Adapter '${meta.name}' does not support constraint '${constraint}' for action '${action.type}'`
     );
+  }
+}
+
+export function assertSupportedMetricSurface(meta: VenueAdapterMeta, request: MetricRequest): void {
+  const surfaces = meta.metricSurfaces ?? [];
+  if (surfaces.length > 0 && !surfaces.includes(request.surface)) {
+    throw new Error(`Adapter '${meta.name}' does not support metric surface '${request.surface}'`);
   }
 }
 

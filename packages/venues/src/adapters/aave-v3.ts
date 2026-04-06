@@ -9,8 +9,9 @@ import type {
   VenueAdapterContext,
   VenueBuildMetadata,
 } from "@grimoirelabs/core";
-import { assertSupportedConstraints } from "../shared/constraints.js";
+import { assertSupportedConstraints, assertSupportedMetricSurface } from "../shared/constraints.js";
 import { buildApprovalIfNeeded } from "../shared/erc20.js";
+import { normalizeAaveApyToBps, toFiniteNumber } from "../shared/metric-selector.js";
 import { resolveTokenAddress, resolveTokenDecimals } from "../shared/token-registry.js";
 
 export interface AaveV3AdapterConfig {
@@ -68,9 +69,7 @@ export function createAaveV3Adapter(
   return {
     meta,
     async readMetric(request: MetricRequest, ctx: VenueAdapterContext): Promise<number> {
-      if (request.surface !== "apy") {
-        throw new Error(`Aave V3 does not support metric surface '${request.surface}'`);
-      }
+      assertSupportedMetricSurface(meta, request);
       if (!request.asset) {
         throw new Error("Aave V3 APY metric requires an asset");
       }
@@ -309,20 +308,20 @@ function unwrapAaveResult<T>(result: unknown): T {
   return result as T;
 }
 
+const AAVE_APY_KEYS = ["liquidityApy", "supplyApy", "depositApy", "liquidityRate", "apy"];
+const MAX_TRAVERSAL_DEPTH = 10;
+
 function extractAaveApyBps(payload: Record<string, unknown>): number | null {
-  const preferredKeys = ["liquidityApy", "supplyApy", "depositApy", "liquidityRate", "apy"];
-  for (const key of preferredKeys) {
+  for (const key of AAVE_APY_KEYS) {
     const values = collectNumericValues(payload, key);
     for (const value of values) {
       if (Number.isFinite(value)) {
-        return normalizeApyToBps(value);
+        return normalizeAaveApyToBps(value);
       }
     }
   }
   return null;
 }
-
-const MAX_TRAVERSAL_DEPTH = 10;
 
 function collectNumericValues(node: unknown, targetKey: string): number[] {
   const out: number[] = [];
@@ -340,7 +339,7 @@ function collectNumericValues(node: unknown, targetKey: string): number[] {
     const record = value as Record<string, unknown>;
     for (const [key, next] of Object.entries(record)) {
       if (key === targetKey) {
-        const numeric = extractMetricNumber(next);
+        const numeric = extractWrappedNumber(next);
         if (numeric !== null) {
           out.push(numeric);
         }
@@ -353,7 +352,7 @@ function collectNumericValues(node: unknown, targetKey: string): number[] {
   return out;
 }
 
-function extractMetricNumber(value: unknown): number | null {
+function extractWrappedNumber(value: unknown): number | null {
   const direct = toFiniteNumber(value);
   if (direct !== null) {
     return direct;
@@ -370,45 +369,6 @@ function extractMetricNumber(value: unknown): number | null {
   }
 
   return null;
-}
-
-function toFiniteNumber(value: unknown): number | null {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === "string") {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  if (typeof value === "bigint") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-// Aave SDK returns rates in different scales depending on the payload shape:
-// - Ray-scaled (1e27): raw on-chain liquidityRate / variableBorrowRate
-// - Ratio (0–1): some SDK wrappers normalize to decimal fraction
-// - Percent (0–200): client-side formatted values like liquidityApy
-// - Basis points (>200): pre-converted values
-const AAVE_RAY = 1e27;
-const RAY_DETECTION_THRESHOLD = 1e12;
-const BPS_PER_UNIT = 10_000;
-const BPS_PER_PERCENT = 100;
-const MAX_PERCENT_VALUE = 200;
-
-function normalizeApyToBps(value: number): number {
-  if (value > RAY_DETECTION_THRESHOLD) {
-    return normalizeApyToBps(value / AAVE_RAY);
-  }
-  if (value <= 1) {
-    return value * BPS_PER_UNIT;
-  }
-  if (value <= MAX_PERCENT_VALUE) {
-    return value * BPS_PER_PERCENT;
-  }
-  return value;
 }
 
 function buildAaveTransactions(

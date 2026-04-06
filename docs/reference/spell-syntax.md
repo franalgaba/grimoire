@@ -243,9 +243,9 @@ Constraint alias normalization in transformer:
 
 Morpho market routing:
 
-- `lend`, `withdraw`, `repay` support optional third arg `market_id`.
-- `borrow` supports optional fourth arg `market_id` (after collateral).
-- `supply_collateral` and `withdraw_collateral` support optional third arg `market_id`.
+- `lend`, `withdraw`, `repay` require `market_id` (third arg or `with (market_id=...)`).
+- `borrow` requires `market_id` (fourth arg after collateral, or via `with (market_id=...)` when collateral is omitted).
+- `supply_collateral` and `withdraw_collateral` require `market_id` (third arg or `with (market_id=...)`).
 
 Address literal formatting (important):
 

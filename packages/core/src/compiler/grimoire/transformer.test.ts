@@ -764,6 +764,24 @@ describe("Transformer", () => {
       expect(actions[3]?.market_id).toBe("market-d");
     });
 
+    test("maps with(market_id=...) to action.market_id", () => {
+      const source = `spell Test {
+  version: "1.0.0"
+
+  on manual: {
+    morpho_blue.borrow(USDC, 100) with (
+      market_id="market-x",
+    )
+  }
+}`;
+      const ast = parse(source);
+      const result = transform(ast);
+      const actionStep = findStep(result.steps, "action");
+      expect(actionStep).toBeDefined();
+      expect(getAction(actionStep)?.type).toBe("borrow");
+      expect(getAction(actionStep)?.market_id).toBe("market-x");
+    });
+
     test("transforms swap method call", () => {
       const source = `spell Test {
   version: "1.0.0"

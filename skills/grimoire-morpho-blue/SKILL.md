@@ -62,29 +62,35 @@ morpho_apy_default = apy(morpho, USDC)
 morpho_apy_market = apy(morpho, USDC, "weth-usdc-86")
 morpho_apy_market_id = apy(morpho, USDC, "0x...")
 morpho_apy_generic = metric("apy", morpho, USDC, "wbtc-usdc-86")
+vault_apy = metric("vault_apy", morpho, USDC, "vault=0xVaultAddress")
+vault_net_apy = metric("vault_net_apy", morpho, USDC, "vault=0xVaultAddress")
 ```
 
 Selector behavior:
 
-- no selector: resolves by `asset` on the active chain and picks the highest-TVL match
+- market no selector (`apy`): resolves by `asset` on the active chain and picks the highest-TVL match
 - config market selector: use known market ids from adapter config (for example `weth-usdc-86`)
 - onchain market id selector: use raw market id (`0x...`)
+- vault selectors (`vault_apy` / `vault_net_apy`): `vault=<address|name|symbol>` or bare vault address/name/symbol
+- `vault_apy` / `vault_net_apy` require explicit selector (no implicit fallback)
 
 When multiple vaults/markets exist for one asset, pass an explicit selector for deterministic comparisons.
 
 ## Spell Constraints
 
-Morpho Blue actions do not support runtime constraints (`max_slippage`, etc.). The adapter resolves markets by loan token and optional collateral.
+Morpho Blue actions do not support runtime constraints (`max_slippage`, etc.). Value-moving actions require an explicit `market_id`.
 
 ```spell
-morpho_blue.lend(USDC, params.amount)
-morpho_blue.withdraw(USDC, params.amount)
-morpho_blue.borrow(USDC, params.amount)
-morpho_blue.supply_collateral(cbBTC, params.amount)
-morpho_blue.withdraw_collateral(cbBTC, params.amount)
+morpho_blue.lend(USDC, params.amount, "cbbtc-usdc-86")
+morpho_blue.withdraw(USDC, params.amount, "cbbtc-usdc-86")
+morpho_blue.borrow(USDC, params.amount) with (
+  market_id="cbbtc-usdc-86",
+)
+morpho_blue.supply_collateral(cbBTC, params.amount, "cbbtc-usdc-86")
+morpho_blue.withdraw_collateral(cbBTC, params.amount, "cbbtc-usdc-86")
 ```
 
-**Market resolution is automatic.** When multiple markets match a loan token and no collateral or `market_id` is specified, the adapter auto-selects the first matching market and emits a warning. To target a specific market explicitly, specify `market_id` in the `with()` clause:
+Use `with (market_id=...)` when positional args are not convenient:
 
 ```spell
 morpho_blue.lend(USDC, params.amount) with (
@@ -93,6 +99,77 @@ morpho_blue.lend(USDC, params.amount) with (
 ```
 
 Use `grimoire venue morpho-blue vaults` to discover available market IDs.
+
+## Action Selection Guide
+
+Choose actions by strategy intent:
+
+- Supply-only strategy (no borrowing planned): prefer `vault_deposit` / `vault_withdraw`.
+- Borrowing strategy (or future borrow/repay/collateral management): use market actions with explicit `market_id`.
+
+Hard rules:
+
+- `vault_deposit` / `vault_withdraw` require explicit vault address and do not use `market_id`.
+- `lend`, `withdraw`, `borrow`, `repay`, `supply_collateral`, `withdraw_collateral` require explicit `market_id`.
+- If vault address is missing for a vault action, do not guess: list candidate vaults and require user selection before authoring/executing.
+
+## Action Semantics
+
+- `lend(asset, amount, market_id)`: lend the market loan asset (lender side).
+- `withdraw(asset, amount, market_id)`: withdraw previously lent loan asset.
+- `supply_collateral(asset, amount, market_id)`: post collateral for borrowing (borrower side).
+- `withdraw_collateral(asset, amount, market_id)`: remove posted collateral.
+- `borrow(asset, amount, collateral?, market_id)`: borrow the market loan asset.
+- `repay(asset, amount, market_id)`: repay borrowed loan asset.
+- `vault_deposit(asset, amount, vault_address)`: deposit into MetaMorpho vault.
+- `vault_withdraw(asset, amount, vault_address)`: withdraw from MetaMorpho vault.
+
+`lend` and `supply_collateral` are not interchangeable:
+
+- `lend` targets lender yield on loan asset.
+- `supply_collateral` is collateral management for borrowing capacity.
+
+APY expectations:
+
+- `lend` accrues market supply APY (plus possible incentives).
+- `supply_collateral` does not earn market lender APY; it is risk buffer for borrow.
+- Collateral token may have its own native yield behavior (for example wstETH), separate from Morpho supply APY.
+
+## Workflow Patterns
+
+Supply-only via vault:
+
+```spell
+morpho_blue.vault_deposit(USDC, params.amount, "0xVaultAddress")
+```
+
+If vault is not provided, run discovery first and ask user to pick:
+
+```bash
+grimoire venue morpho-blue vaults --chain <id> --asset <symbol> --sort netApy --order desc --limit 5 --format table
+```
+
+Then use the selected vault address in `vault_deposit` / `vault_withdraw`.
+
+Borrow workflow (market):
+
+```spell
+morpho_blue.supply_collateral(WETH, params.collateral_amount, "weth-usdc-86")
+morpho_blue.borrow(USDC, params.borrow_amount, WETH, "weth-usdc-86")
+```
+
+Unwind borrow workflow:
+
+```spell
+morpho_blue.repay(USDC, params.repay_amount, "weth-usdc-86")
+morpho_blue.withdraw_collateral(WETH, params.collateral_out, "weth-usdc-86")
+```
+
+Lend-only via market (when explicit market control is desired):
+
+```spell
+morpho_blue.lend(USDC, params.amount, "cbbtc-usdc-86")
+```
 
 ## Default Markets
 
@@ -112,8 +189,6 @@ The adapter ships with pre-configured markets for Ethereum (chain 1) and Base (c
 |--------|------|-----------|------|
 | cbbtc-usdc-86 | USDC | cbBTC | 86% |
 | weth-usdc-86 | USDC | WETH | 86% |
-
-When no collateral is specified, the adapter auto-selects the first matching market by loan token.
 
 ## Notes
 

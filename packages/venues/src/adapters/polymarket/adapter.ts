@@ -9,8 +9,15 @@ import {
   type UserOrder,
 } from "@polymarket/clob-client";
 import { zeroAddress } from "viem";
-import { assertSupportedConstraints } from "../../shared/constraints.js";
-import { parseMetricSelector, readMetricSelectorString } from "../../shared/metric-selector.js";
+import {
+  assertSupportedConstraints,
+  assertSupportedMetricSurface,
+} from "../../shared/constraints.js";
+import {
+  extractFiniteNumber,
+  parseMetricSelector,
+  readMetricSelectorString,
+} from "../../shared/metric-selector.js";
 import {
   readApiCredsFromEnv,
   readEnv,
@@ -65,9 +72,7 @@ export function createPolymarketAdapter(config: PolymarketAdapterConfig = {}): V
   return {
     meta,
     async readMetric(request: MetricRequest, ctx) {
-      if (request.surface !== "mid_price") {
-        throw new Error(`Polymarket does not support metric surface '${request.surface}'`);
-      }
+      assertSupportedMetricSurface(meta, request);
 
       const selector = parseMetricSelector(request.selector);
       const tokenId =
@@ -344,43 +349,9 @@ async function readPolymarketMidPrice(
       );
     }
   }
-  const price = pickFiniteNumber(payload);
+  const price = extractFiniteNumber(payload);
   if (price === null) {
     throw new Error(`Polymarket midpoint unavailable for token '${tokenId}'`);
   }
   return price;
-}
-
-function pickFiniteNumber(value: unknown): number | null {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === "string") {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const candidate = pickFiniteNumber(item);
-      if (candidate !== null) return candidate;
-    }
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  const priorityKeys = ["mid", "midpoint", "price", "value", "result"];
-  for (const key of priorityKeys) {
-    if (key in record) {
-      const candidate = pickFiniteNumber(record[key]);
-      if (candidate !== null) return candidate;
-    }
-  }
-  for (const nested of Object.values(record)) {
-    const candidate = pickFiniteNumber(nested);
-    if (candidate !== null) return candidate;
-  }
-  return null;
 }
