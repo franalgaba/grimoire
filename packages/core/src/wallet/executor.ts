@@ -37,6 +37,8 @@ export interface ExecutorOptions {
   adapters?: VenueAdapter[];
   /** Spell-defined asset definitions for adapter address resolution. */
   assets?: AssetDef[];
+  /** Vault address for adapter context (e.g. ERC-4626 vault routing). */
+  vault?: `0x${string}`;
 }
 
 /** Result of a single transaction execution */
@@ -302,6 +304,7 @@ export class Executor {
               chainId: this.provider.chainId,
               mode: this.options.mode,
               assets: this.options.assets,
+              vault: this.options.vault,
             })
           );
         }
@@ -332,6 +335,7 @@ export class Executor {
           chainId: this.provider.chainId,
           mode: this.options.mode,
           assets: this.options.assets,
+          vault: this.options.vault,
         })
       );
     }
@@ -356,6 +360,7 @@ export class Executor {
               chainId: this.provider.chainId,
               mode: this.options.mode,
               assets: this.options.assets,
+              vault: this.options.vault,
             })
           );
         }
@@ -380,6 +385,7 @@ export class Executor {
           chainId: this.provider.chainId,
           mode: this.options.mode,
           assets: this.options.assets,
+          vault: this.options.vault,
         })
       );
     }
@@ -536,8 +542,9 @@ export class Executor {
     }
 
     const adapter = this.adapterRegistry.get(action.venue);
-    if (!adapter || adapter.meta.executionType !== "offchain") {
-      return null;
+    if (!adapter) return null;
+    if (adapter.meta.executionType !== "offchain") {
+      if (action.type !== "custom" || !adapter.executeAction) return null;
     }
 
     if (!adapter.executeAction) {

@@ -17,6 +17,7 @@ export {
 
 import { aaveV3Adapter, createAaveV3Adapter } from "./adapters/aave-v3.js";
 import { acrossAdapter, createAcrossAdapter } from "./adapters/across.js";
+import { compassV2Adapter, createCompassV2Adapter } from "./adapters/compass-v2.js";
 import { createHyperliquidAdapter, hyperliquidAdapter } from "./adapters/hyperliquid.js";
 import {
   createMorphoBlueAdapter,
@@ -51,6 +52,7 @@ export const adapters: VenueAdapter[] = [
   acrossAdapter,
   pendleAdapter,
   polymarketAdapter,
+  compassV2Adapter,
 ];
 
 export {
@@ -76,4 +78,6 @@ export {
   polymarketAdapter,
   createPolymarketAdapter,
   isMorphoAction,
+  compassV2Adapter,
+  createCompassV2Adapter,
 };

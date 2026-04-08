@@ -23,7 +23,12 @@ import {
   SqliteStateStore,
   toCrossChainReceipt,
 } from "@grimoirelabs/core";
-import { adapters, createHyperliquidAdapter, createPolymarketAdapter } from "@grimoirelabs/venues";
+import {
+  adapters,
+  createCompassV2Adapter,
+  createHyperliquidAdapter,
+  createPolymarketAdapter,
+} from "@grimoirelabs/venues";
 import chalk from "chalk";
 import ora from "ora";
 import {
@@ -127,10 +132,21 @@ export function configureOffchainAdapters(keyConfig: KeyConfig): VenueAdapter[] 
           privateKey: rawKey,
         });
       }
+      if (adapter.meta.name === "compass_v2") {
+        return createCompassV2Adapter({
+          privateKey: rawKey,
+        });
+      }
       return adapter;
     });
   } catch {
-    return adapters;
+    // No private key available — still configure adapters that only need env vars
+    return adapters.map((adapter) => {
+      if (adapter.meta.name === "compass_v2" && process.env.COMPASS_API_KEY) {
+        return createCompassV2Adapter();
+      }
+      return adapter;
+    });
   }
 }
 

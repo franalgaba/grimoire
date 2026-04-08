@@ -629,6 +629,7 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
     skipTestnetConfirmation: options.skipTestnetConfirmation,
     adapters: options.adapters,
     assets: resolvedAssets.assets,
+    vault: receipt.chainContext.vault,
   });
 
   const transactions: CommitResult["transactions"] = [];
