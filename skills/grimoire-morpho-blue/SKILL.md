@@ -66,6 +66,9 @@ vault_apy = metric("vault_apy", morpho, USDC, "vault=0xVaultAddress")
 vault_net_apy = metric("vault_net_apy", morpho, USDC, "vault=0xVaultAddress")
 ```
 
+Use `apy(morpho, asset[, selector])` for Morpho Blue market APY comparisons.
+Use `metric("vault_apy", morpho, asset, selector)` or `metric("vault_net_apy", morpho, asset, selector)` for MetaMorpho vault comparisons.
+
 Selector behavior:
 
 - market no selector (`apy`): resolves by `asset` on the active chain and picks the highest-TVL match

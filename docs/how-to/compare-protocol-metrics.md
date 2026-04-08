@@ -40,6 +40,9 @@ spell LendingCompare {
 
 ### Compare Morpho vault APY surfaces
 
+Use `apy(morpho, asset[, selector])` for Morpho Blue market APY comparisons.
+Use `metric("vault_apy", morpho, asset, selector)` or `metric("vault_net_apy", morpho, asset, selector)` for MetaMorpho vault comparisons.
+
 ```spell
 spell MorphoVaultCompare {
   assets: [USDC]
@@ -124,6 +127,8 @@ Look for `event_emitted` payloads such as `lending_compare_done`, `dex_bridge_co
 
 ## Troubleshooting
 
+- `Venue 'morpho_blue' does not expose metric surface 'vault_net_apy'`:
+  - The spell syntax is valid, but the runtime likely loaded stale packages or a custom adapter set that does not include the newer Morpho vault metric surfaces. Upgrade to a build that includes `@grimoirelabs/venues` `0.12.0+` and `@grimoirelabs/core` `0.20.0+`, or use the repo-local CLI/runtime.
 - `Function 'metric' argument 'asset' expects asset, got string`:
   - The 3rd argument must be an asset symbol/address, not a free-form string. Put free-form values in `selector`.
 - `Pendle ... swap aggregator failed`:
