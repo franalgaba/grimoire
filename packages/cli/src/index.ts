@@ -15,6 +15,7 @@ import { logCommand } from "./commands/log.js";
 import { resumeCommand } from "./commands/resume.js";
 import { setupCommand } from "./commands/setup.js";
 import { simulateCommand } from "./commands/simulate.js";
+import { triggersCommand } from "./commands/triggers.js";
 import { validateCommand } from "./commands/validate.js";
 import { venueCommand } from "./commands/venue.js";
 import { venuesCommand } from "./commands/venues.js";
@@ -257,6 +258,23 @@ const cli = Cli.create("grimoire", {
       const result = await validateCommand(c.args.spell, c.options);
       return c.ok(result, {
         cta: { commands: ["compile <spell>", "simulate <spell>"] },
+      });
+    },
+  })
+
+  // ── Triggers ─────────────────────────────────────────────────────
+  .command("triggers", {
+    description: "List compiled trigger handlers and stable selector ids",
+    args: z.object({
+      spell: z.string().describe("Path to .spell file"),
+    }),
+    async run(c) {
+      const result = await triggersCommand(c.args.spell, {
+        json: c.agent,
+        suppressOutput: c.agent,
+      });
+      return c.ok(toJsonSafe(result), {
+        cta: { commands: ["simulate <spell> --trigger-id <id>", "cast <spell> --trigger-id <id>"] },
       });
     },
   })

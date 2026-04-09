@@ -20,6 +20,7 @@ When using the repo-local Bun entrypoint, keep the trailing `--` so command flag
 <grimoire-cmd> compile <spell> [-o <file>] [--pretty]
 <grimoire-cmd> compile-all [dir] [--fail-fast] [--json]
 <grimoire-cmd> validate <spell> [--strict] [--json]
+<grimoire-cmd> triggers <spell> [--json]
 <grimoire-cmd> simulate <spell> [options]
 <grimoire-cmd> cast <spell> [options]
 <grimoire-cmd> venues [--json]
@@ -80,6 +81,14 @@ Tip:
 - If `grimoire venue doctor ...` fails with `Unknown venue adapter "doctor"`, your installed global CLI is old; use `npx -y @grimoirelabs/cli@latest ...` or repo-local invocation.
 
 ## Simulate (Preview)
+
+Native trigger discovery:
+
+```bash
+<grimoire-cmd> triggers <spell> --json
+```
+
+Use this before `simulate --trigger-id` or `cast --trigger-id`. It returns each compiled handler's `{ id, index, label, source }` plus trigger payload and owned step ids.
 
 Common options:
 

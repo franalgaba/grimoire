@@ -122,6 +122,7 @@ Setup security/runtime expectations:
 - `compile`
 - `compile-all`
 - `validate`
+- `triggers`
 - `simulate`
 - `cast`
 - `venues`
@@ -141,6 +142,7 @@ Use `references/cli-quick-reference.md` for concise command signatures and safet
 - Live `cast` can commit irreversible actions when policy and runtime checks pass.
 - `simulate` supports explicit `--rpc-url`, with precedence: `--rpc-url` -> `RPC_URL_<chainId>` -> `RPC_URL`.
 - Phase 1 cross-chain execution uses two-spell orchestration (`--destination-spell`) with one logical run id and resume support.
+- Use `triggers <spell>` to discover stable handler ids natively before targeted execution.
 - `simulate` and `cast` support selected-trigger execution via `--trigger-id`, `--trigger-index`, and legacy `--trigger`.
 - For multi-handler spells, prefer `--trigger-id`; `--trigger` is label-based and can be ambiguous.
 - Cross-chain `simulate` / `cast` must forward the same selected trigger into per-chain execution.

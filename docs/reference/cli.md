@@ -15,6 +15,7 @@ Repo-local invocation note:
 - `grimoire compile <spell>`
 - `grimoire compile-all [dir]`
 - `grimoire validate <spell>`
+- `grimoire triggers <spell>`
 - `grimoire simulate <spell>`
 - `grimoire cast <spell>`
 - `grimoire venues`
@@ -218,6 +219,33 @@ Exit code:
 - `0` when valid
 - `1` on errors (or warnings in strict mode)
 
+## `triggers`
+
+Inspect compiled trigger handlers and discover stable selector ids.
+
+```bash
+grimoire triggers <spell> [--json]
+```
+
+Use this command before `simulate --trigger-id` or `cast --trigger-id` when you need to target one handler from a multi-trigger spell.
+
+Output includes:
+
+- `spell`: `{ id, name, version }`
+- `triggers[]`: one entry per compiled trigger handler
+- `triggers[].id`: canonical stable trigger selector id
+- `triggers[].index`: 0-based compile order
+- `triggers[].label`: human-facing label such as `condition` or `event(Alert)`
+- `triggers[].source`: `{ line, column }` location in the spell source
+- `triggers[].trigger`: compiled trigger payload
+- `triggers[].stepCount`: number of owned steps
+- `triggers[].stepIds`: exact step ids executed for that handler
+
+JSON behavior:
+
+- `--json` emits one machine-readable payload on stdout
+- progress/spinner lines remain on stderr, so scripts should parse stdout only
+
 ## `simulate`
 
 Run preview-mode execution (no irreversible commit).
@@ -298,6 +326,7 @@ Query provider:
 Behavior notes:
 
 - Uses `execute({ simulate: true })`, which internally runs `preview()`.
+- Use `triggers <spell>` to discover stable handler ids before targeted runs.
 - Selected-trigger runs execute only one compiled trigger handler and return that handler's emitted events.
 - Loads and saves persistent state by default via `SqliteStateStore`.
 - If `--advisory-replay` is set, advisory outputs are loaded from a prior run ledger.
@@ -370,6 +399,7 @@ Query provider:
 Behavior notes:
 
 - Always runs preview first.
+- Use `triggers <spell>` to discover stable handler ids before targeted runs.
 - `--dry-run` and simulate-mode cast respect selected-trigger execution the same way as `simulate`.
 - Commits only when mode is `execute`, a wallet exists, and receipt has planned actions.
 - Hyperliquid and Polymarket adapters are key-configured dynamically in wallet paths.
