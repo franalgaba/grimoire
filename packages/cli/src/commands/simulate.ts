@@ -53,6 +53,7 @@ interface SimulateOptions {
   advisoryTraceVerbose?: boolean;
   piAgentDir?: string;
   stateDir?: string;
+  state?: boolean;
   noState?: boolean;
   json?: boolean;
   dataReplay?: string;
@@ -60,7 +61,6 @@ interface SimulateOptions {
   onStale?: string;
   ensName?: string;
   ensRpcUrl?: string;
-  state?: boolean;
   trigger?: string;
   triggerId?: string;
   triggerIndex?: string;

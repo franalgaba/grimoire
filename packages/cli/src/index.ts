@@ -73,7 +73,7 @@ const ensOptions = {
 
 const stateOptions = {
   stateDir: z.string().optional().describe("Directory for state database"),
-  noState: z.boolean().optional().describe("Disable state persistence"),
+  state: z.boolean().optional().describe("Enable state persistence"),
 };
 
 const crossChainOptions = {

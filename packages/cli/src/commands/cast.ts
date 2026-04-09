@@ -88,6 +88,7 @@ interface CastOptions {
   json?: boolean;
   // State options
   stateDir?: string;
+  state?: boolean;
   noState?: boolean;
   // Data replay and freshness options
   dataReplay?: string;
@@ -96,7 +97,6 @@ interface CastOptions {
   // ENS profile options
   ensName?: string;
   ensRpcUrl?: string;
-  state?: boolean;
   // Trigger filter
   trigger?: string;
   triggerId?: string;

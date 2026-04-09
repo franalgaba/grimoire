@@ -26,7 +26,7 @@ afterEach(async () => {
 });
 
 describe("CLI JSON output", () => {
-  test("simulate --json exits cleanly with selected trigger output", async () => {
+  test("simulate --json exits cleanly with selected trigger output when --no-state is used", async () => {
     const source = `spell CliJsonTrigger {
   version: "1.0.0"
 
@@ -59,7 +59,7 @@ describe("CLI JSON output", () => {
         "simulate",
         spellPath,
         "--json",
-        "--noState",
+        "--no-state",
         "--trigger-id",
         triggerId as string,
       ],
