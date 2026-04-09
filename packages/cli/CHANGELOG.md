@@ -1,5 +1,21 @@
 # @grimoirelabs/cli
 
+## 0.17.0
+
+### Minor Changes
+
+- 8ab7ada: Add stable per-handler trigger selectors for multi-handler spells.
+
+  `@grimoirelabs/core` now emits `triggerHandlers` in compiled IR, including stable trigger ids, compile-order indexes, labels, source locations, and owned step ids. Runtime preview/execute paths can select a single handler via `selectedTrigger`, and execution results now report the resolved selected trigger.
+
+  `@grimoirelabs/cli` now exposes `--trigger-id` and `--trigger-index` on `simulate` and `cast`, adds a native `triggers <spell>` discovery command for stable handler ids, includes `selectedTrigger`, `events`, and `finalState` in JSON output, and fixes the top-level JSON output path so bigint-containing payloads no longer crash the CLI formatter.
+
+### Patch Changes
+
+- Updated dependencies [8ab7ada]
+  - @grimoirelabs/core@0.21.0
+  - @grimoirelabs/venues@0.12.1
+
 ## 0.16.2
 
 ### Patch Changes
