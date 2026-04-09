@@ -75,12 +75,15 @@ export function createPolymarketAdapter(config: PolymarketAdapterConfig = {}): V
       assertSupportedMetricSurface(meta, request);
 
       const selector = parseMetricSelector(request.selector);
-      const tokenId =
-        readMetricSelectorString(selector, ["token_id", "tokenid", "market_id", "id"], {
+      const tokenId = readMetricSelectorString(
+        selector,
+        ["token_id", "tokenid", "market_id", "id"],
+        {
           fallback: request.asset,
           required: true,
           label: "token_id",
-        }) ?? "";
+        }
+      );
       const host =
         resolveString(config.host, readEnv(env, ["POLYMARKET_CLOB_HOST", "CLOB_API_URL"])) ??
         DEFAULT_HOST;

@@ -1027,6 +1027,7 @@ export class Parser {
 
   /** Parse trigger handler: on manual: { ... } */
   private parseTriggerHandler(): TriggerHandler {
+    const startToken = this.current();
     this.expect("KEYWORD", "on");
 
     const triggerType = this.parseTriggerType();
@@ -1034,11 +1035,13 @@ export class Parser {
 
     const body = this.parseBraceBlock();
 
-    return {
+    const node: TriggerHandler = {
       kind: "trigger_handler",
       trigger: triggerType,
       body,
     };
+    node.span = this.makeSpan(startToken);
+    return node;
   }
 
   /** Parse trigger type */

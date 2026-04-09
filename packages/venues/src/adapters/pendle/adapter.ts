@@ -5,6 +5,7 @@ import type {
   VenueAdapter,
   VenueAdapterContext,
 } from "@grimoirelabs/core";
+import { zeroAddress } from "viem";
 import {
   assertSupportedConstraints,
   assertSupportedMetricSurface,
@@ -109,11 +110,10 @@ export function createPendleAdapter(config: PendleAdapterConfig = {}): VenueAdap
       }
 
       const selector = parseMetricSelector(request.selector);
-      const outputAsset =
-        readMetricSelectorString(selector, ["asset_out", "out", "to"], {
-          required: true,
-          label: "asset_out",
-        }) ?? "";
+      const outputAsset = readMetricSelectorString(selector, ["asset_out", "out", "to"], {
+        required: true,
+        label: "asset_out",
+      });
       const inDecimals = safeResolveTokenDecimals(request.asset, ctx.chainId, 18);
       const defaultAmount = 10n ** BigInt(inDecimals);
       const amount =
@@ -135,7 +135,6 @@ export function createPendleAdapter(config: PendleAdapterConfig = {}): VenueAdap
 
       const tokenIn = resolveAssetAddress(request.asset, ctx.chainId, config.tokenMap);
       const tokenOut = resolveAssetAddress(outputAsset, ctx.chainId, config.tokenMap);
-      const zeroAddress = "0x0000000000000000000000000000000000000000";
       const preferredReceiver = (ctx.vault ?? ctx.walletAddress) as string | undefined;
       const receiver =
         preferredReceiver && preferredReceiver.toLowerCase() !== zeroAddress

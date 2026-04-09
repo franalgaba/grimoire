@@ -1,4 +1,5 @@
 import type { Action, Address, CustomAction, VenueAdapterContext } from "@grimoirelabs/core";
+import { zeroAddress } from "viem";
 import { isAddressLike, resolveTokenAddress } from "../../shared/token-registry.js";
 import {
   bpsToDecimal,
@@ -19,9 +20,8 @@ export function toConvertRequest(
   singleInputActions: Set<string>,
   multiInputActions: Set<string>
 ): PendleConvertRequest {
-  const ZERO = "0x0000000000000000000000000000000000000000";
   const defaultReceiver = (
-    ctx.vault && ctx.vault !== ZERO ? ctx.vault : ctx.walletAddress
+    ctx.vault && ctx.vault !== zeroAddress ? ctx.vault : ctx.walletAddress
   ) as string;
 
   if (action.type === "custom") {

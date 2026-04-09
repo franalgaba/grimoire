@@ -52,6 +52,13 @@ interface ParseArgsHelp {
 
 type ParseArgsResult = ParseArgsOk | ParseArgsFail | ParseArgsHelp;
 
+const FORMAT_EXIT = {
+  OK: 0,
+  CHECK_MISMATCH: 1,
+  PARSE_ERROR: 2,
+  IO_ERROR: 3,
+} as const;
+
 export interface RunFormatResult {
   exitCode: number;
   result: FormatCommandResult;
@@ -101,7 +108,7 @@ export async function formatCommandFromArgv(
   if (!parsed.ok) {
     io.writeStderr(`[${parsed.code}] ${parsed.message}\n`);
     io.writeStderr(`\n${formatHelpText()}`);
-    return 3;
+    return FORMAT_EXIT.IO_ERROR;
   }
 
   const parsedArgs = parsed.args;
@@ -297,7 +304,7 @@ async function loadSources(
         sources: [],
         stderrLines,
         earlyReturn: {
-          exitCode: 3,
+          exitCode: FORMAT_EXIT.IO_ERROR,
           result: {
             success: false,
             mode: args.mode,
@@ -455,12 +462,12 @@ function buildFormatResult(mode: FormatMode, files: FormatFileResult[]): FormatC
 }
 
 function computeExitCode(files: FormatFileResult[], ioFailures: number, mode: FormatMode): number {
-  if (ioFailures > 0) return 3;
+  if (ioFailures > 0) return FORMAT_EXIT.IO_ERROR;
   const parseFailures = files.filter((file) => file.error?.code === "ERR_FORMAT_PARSE").length;
-  if (parseFailures > 0) return 2;
+  if (parseFailures > 0) return FORMAT_EXIT.PARSE_ERROR;
   const changed = files.filter((file) => file.changed).length;
-  if (mode === "check" && changed > 0) return 1;
-  return 0;
+  if (mode === "check" && changed > 0) return FORMAT_EXIT.CHECK_MISMATCH;
+  return FORMAT_EXIT.OK;
 }
 
 function emitRunOutput(
@@ -485,15 +492,15 @@ function emitRunOutput(
     io.writeStderr(`${line}\n`);
   }
 
-  if (args.mode === "write" && run.exitCode === 0) {
+  if (args.mode === "write" && run.exitCode === FORMAT_EXIT.OK) {
     io.writeStderr(`Formatted ${run.result.summary.changed} file(s).\n`);
   }
 
-  if (args.mode === "check" && run.exitCode === 0) {
+  if (args.mode === "check" && run.exitCode === FORMAT_EXIT.OK) {
     io.writeStderr("All files are canonical.\n");
   }
 
-  if (args.mode === "check" && run.exitCode === 1) {
+  if (args.mode === "check" && run.exitCode === FORMAT_EXIT.CHECK_MISMATCH) {
     io.writeStderr(`${run.result.summary.changed} file(s) are not canonical.\n`);
   }
 }

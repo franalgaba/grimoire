@@ -195,4 +195,55 @@ describe("Runtime parity: CLI simulate vs embedded preview", () => {
     expect(error.phase).toBe("preview");
     expect((parsed.receipt as Record<string, unknown>).status).toBe("rejected");
   });
+
+  test("supports selected-trigger JSON output for multi-handler spells", async () => {
+    const source = `spell CliParityMultiTrigger {
+  version: "1.0.0"
+
+  on condition 1 > 0 every 10: {
+    emit above(level=1)
+  }
+
+  on condition 1 > 0 every 10: {
+    emit below(level=2)
+  }
+}`;
+
+    const compileResult = compile(source);
+    assertIR(compileResult);
+    const triggerId = compileResult.ir.triggerHandlers?.[1]?.selector.id;
+    expect(triggerId).toBeDefined();
+
+    const dir = await mkdtemp(join(tmpdir(), "grimoire-cli-trigger-"));
+    tempDirs.push(dir);
+    const spellPath = join(dir, "multi-trigger.spell");
+    await writeFile(spellPath, source, "utf8");
+
+    const logs: string[] = [];
+
+    try {
+      await simulateCommand(
+        spellPath,
+        {
+          json: true,
+          noState: true,
+          chain: "1",
+          triggerId,
+        },
+        createTestIO(logs)
+      );
+    } catch {
+      // simulateCommand exits non-zero on failure after printing JSON.
+    }
+
+    const parsed = parseLastJson(logs);
+    expect(parsed.success).toBe(true);
+    expect((parsed.selectedTrigger as Record<string, unknown>).id).toBe(triggerId);
+    expect(parsed.finalState as Record<string, unknown>).toEqual({});
+
+    const events = parsed.events as Array<Record<string, unknown>>;
+    expect(events).toHaveLength(1);
+    expect(events[0]?.name).toBe("below");
+    expect(events[0]?.data).toEqual({ level: 2 });
+  });
 });

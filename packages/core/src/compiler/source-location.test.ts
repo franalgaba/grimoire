@@ -32,6 +32,15 @@ const SPELL_SOURCE = `spell TestSpell {
 
 describe("Source Location Propagation", () => {
   describe("Parser: AST nodes have spans", () => {
+    test("trigger handlers have spans", () => {
+      const ast = parse(SPELL_SOURCE);
+      const trigger = ast.triggers[0];
+
+      expect(trigger?.span).toBeDefined();
+      expect(trigger?.span?.start.line).toBeGreaterThan(0);
+      expect(trigger?.span?.start.column).toBeGreaterThan(0);
+    });
+
     test("assignment nodes have spans", () => {
       const ast = parse(SPELL_SOURCE);
       const trigger = ast.triggers[0];
@@ -180,6 +189,37 @@ describe("Source Location Propagation", () => {
       if (loc) {
         expect(loc.line).toBeGreaterThanOrEqual(10);
       }
+    });
+
+    test("compiled spell includes triggerHandlers with selector source metadata", () => {
+      const result = compile(`spell TriggerSelectors {
+  version: "1.0.0"
+
+  on condition 1 > 0 every 10: {
+    emit first()
+  }
+
+  on condition 1 > 0 every 10: {
+    emit second()
+  }
+}`);
+
+      expect(result.success).toBe(true);
+      expect(result.ir?.triggerHandlers).toHaveLength(2);
+      expect(result.ir?.triggerHandlers?.[0]?.selector.id).toMatch(/^trg_[0-9a-f]{12}$/);
+      expect(result.ir?.triggerHandlers?.[1]?.selector.id).toMatch(/^trg_[0-9a-f]{12}$/);
+      expect(result.ir?.triggerHandlers?.[0]?.selector.id).not.toBe(
+        result.ir?.triggerHandlers?.[1]?.selector.id
+      );
+      expect(result.ir?.triggerHandlers?.[0]?.selector.source.line).toBe(4);
+      expect(result.ir?.triggerHandlers?.[1]?.selector.source.line).toBe(8);
+      const firstStepId = result.ir?.steps[0]?.id;
+      const secondStepId = result.ir?.steps[1]?.id;
+      if (!firstStepId || !secondStepId) {
+        throw new Error("Expected compiled steps for both trigger handlers");
+      }
+      expect(result.ir?.triggerHandlers?.[0]?.stepIds).toEqual([firstStepId]);
+      expect(result.ir?.triggerHandlers?.[1]?.stepIds).toEqual([secondStepId]);
     });
   });
 

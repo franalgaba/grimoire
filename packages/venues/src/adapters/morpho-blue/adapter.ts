@@ -7,7 +7,7 @@ import type {
 } from "@grimoirelabs/core";
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi, MetaMorphoAction } from "@morpho-org/blue-sdk-viem";
-import { encodeFunctionData } from "viem";
+import { encodeFunctionData, zeroAddress } from "viem";
 import {
   assertSupportedConstraints,
   assertSupportedMetricSurface,
@@ -30,6 +30,7 @@ import {
 import { preflightBorrowReadiness } from "./preflight.js";
 
 const MORPHO_GRAPHQL_ENDPOINT = "https://blue-api.morpho.org/graphql" as const;
+const MORPHO_GRAPHQL_PAGE_SIZE = 200;
 
 export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueAdapter {
   const meta: VenueAdapter["meta"] = {
@@ -227,8 +228,7 @@ async function buildVaultAction(
 
   const vaultAddress = action.vault as Address;
   const amount = toBigInt(action.amount);
-  const ZERO = "0x0000000000000000000000000000000000000000" as Address;
-  const receiver = ctx.vault && ctx.vault !== ZERO ? ctx.vault : ctx.walletAddress;
+  const receiver = ctx.vault && ctx.vault !== zeroAddress ? ctx.vault : ctx.walletAddress;
 
   if (action.type === "vault_deposit") {
     const assetAddress = resolveTokenAddress(action.asset, ctx.chainId, {
@@ -384,7 +384,10 @@ async function fetchMorphoApyBps(input: {
   const where = input.marketId
     ? { uniqueKey_in: [input.marketId] }
     : { chainId_in: [input.chainId] };
-  const payload = await fetchMorphoMarkets(query, { first: 200, where });
+  const payload = await fetchMorphoGraphQL<MorphoMarketsResponse>(query, {
+    first: MORPHO_GRAPHQL_PAGE_SIZE,
+    where,
+  });
   const items = payload.markets?.items ?? [];
   const candidate = pickMorphoMarketCandidate(items, input);
   if (!candidate?.state || candidate.state.supplyApy === undefined) {
@@ -464,7 +467,10 @@ async function fetchMorphoVaultApyBps(input: {
     where.assetSymbol_in = [input.asset.toUpperCase()];
   }
 
-  const payload = await fetchMorphoVaults(query, { first: 200, where });
+  const payload = await fetchMorphoGraphQL<MorphoVaultsResponse>(query, {
+    first: MORPHO_GRAPHQL_PAGE_SIZE,
+    where,
+  });
   const items = payload.vaults?.items ?? [];
   const candidate = pickMorphoVaultCandidate(items, input);
   const apy = input.useNetApy ? candidate?.state?.netApy : candidate?.state?.apy;
@@ -512,10 +518,10 @@ function pickMorphoVaultCandidate(
   return match ?? null;
 }
 
-async function fetchMorphoMarkets(
+async function fetchMorphoGraphQL<T>(
   query: string,
   variables: Record<string, unknown>
-): Promise<MorphoMarketsResponse> {
+): Promise<T> {
   const response = await fetch(MORPHO_GRAPHQL_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -526,36 +532,13 @@ async function fetchMorphoMarkets(
   }
 
   const payload = (await response.json()) as {
-    data?: MorphoMarketsResponse;
+    data?: T;
     errors?: Array<{ message?: string }>;
   };
   if (payload.errors?.length) {
     throw new Error(payload.errors.map((error) => error.message ?? "Unknown error").join("; "));
   }
-  return payload.data ?? {};
-}
-
-async function fetchMorphoVaults(
-  query: string,
-  variables: Record<string, unknown>
-): Promise<MorphoVaultsResponse> {
-  const response = await fetch(MORPHO_GRAPHQL_ENDPOINT, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query, variables }),
-  });
-  if (!response.ok) {
-    throw new Error(`Morpho API error: ${response.status} ${response.statusText}`);
-  }
-
-  const payload = (await response.json()) as {
-    data?: MorphoVaultsResponse;
-    errors?: Array<{ message?: string }>;
-  };
-  if (payload.errors?.length) {
-    throw new Error(payload.errors.map((error) => error.message ?? "Unknown error").join("; "));
-  }
-  return payload.data ?? {};
+  return payload.data ?? ({} as T);
 }
 
 export function isMorphoAction(action: Action): action is Extract<

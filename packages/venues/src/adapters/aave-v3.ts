@@ -9,6 +9,7 @@ import type {
   VenueAdapterContext,
   VenueBuildMetadata,
 } from "@grimoirelabs/core";
+import { zeroAddress } from "viem";
 import { assertSupportedConstraints, assertSupportedMetricSurface } from "../shared/constraints.js";
 import { buildApprovalIfNeeded } from "../shared/erc20.js";
 import { normalizeAaveApyToBps, toFiniteNumber } from "../shared/metric-selector.js";
@@ -30,7 +31,6 @@ const DEFAULT_MARKETS: Record<number, Address> = {
   1: "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2" as Address,
   8453: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5" as Address,
 };
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 type AaveBuiltTransaction = BuiltTransaction & { metadata?: VenueBuildMetadata };
 
 export function createAaveV3Adapter(
@@ -429,7 +429,7 @@ function buildInsufficientBalancePlaceholder(
 
   return {
     tx: {
-      to: ZERO_ADDRESS,
+      to: zeroAddress,
       data: "0x",
       value: 0n,
     },

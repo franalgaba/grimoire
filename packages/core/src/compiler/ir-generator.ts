@@ -3,6 +3,7 @@
  * Transforms SpellSource AST into SpellIR
  */
 
+import { createHash } from "node:crypto";
 import type {
   Action,
   ActionAmount,
@@ -19,6 +20,8 @@ import type {
   SkillDef,
   SpellIR,
   SpellSource,
+  TriggerHandlerIR,
+  TriggerSourceLocation,
 } from "../types/ir.js";
 import type {
   Address,
@@ -261,6 +264,8 @@ export function generateIR(source: SpellSource): IRGeneratorResult {
     return { success: false, errors, warnings };
   }
 
+  const triggerHandlers = buildTriggerHandlers(source, triggers, steps, sourceMap, triggerStepMap);
+
   const ir: SpellIR = {
     id,
     version: source.version,
@@ -279,6 +284,7 @@ export function generateIR(source: SpellSource): IRGeneratorResult {
     steps,
     guards,
     triggers,
+    triggerHandlers,
     triggerStepMap: Object.keys(triggerStepMap).length > 0 ? triggerStepMap : undefined,
     sourceMap: Object.keys(sourceMap).length > 0 ? sourceMap : undefined,
   };
@@ -297,6 +303,126 @@ function generateHash(content: string): string {
     hash = hash & hash;
   }
   return Math.abs(hash).toString(16).padStart(8, "0");
+}
+
+function buildTriggerHandlers(
+  source: SpellSource,
+  triggers: Trigger[],
+  steps: Step[],
+  sourceMap: Record<string, { line: number; column: number }>,
+  triggerStepMap: Record<number, string[]>
+): TriggerHandlerIR[] {
+  const topLevelTrigger = triggers[0];
+
+  if (topLevelTrigger?.type === "any") {
+    return topLevelTrigger.triggers.map((trigger, index) => {
+      const handlerTrigger = assertConcreteTrigger(trigger);
+      const stepIds = triggerStepMap[index] ?? [];
+      const sourceLocation =
+        source.triggerHandlersMeta?.[index]?.source ?? resolveTriggerSource(stepIds, sourceMap);
+      return {
+        selector: {
+          id: createTriggerHandlerId(handlerTrigger, sourceLocation),
+          index,
+          label: describeTriggerLabel(handlerTrigger),
+          source: sourceLocation,
+        },
+        trigger: handlerTrigger,
+        stepIds,
+      };
+    });
+  }
+
+  const fallbackTrigger = (topLevelTrigger ?? { type: "manual" }) as Exclude<
+    Trigger,
+    { type: "any" }
+  >;
+  const stepIds = steps.map((step) => step.id);
+  const sourceLocation =
+    source.triggerHandlersMeta?.[0]?.source ?? resolveTriggerSource(stepIds, sourceMap);
+
+  return [
+    {
+      selector: {
+        id: createTriggerHandlerId(fallbackTrigger, sourceLocation),
+        index: 0,
+        label: describeTriggerLabel(fallbackTrigger),
+        source: sourceLocation,
+      },
+      trigger: fallbackTrigger,
+      stepIds,
+    },
+  ];
+}
+
+function resolveTriggerSource(
+  stepIds: string[],
+  sourceMap: Record<string, { line: number; column: number }>
+): TriggerSourceLocation {
+  for (const stepId of stepIds) {
+    const loc = sourceMap[stepId];
+    if (loc) {
+      return loc;
+    }
+  }
+  return { line: 1, column: 1 };
+}
+
+function assertConcreteTrigger(trigger: Trigger): Exclude<Trigger, { type: "any" }> {
+  if (trigger.type === "any") {
+    throw new Error("Nested trigger.any handlers are not supported in TriggerHandlerIR");
+  }
+  return trigger;
+}
+
+function createTriggerHandlerId(
+  trigger: Exclude<Trigger, { type: "any" }>,
+  source: TriggerSourceLocation
+): string {
+  const digest = createHash("sha256")
+    .update(
+      stableStringify({
+        trigger,
+        line: source.line,
+        column: source.column,
+      })
+    )
+    .digest("hex");
+  return `trg_${digest.slice(0, 12)}`;
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(sortJsonValue(value));
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sortJsonValue(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.keys(value as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        acc[key] = sortJsonValue((value as Record<string, unknown>)[key]);
+        return acc;
+      }, {});
+  }
+  return value;
+}
+
+function describeTriggerLabel(trigger: Exclude<Trigger, { type: "any" }>): string {
+  switch (trigger.type) {
+    case "manual":
+      return "manual";
+    case "schedule":
+      if (trigger.cron === "0 * * * *") return "hourly";
+      if (trigger.cron === "0 0 * * *") return "daily";
+      return `schedule(${trigger.cron})`;
+    case "condition":
+      return "condition";
+    case "event":
+      return `event(${trigger.event})`;
+  }
 }
 
 /**

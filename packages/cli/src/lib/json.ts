@@ -12,3 +12,7 @@ export function stringifyJson(value: unknown): string {
     2
   );
 }
+
+export function toJsonSafe<T>(value: T): T {
+  return JSON.parse(stringifyJson(value)) as T;
+}

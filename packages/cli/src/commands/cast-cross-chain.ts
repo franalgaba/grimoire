@@ -19,6 +19,7 @@ import {
   type LedgerEvent,
   loadPrivateKey,
   orchestrateCrossChain,
+  type SelectedTriggerRef,
   type SpellIR,
   SqliteStateStore,
   toCrossChainReceipt,
@@ -97,6 +98,8 @@ interface CastOptions {
   ensRpcUrl?: string;
   state?: boolean;
   trigger?: string;
+  triggerId?: string;
+  triggerIndex?: string;
 }
 
 export interface ExecuteCrossChainCastInput {
@@ -110,24 +113,82 @@ export interface ExecuteCrossChainCastInput {
   hasKey: boolean;
   dataPolicy: RuntimeDataPolicy;
   replayResolution: ReplayResolution;
+  selectedTrigger?: SelectedTriggerRef;
 }
+
+type CrossChainCastExecuteOptions = Parameters<typeof execute>[0];
+
+export interface BuildCrossChainCastExecuteOptionsArgs {
+  spell: SpellIR;
+  runId: string;
+  vault: Address;
+  chain: number;
+  params: Record<string, unknown>;
+  persistentState: Record<string, unknown>;
+  mode: ExecutionMode;
+  wallet?: CrossChainCastExecuteOptions["wallet"];
+  provider: ReturnType<typeof createProvider>;
+  gasMultiplier: number;
+  confirmCallback: NonNullable<CrossChainCastExecuteOptions["confirmCallback"]>;
+  skipTestnetConfirmation: boolean;
+  configuredAdapters: VenueAdapter[];
+  advisorSkillsDirs: string[];
+  onAdvisory: CrossChainCastExecuteOptions["onAdvisory"];
+  eventCallback: CrossChainCastExecuteOptions["eventCallback"];
+  warningCallback: CrossChainCastExecuteOptions["warningCallback"];
+  selectedTrigger?: SelectedTriggerRef;
+  trackId: "source" | "destination";
+  role: "source" | "destination";
+  morphoMarketIds: Record<string, string>;
+}
+
+export function buildCrossChainCastExecuteOptions(
+  args: BuildCrossChainCastExecuteOptionsArgs
+): CrossChainCastExecuteOptions {
+  return {
+    spell: args.spell,
+    runId: args.runId,
+    vault: args.vault,
+    chain: args.chain,
+    params: args.params,
+    persistentState: args.persistentState,
+    simulate: args.mode === "simulate",
+    executionMode: args.mode === "simulate" ? undefined : args.mode,
+    wallet: args.mode === "execute" ? args.wallet : undefined,
+    provider: args.provider,
+    gasMultiplier: args.gasMultiplier,
+    confirmCallback: args.confirmCallback,
+    skipTestnetConfirmation: args.skipTestnetConfirmation,
+    adapters: args.configuredAdapters,
+    advisorSkillsDirs: args.advisorSkillsDirs.length > 0 ? args.advisorSkillsDirs : undefined,
+    onAdvisory: args.onAdvisory,
+    eventCallback: args.eventCallback,
+    warningCallback: args.warningCallback,
+    selectedTrigger: args.selectedTrigger,
+    crossChain: {
+      enabled: true,
+      runId: args.runId,
+      trackId: args.trackId,
+      role: args.role,
+      morphoMarketIds: args.morphoMarketIds,
+    },
+  };
+}
+
+const HYPERLIQUID_ETH_ASSET_ID = 4;
+
+const OFFCHAIN_ADAPTER_FACTORIES: Record<string, (privateKey: `0x${string}`) => VenueAdapter> = {
+  hyperliquid: (privateKey) =>
+    createHyperliquidAdapter({ privateKey, assetMap: { ETH: HYPERLIQUID_ETH_ASSET_ID } }),
+  polymarket: (privateKey) => createPolymarketAdapter({ privateKey }),
+};
 
 export function configureOffchainAdapters(keyConfig: KeyConfig): VenueAdapter[] {
   try {
     const rawKey = loadPrivateKey(keyConfig);
     return adapters.map((adapter) => {
-      if (adapter.meta.name === "hyperliquid") {
-        return createHyperliquidAdapter({
-          privateKey: rawKey,
-          assetMap: { ETH: 4 },
-        });
-      }
-      if (adapter.meta.name === "polymarket") {
-        return createPolymarketAdapter({
-          privateKey: rawKey,
-        });
-      }
-      return adapter;
+      const factory = OFFCHAIN_ADAPTER_FACTORIES[adapter.meta.name];
+      return factory ? factory(rawKey) : adapter;
     });
   } catch {
     return adapters;
@@ -388,64 +449,60 @@ export async function executeCrossChainCast(input: ExecuteCrossChainCastInput): 
     handoffTimeoutSec,
     pollIntervalSec,
     executeSource: async () => {
-      const result = await execute({
-        spell: input.sourceSpell,
-        runId,
-        vault: vault as Address,
-        chain: input.sourceChainId,
-        params: input.params,
-        persistentState: sourceState,
-        simulate: input.mode === "simulate",
-        executionMode: input.mode === "simulate" ? undefined : input.mode,
-        wallet: input.mode === "execute" ? sourceWallet : undefined,
-        provider: sourceProvider,
-        gasMultiplier,
-        confirmCallback,
-        skipTestnetConfirmation: input.options.skipConfirm ?? false,
-        adapters: configuredAdapters,
-        advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
-        onAdvisory: sourceOnAdvisory,
-        eventCallback: advisoryEventCallback,
-        warningCallback: (message) => console.error(chalk.yellow(`Warning: ${message}`)),
-        crossChain: {
-          enabled: true,
+      const result = await execute(
+        buildCrossChainCastExecuteOptions({
+          spell: input.sourceSpell,
           runId,
+          vault: vault as Address,
+          chain: input.sourceChainId,
+          params: input.params,
+          persistentState: sourceState,
+          mode: input.mode,
+          wallet: sourceWallet,
+          provider: sourceProvider,
+          gasMultiplier,
+          confirmCallback,
+          skipTestnetConfirmation: input.options.skipConfirm ?? false,
+          configuredAdapters,
+          advisorSkillsDirs,
+          onAdvisory: sourceOnAdvisory,
+          eventCallback: advisoryEventCallback,
+          warningCallback: (message) => console.error(chalk.yellow(`Warning: ${message}`)),
+          selectedTrigger: input.selectedTrigger,
           trackId: "source",
           role: "source",
           morphoMarketIds,
-        },
-      });
+        })
+      );
       sourceState = result.finalState;
       return result;
     },
     executeDestination: async (params) => {
-      const result = await execute({
-        spell: destinationSpell,
-        runId,
-        vault: vault as Address,
-        chain: destinationChainId,
-        params,
-        persistentState: destinationState,
-        simulate: input.mode === "simulate",
-        executionMode: input.mode === "simulate" ? undefined : input.mode,
-        wallet: input.mode === "execute" ? destinationWallet : undefined,
-        provider: destinationProvider,
-        gasMultiplier,
-        confirmCallback,
-        skipTestnetConfirmation: input.options.skipConfirm ?? false,
-        adapters: configuredAdapters,
-        advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
-        onAdvisory: destinationOnAdvisory,
-        eventCallback: advisoryEventCallback,
-        warningCallback: (message) => console.error(chalk.yellow(`Warning: ${message}`)),
-        crossChain: {
-          enabled: true,
+      const result = await execute(
+        buildCrossChainCastExecuteOptions({
+          spell: destinationSpell,
           runId,
+          vault: vault as Address,
+          chain: destinationChainId,
+          params,
+          persistentState: destinationState,
+          mode: input.mode,
+          wallet: destinationWallet,
+          provider: destinationProvider,
+          gasMultiplier,
+          confirmCallback,
+          skipTestnetConfirmation: input.options.skipConfirm ?? false,
+          configuredAdapters,
+          advisorSkillsDirs,
+          onAdvisory: destinationOnAdvisory,
+          eventCallback: advisoryEventCallback,
+          warningCallback: (message) => console.error(chalk.yellow(`Warning: ${message}`)),
+          selectedTrigger: input.selectedTrigger,
           trackId: "destination",
           role: "destination",
           morphoMarketIds,
-        },
-      });
+        })
+      );
       destinationState = result.finalState;
       return result;
     },
