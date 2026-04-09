@@ -15,10 +15,12 @@ import { logCommand } from "./commands/log.js";
 import { resumeCommand } from "./commands/resume.js";
 import { setupCommand } from "./commands/setup.js";
 import { simulateCommand } from "./commands/simulate.js";
+import { triggersCommand } from "./commands/triggers.js";
 import { validateCommand } from "./commands/validate.js";
 import { venueCommand } from "./commands/venue.js";
 import { venuesCommand } from "./commands/venues.js";
 import { walletCli } from "./commands/wallet.js";
+import { toJsonSafe } from "./lib/json.js";
 import { loadSetupEnv } from "./lib/setup-env.js";
 
 loadSetupEnv();
@@ -71,7 +73,7 @@ const ensOptions = {
 
 const stateOptions = {
   stateDir: z.string().optional().describe("Directory for state database"),
-  noState: z.boolean().optional().describe("Disable state persistence"),
+  state: z.boolean().optional().describe("Enable state persistence"),
 };
 
 const crossChainOptions = {
@@ -260,6 +262,23 @@ const cli = Cli.create("grimoire", {
     },
   })
 
+  // ── Triggers ─────────────────────────────────────────────────────
+  .command("triggers", {
+    description: "List compiled trigger handlers and stable selector ids",
+    args: z.object({
+      spell: z.string().describe("Path to .spell file"),
+    }),
+    async run(c) {
+      const result = await triggersCommand(c.args.spell, {
+        json: c.agent,
+        suppressOutput: c.agent,
+      });
+      return c.ok(toJsonSafe(result), {
+        cta: { commands: ["simulate <spell> --trigger-id <id>", "cast <spell> --trigger-id <id>"] },
+      });
+    },
+  })
+
   // ── Simulate ─────────────────────────────────────────────────────
   .command("simulate", {
     description: "Simulate spell execution (dry run)",
@@ -280,11 +299,24 @@ const cli = Cli.create("grimoire", {
       ...dataProvenanceOptions,
       ...ensOptions,
       ...stateOptions,
+      trigger: z
+        .string()
+        .optional()
+        .describe("Run only the specified trigger handler label (deprecated alias)"),
+      triggerId: z.string().optional().describe("Run only the trigger handler with this stable id"),
+      triggerIndex: z
+        .string()
+        .optional()
+        .describe("Run only the trigger handler at this 0-based compile index"),
     }),
     alias: { params: "p" },
     async run(c) {
-      const result = await simulateCommand(c.args.spell, { ...c.options, json: c.agent });
-      return c.ok(result ?? { success: true }, {
+      const result = await simulateCommand(c.args.spell, {
+        ...c.options,
+        json: c.agent,
+        suppressOutput: c.agent,
+      });
+      return c.ok(toJsonSafe(result ?? { success: true }), {
         cta: { commands: ["cast <spell>", "cast <spell> --dry-run"] },
       });
     },
@@ -324,12 +356,21 @@ const cli = Cli.create("grimoire", {
       trigger: z
         .string()
         .optional()
-        .describe("Run only the specified trigger handler (e.g., manual, hourly)"),
+        .describe("Run only the specified trigger handler label (deprecated alias)"),
+      triggerId: z.string().optional().describe("Run only the trigger handler with this stable id"),
+      triggerIndex: z
+        .string()
+        .optional()
+        .describe("Run only the trigger handler at this 0-based compile index"),
     }),
     alias: { params: "p", verbose: "v" },
     async run(c) {
-      const result = await castCommand(c.args.spell, { ...c.options, json: c.agent });
-      return c.ok(result ?? { success: true }, {
+      const result = await castCommand(c.args.spell, {
+        ...c.options,
+        json: c.agent,
+        suppressOutput: c.agent,
+      });
+      return c.ok(toJsonSafe(result ?? { success: true }), {
         cta: { commands: ["history <spell>", "log <spell> <runId>"] },
       });
     },
@@ -444,7 +485,7 @@ if (shouldBypassFormatParser) {
     })
     .catch((err) => {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`${msg}`);
+      console.error(msg);
       process.exitCode = 3;
     });
 } else if (shouldBypassVenueParser) {
@@ -452,7 +493,7 @@ if (shouldBypassFormatParser) {
   const passArgs = getVenuePassArgsFromArgv(process.argv);
   venueCommand(adapter, passArgs).catch((err) => {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`${msg}`);
+    console.error(msg);
     process.exitCode = 1;
   });
 } else {

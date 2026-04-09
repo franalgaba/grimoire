@@ -6,10 +6,20 @@ interface RunReportEvent {
   data: Record<string, unknown>;
 }
 
+interface RunReportTrigger {
+  type: string;
+  id?: string;
+  index?: number;
+  label?: string;
+}
+
 export interface RunReportEnvelope {
   run: {
     spell: string;
     trigger: string;
+    trigger_id?: string;
+    trigger_index?: number;
+    trigger_label?: string;
     status: "success" | "failed";
     run_id: string;
     duration_ms: number;
@@ -50,14 +60,17 @@ export function buildRunReportEnvelope(input: {
   result: ExecutionResult;
   provenance: RuntimeProvenanceManifest;
 }): RunReportEnvelope {
-  const trigger = extractTrigger(input.result.ledgerEvents);
+  const trigger = extractTrigger(input.result);
   const events = extractEmittedEvents(input.result.ledgerEvents);
   const firstSource = input.provenance.sources[0];
 
   return {
     run: {
       spell: input.spellName,
-      trigger,
+      trigger: trigger.label ?? trigger.type,
+      trigger_id: trigger.id,
+      trigger_index: trigger.index,
+      trigger_label: trigger.label,
       status: input.result.success ? "success" : "failed",
       run_id: input.result.runId,
       duration_ms: input.result.duration,
@@ -103,6 +116,15 @@ export function formatRunReportText(report: RunReportEnvelope): string {
   lines.push("Run:");
   lines.push(`  spell: ${report.run.spell}`);
   lines.push(`  trigger: ${report.run.trigger}`);
+  if (report.run.trigger_id) {
+    lines.push(`  trigger_id: ${report.run.trigger_id}`);
+  }
+  if (report.run.trigger_index !== undefined) {
+    lines.push(`  trigger_index: ${report.run.trigger_index}`);
+  }
+  if (report.run.trigger_label) {
+    lines.push(`  trigger_label: ${report.run.trigger_label}`);
+  }
   lines.push(`  status: ${report.run.status}`);
   lines.push(`  run_id: ${report.run.run_id}`);
   lines.push(`  duration_ms: ${report.run.duration_ms}`);
@@ -152,16 +174,31 @@ export function formatRunReportText(report: RunReportEnvelope): string {
   return lines.join("\n");
 }
 
-function extractTrigger(entries: LedgerEntry[]): string {
-  for (const entry of entries) {
+function extractTrigger(result: ExecutionResult): RunReportTrigger {
+  if (result.selectedTrigger) {
+    return {
+      type: result.selectedTrigger.label,
+      id: result.selectedTrigger.id,
+      index: result.selectedTrigger.index,
+      label: result.selectedTrigger.label,
+    };
+  }
+
+  for (const entry of result.ledgerEvents) {
     if (entry.event.type === "run_started") {
-      return entry.event.trigger.type;
+      return {
+        type: entry.event.trigger.type,
+        id: entry.event.trigger.id,
+        index: entry.event.trigger.index,
+        label:
+          typeof entry.event.trigger.label === "string" ? entry.event.trigger.label : undefined,
+      };
     }
   }
-  return "manual";
+  return { type: "manual" };
 }
 
-function extractEmittedEvents(entries: LedgerEntry[]): RunReportEvent[] {
+export function extractEmittedEvents(entries: LedgerEntry[]): RunReportEvent[] {
   const out: RunReportEvent[] = [];
   for (const entry of entries) {
     if (entry.event.type === "event_emitted") {

@@ -4,7 +4,7 @@
 
 import type { Action, ActionConstraintsResolved } from "./actions.js";
 import type { CrossChainReceipt } from "./cross-chain.js";
-import type { SpellIR } from "./ir.js";
+import type { SpellIR, TriggerSelector } from "./ir.js";
 import type { PolicySet } from "./policy.js";
 import type { Address, ChainId, Timestamp, VenueAlias } from "./primitives.js";
 import type { QueryProvider } from "./query-provider.js";
@@ -85,6 +85,7 @@ export interface ExecutionResult {
   metrics: ExecutionMetrics;
   finalState: Record<string, unknown>;
   ledgerEvents: LedgerEntry[];
+  selectedTrigger?: TriggerSelector;
   /** Preview receipt generated during execution */
   receipt?: Receipt;
   /** Commit result when irreversible actions are committed */
@@ -183,7 +184,7 @@ interface RunStartedEvent {
   type: "run_started";
   runId: string;
   spellId: string;
-  trigger: { type: string };
+  trigger: { type: string; id?: string; index?: number; label?: string };
 }
 
 interface RunCompletedEvent {

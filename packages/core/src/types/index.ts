@@ -109,10 +109,16 @@ export type {
   CompilationWarning,
   Guard,
   GuardDef,
+  SelectedTriggerRef,
   SkillDef,
   SpellIR,
   SpellSource,
+  SpellSourceTrigger,
+  SpellSourceTriggerHandlerMeta,
   StateSchema,
+  TriggerHandlerIR,
+  TriggerSelector,
+  TriggerSourceLocation,
 } from "./ir.js";
 // Policy
 export type {

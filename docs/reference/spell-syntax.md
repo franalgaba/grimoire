@@ -194,6 +194,15 @@ Supported trigger kinds:
 
 Multiple trigger handlers compile into `trigger.any`.
 
+Compiled IR also includes `triggerHandlers`, which assigns each handler a stable selector:
+
+- `selector.id`: canonical opaque handler id
+- `selector.index`: 0-based compile order
+- `selector.label`: legacy human-facing label
+- `selector.source`: source line/column for the handler
+
+CLI selected-trigger execution uses these selectors via `simulate --trigger-id/--trigger-index` and `cast --dry-run --trigger-id/--trigger-index`.
+
 ## Statements
 
 Supported statements in block bodies:

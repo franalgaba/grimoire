@@ -14,6 +14,42 @@ import type {
 } from "./primitives.js";
 import type { Step } from "./steps.js";
 
+export interface TriggerSourceLocation {
+  line: number;
+  column: number;
+}
+
+export interface TriggerSelector {
+  id: string;
+  index: number;
+  label: string;
+  source: TriggerSourceLocation;
+}
+
+export interface TriggerHandlerIR {
+  selector: TriggerSelector;
+  trigger: Exclude<Trigger, { type: "any" }>;
+  stepIds: string[];
+}
+
+export interface SelectedTriggerRef {
+  id?: string;
+  index?: number;
+  label?: string;
+}
+
+export type SpellSourceTrigger =
+  | { manual: true }
+  | { schedule: string }
+  | { condition: string; poll_interval: number }
+  | { event: string; filter?: string }
+  | { any: Array<Record<string, unknown>> };
+
+export interface SpellSourceTriggerHandlerMeta {
+  trigger: Exclude<SpellSourceTrigger, { any: Array<Record<string, unknown>> }>;
+  source: TriggerSourceLocation;
+}
+
 /** Advisor definition */
 export interface AdvisorDef {
   name: string;
@@ -125,6 +161,9 @@ export interface SpellIR {
   /** Triggers */
   triggers: Trigger[];
 
+  /** Trigger handlers with stable selector metadata. */
+  triggerHandlers?: TriggerHandlerIR[];
+
   /** Maps trigger handler index (0-based) to its top-level step IDs.
    *  Only populated for multi-trigger spells (trigger type "any"). */
   triggerStepMap?: Record<number, string[]>;
@@ -206,12 +245,9 @@ export interface SpellSource {
     }
   >;
 
-  trigger?:
-    | { manual: true }
-    | { schedule: string }
-    | { condition: string; poll_interval: number }
-    | { event: string; filter?: string }
-    | { any: Array<Record<string, unknown>> };
+  trigger?: SpellSourceTrigger;
+
+  triggerHandlersMeta?: SpellSourceTriggerHandlerMeta[];
 
   steps?: Array<Record<string, unknown>>;
 

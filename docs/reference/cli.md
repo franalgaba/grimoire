@@ -2,6 +2,11 @@
 
 This page documents the `grimoire` CLI surface from `packages/cli/src/index.ts` and command implementations in `packages/cli/src/commands/*`.
 
+Repo-local invocation note:
+
+- when invoking the TypeScript entrypoint directly with Bun, use `bun run packages/cli/src/index.ts -- <command> ...`
+- the `--` ensures Bun forwards command flags to Grimoire instead of consuming them itself
+
 ## Command Summary
 
 - `grimoire init`
@@ -10,6 +15,7 @@ This page documents the `grimoire` CLI surface from `packages/cli/src/index.ts` 
 - `grimoire compile <spell>`
 - `grimoire compile-all [dir]`
 - `grimoire validate <spell>`
+- `grimoire triggers <spell>`
 - `grimoire simulate <spell>`
 - `grimoire cast <spell>`
 - `grimoire venues`
@@ -213,6 +219,33 @@ Exit code:
 - `0` when valid
 - `1` on errors (or warnings in strict mode)
 
+## `triggers`
+
+Inspect compiled trigger handlers and discover stable selector ids.
+
+```bash
+grimoire triggers <spell> [--json]
+```
+
+Use this command before `simulate --trigger-id` or `cast --trigger-id` when you need to target one handler from a multi-trigger spell.
+
+Output includes:
+
+- `spell`: `{ id, name, version }`
+- `triggers[]`: one entry per compiled trigger handler
+- `triggers[].id`: canonical stable trigger selector id
+- `triggers[].index`: 0-based compile order
+- `triggers[].label`: human-facing label such as `condition` or `event(Alert)`
+- `triggers[].source`: `{ line, column }` location in the spell source
+- `triggers[].trigger`: compiled trigger payload
+- `triggers[].stepCount`: number of owned steps
+- `triggers[].stepIds`: exact step ids executed for that handler
+
+JSON behavior:
+
+- `--json` emits one machine-readable payload on stdout
+- progress/spinner lines remain on stderr, so scripts should parse stdout only
+
 ## `simulate`
 
 Run preview-mode execution (no irreversible commit).
@@ -227,6 +260,9 @@ Core options:
 - `--vault <address>`: vault address (default `0x000...000`)
 - `--chain <id>`: EVM chain id (default `1`)
 - `--rpc-url <url>`: explicit RPC URL override, or chain mapping `--rpc-url <chainId>=<url>` (repeatable)
+- `--trigger-id <id>`: run only the trigger handler with this stable selector id
+- `--trigger-index <n>`: run only the trigger handler at this 0-based compile index
+- `--trigger <label>`: legacy label-based trigger selector alias
 - `--json`: JSON output
 
 RPC resolution order:
@@ -290,10 +326,20 @@ Query provider:
 Behavior notes:
 
 - Uses `execute({ simulate: true })`, which internally runs `preview()`.
+- Use `triggers <spell>` to discover stable handler ids before targeted runs.
+- Selected-trigger runs execute only one compiled trigger handler and return that handler's emitted events.
 - Loads and saves persistent state by default via `SqliteStateStore`.
 - If `--advisory-replay` is set, advisory outputs are loaded from a prior run ledger.
 - Advisory lifecycle logs are shown live in non-JSON mode; use `--advisory-trace-verbose` for detailed traces.
-- `--json` suppresses live advisory trace lines to keep output valid JSON.
+- `--json` emits one machine-readable payload on stdout.
+- progress/spinner lines remain on stderr, so scripts should parse stdout only.
+- `--json` suppresses live advisory trace lines to keep stdout valid JSON.
+
+JSON output additions:
+
+- `selectedTrigger`: `{ id, index, label, source }` for the executed handler when a selector is used
+- `events`: emitted events from the selected run only
+- `finalState`: final runtime state snapshot
 
 ## `cast`
 
@@ -309,6 +355,9 @@ Core options:
 - `--vault <address>`
 - `--chain <id>`
 - `--dry-run`
+- `--trigger-id <id>`
+- `--trigger-index <n>`
+- `--trigger <label>`: legacy label-based trigger selector alias
 - `--json`
 - `-v, --verbose`
 
@@ -350,10 +399,13 @@ Query provider:
 Behavior notes:
 
 - Always runs preview first.
+- Use `triggers <spell>` to discover stable handler ids before targeted runs.
+- `--dry-run` and simulate-mode cast respect selected-trigger execution the same way as `simulate`.
 - Commits only when mode is `execute`, a wallet exists, and receipt has planned actions.
 - Hyperliquid and Polymarket adapters are key-configured dynamically in wallet paths.
 - In cross-chain mode, source and destination runs share one logical `runId`.
 - If `--watch` is not set in execute mode, runs can return a waiting state and must be continued with `resume`.
+- `--json` emits one machine-readable payload on stdout; human progress lines are written to stderr.
 
 ## `venues`
 

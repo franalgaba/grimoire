@@ -6,7 +6,9 @@ Assume `<grimoire-cmd>` is one of:
 
 - `grimoire`
 - `npx -y @grimoirelabs/cli`
-- `bun run packages/cli/src/index.ts`
+- `bun run packages/cli/src/index.ts --`
+
+When using the repo-local Bun entrypoint, keep the trailing `--` so command flags are passed through to Grimoire.
 
 ## Core Commands
 
@@ -18,6 +20,7 @@ Assume `<grimoire-cmd>` is one of:
 <grimoire-cmd> compile <spell> [-o <file>] [--pretty]
 <grimoire-cmd> compile-all [dir] [--fail-fast] [--json]
 <grimoire-cmd> validate <spell> [--strict] [--json]
+<grimoire-cmd> triggers <spell> [--json]
 <grimoire-cmd> simulate <spell> [options]
 <grimoire-cmd> cast <spell> [options]
 <grimoire-cmd> venues [--json]
@@ -79,11 +82,22 @@ Tip:
 
 ## Simulate (Preview)
 
+Native trigger discovery:
+
+```bash
+<grimoire-cmd> triggers <spell> --json
+```
+
+Use this before `simulate --trigger-id` or `cast --trigger-id`. It returns each compiled handler's `{ id, index, label, source }` plus trigger payload and owned step ids.
+
 Common options:
 
 - `-p, --params <json>`
 - `--chain <id>`
 - `--rpc-url <url>`
+- `--trigger-id <id>`
+- `--trigger-index <n>`
+- `--trigger <label>` (legacy label selector)
 - `--destination-spell <spell>`
 - `--destination-chain <id>`
 - `--handoff-timeout-sec <seconds>`
@@ -114,6 +128,9 @@ Important:
 4. Cross-chain Morpho actions require explicit market mapping (`--morpho-market-id` or `--morpho-market-map`).
 5. When `--rpc-url` is an Alchemy URL (e.g. `https://eth-mainnet.g.alchemy.com/v2/<key>`), the API key is auto-extracted and used to enable `price()` queries via the Alchemy query provider.
 6. `balance()` works with any RPC, and adapter-backed `apy()` / `metric()` do not require Alchemy.
+7. `--trigger-id` is the canonical handler selector; use it for automation and event-only multi-handler spells.
+8. Cross-chain simulate mode also honors selected-trigger flags.
+9. In `--json` mode, parse stdout only; progress lines may still appear on stderr.
 
 ## Anvil Quickstart
 
@@ -164,6 +181,9 @@ Common options:
 
 - `--dry-run`
 - `--chain <id>`
+- `--trigger-id <id>`
+- `--trigger-index <n>`
+- `--trigger <label>` (legacy label selector)
 - `--key-env <name>`
 - `--keystore <path>`
 - `--password-env <name>`
@@ -202,6 +222,13 @@ Cross-chain continuation:
 
 1. if run status is waiting, continue with `resume <runId>`
 2. use `resume --watch` to poll handoff settlement and execute destination track
+3. selected-trigger flags also apply in cross-chain cast mode
+
+JSON output guidance:
+
+1. `simulate --json` and `cast --json` emit a single machine-readable payload on stdout
+2. parse stdout only; human progress and spinner output may be written to stderr
+3. selected-trigger runs include `selectedTrigger`, `events`, and `finalState` in the JSON payload
 
 ## Foundry Cast (RPC/Tx Diagnostics)
 

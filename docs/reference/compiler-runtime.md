@@ -62,6 +62,14 @@ Key responsibilities:
 
 Accepts an optional `queryProvider` for blockchain data queries (see Query Provider API below).
 
+Selected-trigger execution:
+
+- `PreviewOptions.selectedTrigger` accepts exactly one of `{ id, index, label }`
+- `id` is the canonical stable selector exported by compilation
+- `index` is the 0-based compile order for the handler
+- `label` is a legacy alias and may be ambiguous for duplicate handlers
+- `PreviewResult.selectedTrigger` echoes the resolved handler selector
+
 ### `commit(options: CommitOptions): Promise<CommitResult>`
 
 Commits planned actions from a `ready` preview receipt.
@@ -147,6 +155,8 @@ Execution-mode behavior:
 - `dry-run` -> preview only
 - `execute` + wallet + planned actions -> preview + commit
 
+`ExecuteOptions.selectedTrigger` uses the same selector contract as `preview()`.
+
 ## Session API
 
 Source: `packages/core/src/runtime/session.ts`
@@ -185,7 +195,19 @@ SQLite implementation:
 
 ### `SpellIR`
 
-Defines compiled spell metadata, config, steps, guards, triggers, source map.
+Defines compiled spell metadata, config, steps, guards, triggers, source map, and trigger handler selectors.
+
+Relevant trigger fields:
+
+- `triggers`: legacy trigger graph representation
+- `triggerStepMap`: legacy mapping from multi-trigger handler index to top-level step ids
+- `triggerHandlers`: stable per-handler metadata:
+  - `selector.id`
+  - `selector.index`
+  - `selector.label`
+  - `selector.source`
+  - `trigger`
+  - `stepIds`
 
 ### `ExecutionResult`
 
@@ -196,6 +218,7 @@ Includes:
 - metrics
 - final state
 - ledger events
+- selected trigger metadata (`selectedTrigger`) when a handler was selected
 - preview receipt
 - commit result (when applicable)
 

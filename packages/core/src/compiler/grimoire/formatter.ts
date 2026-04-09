@@ -66,7 +66,7 @@ export function formatGrimoire(source: string): GrimoireFormatResult {
       formatted: new GrimoireFormatter().format(ast),
     };
   } catch (error) {
-    const err = error as Error;
+    const err = error instanceof Error ? error : new Error(String(error));
     const grimoireError = error instanceof GrimoireError ? error : undefined;
     return {
       success: false,
@@ -79,6 +79,12 @@ export function formatGrimoire(source: string): GrimoireFormatResult {
     };
   }
 }
+
+const PRECEDENCE = {
+  TERNARY: 1,
+  UNARY: 8,
+  POSTFIX: 9,
+} as const;
 
 const INDENT = "  ";
 
@@ -298,8 +304,12 @@ class GrimoireFormatter {
 
   private writeStateSection(section: StateSection): void {
     this.line(1, "state: {");
-    this.writeStateScope("persistent", section.persistent, 2);
-    this.writeStateScope("ephemeral", section.ephemeral, 2);
+    if (section.persistent.length > 0) {
+      this.writeStateScope("persistent", section.persistent, 2);
+    }
+    if (section.ephemeral.length > 0) {
+      this.writeStateScope("ephemeral", section.ephemeral, 2);
+    }
     this.line(1, "}");
   }
 
@@ -845,9 +855,10 @@ class GrimoireFormatter {
   private constraintClause(clause: ConstraintClause): string {
     if (clause.constraints.length === 1) {
       const single = clause.constraints[0];
-      if (single) {
-        return `with ${single.key}=${this.expr(single.value)}`;
+      if (!single) {
+        throw new Error("Constraint clause expected exactly one constraint");
       }
+      return `with ${single.key}=${this.expr(single.value)}`;
     }
 
     const all = clause.constraints.map((item) => `${item.key}=${this.expr(item.value)}`).join(", ");
@@ -879,13 +890,13 @@ class GrimoireFormatter {
         return this.wrapIfNeeded(`${left} ${node.op} ${right}`, precedence, parentPrecedence);
       }
       case "unary": {
-        const precedence = 8;
+        const precedence = PRECEDENCE.UNARY;
         const arg = this.exprWithPrecedence(node.arg, precedence);
         const text = node.op === "not" ? `not ${arg}` : `-${arg}`;
         return this.wrapIfNeeded(text, precedence, parentPrecedence);
       }
       case "ternary": {
-        const precedence = 1;
+        const precedence = PRECEDENCE.TERNARY;
         const condition = this.exprWithPrecedence(node.condition, precedence);
         const thenExpr = this.exprWithPrecedence(node.thenExpr, precedence);
         const elseExpr = this.exprWithPrecedence(node.elseExpr, precedence);
@@ -896,17 +907,17 @@ class GrimoireFormatter {
         );
       }
       case "call": {
-        const callee = this.exprWithPrecedence(node.callee, 9);
+        const callee = this.exprWithPrecedence(node.callee, PRECEDENCE.POSTFIX);
         const args = node.args.map((arg) => this.expr(arg));
         const kwargs = node.kwargs?.map((arg) => `${arg.key}=${this.expr(arg.value)}`) ?? [];
         return `${callee}(${[...args, ...kwargs].join(", ")})`;
       }
       case "property_access": {
-        const object = this.exprWithPrecedence(node.object, 9);
+        const object = this.exprWithPrecedence(node.object, PRECEDENCE.POSTFIX);
         return `${object}.${node.property}`;
       }
       case "array_access": {
-        const array = this.exprWithPrecedence(node.array, 9);
+        const array = this.exprWithPrecedence(node.array, PRECEDENCE.POSTFIX);
         return `${array}[${this.expr(node.index)}]`;
       }
       case "array_literal":

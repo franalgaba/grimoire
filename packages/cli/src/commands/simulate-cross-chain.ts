@@ -12,6 +12,7 @@ import {
   execute,
   type LedgerEvent,
   orchestrateCrossChain,
+  type SelectedTriggerRef,
   type SpellIR,
   SqliteStateStore,
   toCrossChainReceipt,
@@ -67,6 +68,9 @@ interface SimulateOptions {
   ensName?: string;
   ensRpcUrl?: string;
   state?: boolean;
+  trigger?: string;
+  triggerId?: string;
+  triggerIndex?: string;
 }
 
 interface SimulateCommandIO {
@@ -85,6 +89,55 @@ export interface ExecuteCrossChainSimulationInput {
   params: Record<string, unknown>;
   options: SimulateOptions;
   noState: boolean;
+  selectedTrigger?: SelectedTriggerRef;
+}
+
+type CrossChainSimulationExecuteOptions = Parameters<typeof execute>[0];
+
+export interface BuildCrossChainSimulationExecuteOptionsArgs {
+  spell: SpellIR;
+  runId: string;
+  vault: Address;
+  chain: number;
+  params: Record<string, unknown>;
+  persistentState: Record<string, unknown>;
+  provider: ReturnType<typeof createProvider>;
+  advisorSkillsDirs: string[];
+  onAdvisory: CrossChainSimulationExecuteOptions["onAdvisory"];
+  eventCallback: CrossChainSimulationExecuteOptions["eventCallback"];
+  warningCallback: CrossChainSimulationExecuteOptions["warningCallback"];
+  selectedTrigger?: SelectedTriggerRef;
+  trackId: "source" | "destination";
+  role: "source" | "destination";
+  morphoMarketIds: Record<string, string>;
+}
+
+export function buildCrossChainSimulationExecuteOptions(
+  args: BuildCrossChainSimulationExecuteOptionsArgs
+): CrossChainSimulationExecuteOptions {
+  return {
+    spell: args.spell,
+    runId: args.runId,
+    vault: args.vault,
+    chain: args.chain,
+    params: args.params,
+    persistentState: args.persistentState,
+    simulate: true,
+    provider: args.provider,
+    adapters,
+    advisorSkillsDirs: args.advisorSkillsDirs.length > 0 ? args.advisorSkillsDirs : undefined,
+    onAdvisory: args.onAdvisory,
+    eventCallback: args.eventCallback,
+    warningCallback: args.warningCallback,
+    selectedTrigger: args.selectedTrigger,
+    crossChain: {
+      enabled: true,
+      runId: args.runId,
+      trackId: args.trackId,
+      role: args.role,
+      morphoMarketIds: args.morphoMarketIds,
+    },
+  };
 }
 
 export async function executeCrossChainSimulation(
@@ -206,54 +259,48 @@ export async function executeCrossChainSimulation(
     handoffTimeoutSec,
     pollIntervalSec,
     executeSource: async () => {
-      const result = await execute({
-        spell: input.sourceSpell,
-        runId,
-        vault,
-        chain: input.sourceChainId,
-        params: input.params,
-        persistentState: sourceState,
-        simulate: true,
-        provider: sourceProvider,
-        adapters,
-        advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
-        onAdvisory: sourceOnAdvisory,
-        eventCallback: advisoryEventCallback,
-        warningCallback: (message) => input.io.log(chalk.yellow(`Warning: ${message}`)),
-        crossChain: {
-          enabled: true,
+      const result = await execute(
+        buildCrossChainSimulationExecuteOptions({
+          spell: input.sourceSpell,
           runId,
+          vault,
+          chain: input.sourceChainId,
+          params: input.params,
+          persistentState: sourceState,
+          provider: sourceProvider,
+          advisorSkillsDirs,
+          onAdvisory: sourceOnAdvisory,
+          eventCallback: advisoryEventCallback,
+          warningCallback: (message) => input.io.log(chalk.yellow(`Warning: ${message}`)),
+          selectedTrigger: input.selectedTrigger,
           trackId: "source",
           role: "source",
           morphoMarketIds,
-        },
-      });
+        })
+      );
       sourceState = result.finalState;
       return result;
     },
     executeDestination: async (params) => {
-      const result = await execute({
-        spell: destinationSpell,
-        runId,
-        vault,
-        chain: destinationChainId,
-        params,
-        persistentState: destinationState,
-        simulate: true,
-        provider: destinationProvider,
-        adapters,
-        advisorSkillsDirs: advisorSkillsDirs.length > 0 ? advisorSkillsDirs : undefined,
-        onAdvisory: destinationOnAdvisory,
-        eventCallback: advisoryEventCallback,
-        warningCallback: (message) => input.io.log(chalk.yellow(`Warning: ${message}`)),
-        crossChain: {
-          enabled: true,
+      const result = await execute(
+        buildCrossChainSimulationExecuteOptions({
+          spell: destinationSpell,
           runId,
+          vault,
+          chain: destinationChainId,
+          params,
+          persistentState: destinationState,
+          provider: destinationProvider,
+          advisorSkillsDirs,
+          onAdvisory: destinationOnAdvisory,
+          eventCallback: advisoryEventCallback,
+          warningCallback: (message) => input.io.log(chalk.yellow(`Warning: ${message}`)),
+          selectedTrigger: input.selectedTrigger,
           trackId: "destination",
           role: "destination",
           morphoMarketIds,
-        },
-      });
+        })
+      );
       destinationState = result.finalState;
       return result;
     },

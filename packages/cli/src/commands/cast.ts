@@ -48,6 +48,7 @@ import {
 import { buildRunReportEnvelope, formatRunReportText } from "./run-report.js";
 import { spellUsesQueryFunctions } from "./spell-analysis.js";
 import { withStatePersistence } from "./state-helpers.js";
+import { resolveSelectedTrigger } from "./trigger-selector.js";
 
 const DEFAULT_GAS_MULTIPLIER = 1.1;
 
@@ -87,6 +88,7 @@ interface CastOptions {
   json?: boolean;
   // State options
   stateDir?: string;
+  state?: boolean;
   noState?: boolean;
   // Data replay and freshness options
   dataReplay?: string;
@@ -95,9 +97,33 @@ interface CastOptions {
   // ENS profile options
   ensName?: string;
   ensRpcUrl?: string;
-  state?: boolean;
   // Trigger filter
   trigger?: string;
+  triggerId?: string;
+  triggerIndex?: string;
+  suppressOutput?: boolean;
+}
+
+export interface BuildCastCrossChainInputArgs {
+  sourceSpellPath: string;
+  sourceSpell: SpellIR;
+  sourceChainId: number;
+  params: Record<string, unknown>;
+  options: CastOptions;
+  noState: boolean;
+  mode: ExecutionMode;
+  hasKey: boolean;
+  dataPolicy: RuntimeDataPolicy;
+  replayResolution: ReplayResolution;
+}
+
+export function buildCastCrossChainInput(
+  args: BuildCastCrossChainInputArgs
+): Parameters<typeof executeCrossChainCast>[0] {
+  return {
+    ...args,
+    selectedTrigger: resolveSelectedTrigger(args.options),
+  };
 }
 
 export async function castCommand(
@@ -141,19 +167,6 @@ export async function castCommand(
 
     const spell = compileResult.ir;
     spinner.succeed(chalk.green("Spell compiled successfully"));
-
-    // Validate --trigger option against available triggers
-    if (options.trigger) {
-      const anyTrigger = spell.triggers.find((t) => t.type === "any");
-      if (!anyTrigger || anyTrigger.type !== "any" || !spell.triggerStepMap) {
-        console.error(
-          chalk.yellow(
-            `Warning: --trigger "${options.trigger}" ignored — spell has a single trigger (no filtering needed).`
-          )
-        );
-      }
-    }
-
     const noState = resolveNoState(options);
 
     const hasExplicitKey = !!(options.privateKey || options.mnemonic || options.keystore);
@@ -208,20 +221,24 @@ export async function castCommand(
     const isTest = isTestnet(chainId);
 
     if (options.destinationSpell) {
-      await executeCrossChainCast({
-        sourceSpellPath: spellPath,
-        sourceSpell: spell,
-        sourceChainId: chainId,
-        params,
-        options,
-        noState,
-        mode,
-        hasKey,
-        dataPolicy,
-        replayResolution,
-      });
+      await executeCrossChainCast(
+        buildCastCrossChainInput({
+          sourceSpellPath: spellPath,
+          sourceSpell: spell,
+          sourceChainId: chainId,
+          params,
+          options,
+          noState,
+          mode,
+          hasKey,
+          dataPolicy,
+          replayResolution,
+        })
+      );
       return;
     }
+
+    const selectedTrigger = resolveSelectedTrigger(options);
 
     console.error();
     console.error(chalk.cyan("Network:"));
@@ -233,6 +250,7 @@ export async function castCommand(
         spell,
         params,
         options,
+        selectedTrigger,
         noState,
         chainId,
         isTest,
@@ -245,6 +263,7 @@ export async function castCommand(
         spell,
         params,
         options,
+        selectedTrigger,
         noState,
         chainId,
         runtimeFlow,
@@ -265,6 +284,7 @@ async function executeWithWallet(
   spell: SpellIR,
   params: Record<string, unknown>,
   options: CastOptions,
+  selectedTrigger: ReturnType<typeof resolveSelectedTrigger>,
   noState: boolean,
   chainId: number,
   isTest: boolean,
@@ -426,7 +446,7 @@ async function executeWithWallet(
         onAdvisory,
         eventCallback,
         queryProvider,
-        triggerFilter: options.trigger,
+        selectedTrigger,
       });
     }
   );
@@ -449,18 +469,26 @@ async function executeWithWallet(
         preview: execResult.receipt,
         commit: execResult.commit,
         error: execResult.structuredError,
+        selectedTrigger: execResult.selectedTrigger,
+        events: report.events,
+        finalState: execResult.finalState,
       }
     : {
         success: execResult.success,
         receipt: execResult.receipt,
         error: execResult.structuredError,
+        selectedTrigger: execResult.selectedTrigger,
+        events: report.events,
+        finalState: execResult.finalState,
       };
 
-  console.error();
-  if (options.json) {
-    console.error(stringifyJson(payload));
-  } else {
-    console.error(formatRunReportText(report));
+  if (!options.suppressOutput) {
+    console.error();
+    if (options.json) {
+      console.error(stringifyJson(payload));
+    } else {
+      console.error(formatRunReportText(report));
+    }
   }
 
   if (!execResult.success) {
@@ -474,6 +502,7 @@ async function executeSimulation(
   spell: SpellIR,
   params: Record<string, unknown>,
   options: CastOptions,
+  selectedTrigger: ReturnType<typeof resolveSelectedTrigger>,
   noState: boolean,
   chainId: number,
   runtimeMode: RuntimeFlow,
@@ -560,7 +589,7 @@ async function executeSimulation(
         onAdvisory,
         eventCallback,
         queryProvider: simQueryProvider,
-        triggerFilter: options.trigger,
+        selectedTrigger,
       });
     }
   );
@@ -581,13 +610,18 @@ async function executeSimulation(
     success: result.success,
     receipt: result.receipt,
     error: result.structuredError,
+    selectedTrigger: result.selectedTrigger,
+    events: report.events,
+    finalState: result.finalState,
   };
 
-  console.error();
-  if (options.json) {
-    console.error(stringifyJson(payload));
-  } else {
-    console.error(formatRunReportText(report));
+  if (!options.suppressOutput) {
+    console.error();
+    if (options.json) {
+      console.error(stringifyJson(payload));
+    } else {
+      console.error(formatRunReportText(report));
+    }
   }
 
   if (!result.success) {

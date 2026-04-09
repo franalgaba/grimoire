@@ -11,7 +11,15 @@ import type {
   LedgerEntry,
   StepResult,
 } from "../types/execution.js";
-import type { AdvisorDef, Guard, GuardDef, SpellIR } from "../types/ir.js";
+import type {
+  AdvisorDef,
+  Guard,
+  GuardDef,
+  SelectedTriggerRef,
+  SpellIR,
+  TriggerHandlerIR,
+  TriggerSelector,
+} from "../types/ir.js";
 import type { PolicySet } from "../types/policy.js";
 import type { Address, AssetDef, ChainId, Trigger } from "../types/primitives.js";
 import type { QueryProvider } from "../types/query-provider.js";
@@ -134,7 +142,9 @@ export interface ExecuteOptions {
   crossChain?: ActionExecutionOptions["crossChain"];
   /** Pluggable query provider for balance/price/apy/etc. */
   queryProvider?: QueryProvider;
-  /** Filter execution to a specific trigger handler by type name (e.g., "manual", "hourly") */
+  /** Execute only one trigger handler. */
+  selectedTrigger?: SelectedTriggerRef;
+  /** @deprecated Use selectedTrigger.label instead. */
   triggerFilter?: string;
 }
 
@@ -165,28 +175,177 @@ export interface PreviewOptions {
   crossChain?: ActionExecutionOptions["crossChain"];
   /** Pluggable query provider for balance/price/apy/etc. */
   queryProvider?: QueryProvider;
-  /** Filter execution to a specific trigger handler by type name (e.g., "manual", "hourly") */
+  /** Execute only one trigger handler. */
+  selectedTrigger?: SelectedTriggerRef;
+  /** @deprecated Use selectedTrigger.label instead. */
   triggerFilter?: string;
 }
 
-/** Check if a trigger matches a filter string (e.g., "manual", "hourly", "daily") */
-function matchesTriggerFilter(trigger: Trigger, filter: string): boolean {
-  if (trigger.type === filter) return true;
-  if (filter === "hourly" && trigger.type === "schedule" && trigger.cron === "0 * * * *")
-    return true;
-  if (filter === "daily" && trigger.type === "schedule" && trigger.cron === "0 0 * * *")
-    return true;
-  return false;
+function normalizeSelectedTrigger(
+  selectedTrigger?: SelectedTriggerRef,
+  triggerFilter?: string
+): SelectedTriggerRef | undefined {
+  if (selectedTrigger && triggerFilter) {
+    throw new Error("selectedTrigger cannot be combined with triggerFilter");
+  }
+  const normalized = selectedTrigger ?? (triggerFilter ? { label: triggerFilter } : undefined);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const definedFields = [normalized.id, normalized.index, normalized.label].filter(
+    (value) => value !== undefined
+  );
+  if (definedFields.length > 1) {
+    throw new Error("selectedTrigger must define exactly one of id, index, or label");
+  }
+
+  return normalized;
 }
 
-/** Describe a trigger for user-facing messages */
-function describeTrigger(trigger: Trigger): string {
+function getSpellTriggerHandlers(spell: SpellIR): TriggerHandlerIR[] {
+  if (spell.triggerHandlers && spell.triggerHandlers.length > 0) {
+    return spell.triggerHandlers;
+  }
+
+  const primaryTrigger = spell.triggers[0];
+  if (primaryTrigger?.type === "any") {
+    return primaryTrigger.triggers.map((trigger, index) => {
+      const handlerTrigger = assertConcreteTrigger(trigger);
+      const stepIds = spell.triggerStepMap?.[index] ?? [];
+      return {
+        selector: {
+          id: `trigger_${index}`,
+          index,
+          label: describeTriggerLabel(handlerTrigger),
+          source: resolveTriggerSourceFromSpell(stepIds, spell),
+        },
+        trigger: handlerTrigger,
+        stepIds,
+      };
+    });
+  }
+
+  const trigger = (primaryTrigger ?? { type: "manual" }) as Exclude<Trigger, { type: "any" }>;
+  return [
+    {
+      selector: {
+        id: "trigger_0",
+        index: 0,
+        label: describeTriggerLabel(trigger),
+        source: resolveTriggerSourceFromSpell(
+          spell.steps.map((step) => step.id),
+          spell
+        ),
+      },
+      trigger,
+      stepIds: spell.steps.map((step) => step.id),
+    },
+  ];
+}
+
+function resolveSelectedTriggerHandler(
+  spell: SpellIR,
+  selectedTrigger?: SelectedTriggerRef
+): TriggerHandlerIR | undefined {
+  if (!selectedTrigger) {
+    return undefined;
+  }
+
+  const handlers = getSpellTriggerHandlers(spell);
+
+  if (selectedTrigger.id !== undefined) {
+    const match = handlers.find((handler) => handler.selector.id === selectedTrigger.id);
+    if (!match) {
+      throw new Error(
+        `Unknown trigger id "${selectedTrigger.id}". Available triggers: ${formatTriggerCandidates(handlers)}`
+      );
+    }
+    return match;
+  }
+
+  if (selectedTrigger.index !== undefined) {
+    const match = handlers.find((handler) => handler.selector.index === selectedTrigger.index);
+    if (!match) {
+      throw new Error(
+        `Unknown trigger index "${selectedTrigger.index}". Available triggers: ${formatTriggerCandidates(handlers)}`
+      );
+    }
+    return match;
+  }
+
+  if (selectedTrigger.label !== undefined) {
+    const matches = handlers.filter((handler) =>
+      getTriggerMatchLabels(handler).has(selectedTrigger.label as string)
+    );
+    if (matches.length === 0) {
+      throw new Error(
+        `Unknown trigger label "${selectedTrigger.label}". Available triggers: ${formatTriggerCandidates(handlers)}`
+      );
+    }
+    if (matches.length > 1) {
+      throw new Error(
+        `Ambiguous trigger label "${selectedTrigger.label}". Matching triggers: ${formatTriggerCandidates(matches)}`
+      );
+    }
+    return matches[0];
+  }
+
+  return undefined;
+}
+
+function getTriggerMatchLabels(handler: TriggerHandlerIR): Set<string> {
+  const labels = new Set<string>([handler.selector.label, handler.trigger.type]);
+  if (handler.trigger.type === "schedule") {
+    if (handler.trigger.cron === "0 * * * *") {
+      labels.add("hourly");
+    }
+    if (handler.trigger.cron === "0 0 * * *") {
+      labels.add("daily");
+    }
+  }
+  return labels;
+}
+
+function formatTriggerCandidates(handlers: TriggerHandlerIR[]): string {
+  return handlers
+    .map(
+      (handler) =>
+        `{id=${handler.selector.id}, index=${handler.selector.index}, label=${handler.selector.label}}`
+    )
+    .join(", ");
+}
+
+function describeTriggerLabel(trigger: Exclude<Trigger, { type: "any" }>): string {
   if (trigger.type === "schedule") {
     if (trigger.cron === "0 * * * *") return "hourly";
     if (trigger.cron === "0 0 * * *") return "daily";
     return `schedule(${trigger.cron})`;
   }
+  if (trigger.type === "event") {
+    return `event(${trigger.event})`;
+  }
   return trigger.type;
+}
+
+function resolveTriggerSourceFromSpell(
+  stepIds: string[],
+  spell: SpellIR
+): TriggerSelector["source"] {
+  for (const stepId of stepIds) {
+    const loc = spell.sourceMap?.[stepId];
+    if (loc) {
+      return loc;
+    }
+  }
+  return { line: 1, column: 1 };
+}
+
+function assertConcreteTrigger(trigger: Trigger): Exclude<Trigger, { type: "any" }> {
+  if (trigger.type === "any") {
+    throw new Error("Nested trigger.any handlers are not supported");
+  }
+  return trigger;
 }
 
 /**
@@ -199,27 +358,26 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
   // Apply trigger filter: narrow steps to only those from the matched trigger handler
   let spell = originalSpell;
   let triggerOverride: ExecutionContext["trigger"] | undefined = options.trigger;
+  let selectedTrigger: TriggerSelector | undefined;
 
-  if (options.triggerFilter && originalSpell.triggerStepMap) {
-    const anyTrigger = originalSpell.triggers.find((t) => t.type === "any");
-    if (anyTrigger && anyTrigger.type === "any") {
-      const filter = options.triggerFilter as string;
-      const matchedIndex = anyTrigger.triggers.findIndex((t) => matchesTriggerFilter(t, filter));
-      if (matchedIndex === -1) {
-        const available = anyTrigger.triggers.map(describeTrigger).join(", ");
-        throw new Error(
-          `Unknown trigger "${options.triggerFilter}". Available triggers: ${available}`
-        );
-      }
-      const allowedStepIds = new Set(originalSpell.triggerStepMap[matchedIndex] ?? []);
-      spell = {
-        ...originalSpell,
-        steps: originalSpell.steps.filter((s) => allowedStepIds.has(s.id)),
-      };
-      // Set trigger context to the matched sub-trigger instead of "any"
-      const matchedTrigger = anyTrigger.triggers[matchedIndex];
-      triggerOverride = { type: matchedTrigger.type, source: matchedTrigger.type };
-    }
+  const triggerSelection = normalizeSelectedTrigger(options.selectedTrigger, options.triggerFilter);
+  const matchedTriggerHandler = resolveSelectedTriggerHandler(originalSpell, triggerSelection);
+  if (matchedTriggerHandler) {
+    const allowedStepIds = new Set(matchedTriggerHandler.stepIds);
+    spell = {
+      ...originalSpell,
+      steps: originalSpell.steps.filter((step) => allowedStepIds.has(step.id)),
+      triggers: [matchedTriggerHandler.trigger],
+      triggerHandlers: [matchedTriggerHandler],
+      triggerStepMap: { 0: [...matchedTriggerHandler.stepIds] },
+    };
+    triggerOverride = {
+      ...matchedTriggerHandler.trigger,
+      id: matchedTriggerHandler.selector.id,
+      index: matchedTriggerHandler.selector.index,
+      label: matchedTriggerHandler.selector.label,
+    };
+    selectedTrigger = matchedTriggerHandler.selector;
   }
 
   // Always simulate during preview
@@ -304,6 +462,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
         receipt,
         error: structuredError,
         ledgerEvents: ledger.getEntries(),
+        selectedTrigger,
       };
     }
 
@@ -346,6 +505,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
         receipt,
         error: structuredError,
         ledgerEvents: ledger.getEntries(),
+        selectedTrigger,
       };
     }
 
@@ -378,6 +538,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
         receipt,
         error: structuredError,
         ledgerEvents: ledger.getEntries(),
+        selectedTrigger,
       };
     }
 
@@ -409,6 +570,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
         receipt,
         error: structuredError,
         ledgerEvents: ledger.getEntries(),
+        selectedTrigger,
       };
     }
 
@@ -446,7 +608,7 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
     });
     ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "ready" });
 
-    return { success: true, receipt, ledgerEvents: ledger.getEntries() };
+    return { success: true, receipt, ledgerEvents: ledger.getEntries(), selectedTrigger };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const structuredError = createStructuredError("preview", "PREVIEW_INTERNAL_ERROR", message);
@@ -454,7 +616,12 @@ export async function preview(options: PreviewOptions): Promise<PreviewResult> {
     ledger.emit({ type: "run_failed", runId: ctx.runId, error: message });
     ledger.emit({ type: "preview_completed", runId: ctx.runId, receiptId, status: "rejected" });
 
-    return { success: false, error: structuredError, ledgerEvents: ledger.getEntries() };
+    return {
+      success: false,
+      error: structuredError,
+      ledgerEvents: ledger.getEntries(),
+      selectedTrigger,
+    };
   }
 }
 
@@ -481,6 +648,26 @@ export interface CommitOptions {
   eventCallback?: (entry: LedgerEntry) => void;
   /** Spell-defined asset definitions for adapter address resolution. */
   assets?: AssetDef[];
+}
+
+function commitFailureResult(
+  receiptId: string,
+  runId: string,
+  ledger: InMemoryLedger,
+  driftChecks: DriftCheckResult[],
+  finalState: Record<string, unknown>,
+  error: StructuredError
+): CommitResult {
+  ledger.emit({ type: "commit_completed", runId, receiptId, success: false });
+  return {
+    success: false,
+    receiptId,
+    transactions: [],
+    driftChecks,
+    finalState,
+    ledgerEvents: ledger.getEntries(),
+    error,
+  };
 }
 
 /**
@@ -540,16 +727,14 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
           suggestion: "Run preview again to generate a fresh receipt.",
         }
       );
-      ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
-      return {
-        success: false,
-        receiptId: receipt.id,
-        transactions: [],
-        driftChecks: [],
-        finalState: receipt.finalState,
-        ledgerEvents: ledger.getEntries(),
-        error: structuredError,
-      };
+      return commitFailureResult(
+        receipt.id,
+        runId,
+        ledger,
+        [],
+        receipt.finalState,
+        structuredError
+      );
     }
   }
 
@@ -560,16 +745,14 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
   });
 
   if (driftResult.error) {
-    ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
-    return {
-      success: false,
-      receiptId: receipt.id,
-      transactions: [],
-      driftChecks: driftResult.driftChecks,
-      finalState: receipt.finalState,
-      ledgerEvents: ledger.getEntries(),
-      error: driftResult.error,
-    };
+    return commitFailureResult(
+      receipt.id,
+      runId,
+      ledger,
+      driftResult.driftChecks,
+      receipt.finalState,
+      driftResult.error
+    );
   }
 
   const driftChecks = driftResult.driftChecks;
@@ -592,30 +775,26 @@ export async function commit(options: CommitOptions): Promise<CommitResult> {
       `Provider chain ${options.provider.chainId} does not match receipt chain ${chainId}. ` +
         `Provide a provider for chain ${chainId} or omit it to auto-create one.`
     );
-    ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
-    return {
-      success: false,
-      receiptId: receipt.id,
-      transactions: [],
+    return commitFailureResult(
+      receipt.id,
+      runId,
+      ledger,
       driftChecks,
-      finalState: receipt.finalState,
-      ledgerEvents: ledger.getEntries(),
-      error: structuredError,
-    };
+      receipt.finalState,
+      structuredError
+    );
   }
 
   const resolvedAssets = resolveAuthoritativeAssets(receipt.assets, options.assets);
   if (resolvedAssets.error) {
-    ledger.emit({ type: "commit_completed", runId, receiptId: receipt.id, success: false });
-    return {
-      success: false,
-      receiptId: receipt.id,
-      transactions: [],
+    return commitFailureResult(
+      receipt.id,
+      runId,
+      ledger,
       driftChecks,
-      finalState: receipt.finalState,
-      ledgerEvents: ledger.getEntries(),
-      error: resolvedAssets.error,
-    };
+      receipt.finalState,
+      resolvedAssets.error
+    );
   }
 
   const provider = options.provider ?? createProvider(chainId, options.rpcUrl);
@@ -880,15 +1059,15 @@ export async function buildTransactions(
   for (const planned of receipt.plannedActions) {
     try {
       options.progressCallback?.(`Building transactions for step '${planned.stepId}'...`);
-      const builtTxs = await buildActionTransactions(
-        planned.action,
+      const builtTxs = await buildActionTransactions({
+        action: planned.action,
         chainId,
         getProvider,
-        options.walletAddress,
-        receipt.chainContext.vault,
+        walletAddress: options.walletAddress,
+        vault: receipt.chainContext.vault,
         registry,
-        resolvedAssets.assets
-      );
+        assets: resolvedAssets.assets,
+      });
       transactions.push({
         stepId: planned.stepId,
         builtTransactions: builtTxs,
@@ -957,6 +1136,7 @@ export async function execute(options: ExecuteOptions): Promise<ExecutionResult>
     warningCallback: options.warningCallback,
     crossChain: options.crossChain,
     queryProvider: options.queryProvider,
+    selectedTrigger: options.selectedTrigger,
     triggerFilter: options.triggerFilter,
   });
 
@@ -1146,6 +1326,7 @@ function convertPreviewToExecutionResult(
     },
     finalState: receipt?.finalState ?? {},
     ledgerEvents: previewResult.ledgerEvents,
+    selectedTrigger: previewResult.selectedTrigger,
     receipt,
   };
 }
@@ -1181,6 +1362,7 @@ function convertPreviewCommitToExecutionResult(
     },
     finalState: commitResult.finalState,
     ledgerEvents: [...previewResult.ledgerEvents, ...commitResult.ledgerEvents],
+    selectedTrigger: previewResult.selectedTrigger,
     receipt,
     commit: commitResult,
   };
@@ -1350,29 +1532,8 @@ function registerIssuedReceipt(receipt: Receipt): void {
  * Deterministic serialization of the receipt fields that must not change
  * between preview and buildTransactions.  Used as the HMAC payload.
  */
-function canonicalizeReceiptFields(receipt: Receipt): string {
-  const critical = {
-    id: receipt.id,
-    spellId: receipt.spellId,
-    chainId: receipt.chainContext.chainId,
-    vault: receipt.chainContext.vault,
-    timestamp: receipt.timestamp,
-    status: receipt.status,
-    plannedActions: receipt.plannedActions.map((pa) => ({
-      stepId: pa.stepId,
-      venue: pa.venue,
-      action: pa.action,
-      onFailure: pa.onFailure,
-    })),
-    assets: canonicalizeAssetDefs(receipt.assets),
-  };
-  return JSON.stringify(critical, (_key, value) =>
-    typeof value === "bigint" ? `__bigint__${value.toString()}` : value
-  );
-}
-
-function canonicalizeReceiptFieldsLegacy(receipt: Receipt): string {
-  const critical = {
+function canonicalizeReceiptFields(receipt: Receipt, includeAssets = true): string {
+  const critical: Record<string, unknown> = {
     id: receipt.id,
     spellId: receipt.spellId,
     chainId: receipt.chainContext.chainId,
@@ -1386,6 +1547,9 @@ function canonicalizeReceiptFieldsLegacy(receipt: Receipt): string {
       onFailure: pa.onFailure,
     })),
   };
+  if (includeAssets) {
+    critical.assets = canonicalizeAssetDefs(receipt.assets);
+  }
   return JSON.stringify(critical, (_key, value) =>
     typeof value === "bigint" ? `__bigint__${value.toString()}` : value
   );
@@ -1439,7 +1603,7 @@ function verifyReceiptIntegrity(receipt: Receipt, secret: string, integrity: str
   }
 
   const legacyExpected = createHmac("sha256", secret)
-    .update(canonicalizeReceiptFieldsLegacy(receipt))
+    .update(canonicalizeReceiptFields(receipt, false))
     .digest("hex");
   return integrityMatches(legacyExpected, integrity);
 }
@@ -1713,15 +1877,18 @@ async function resolveDriftValue(
  * so calldata matches the previewed chain even if a mismatched provider
  * sneaks through.
  */
-async function buildActionTransactions(
-  action: Action,
-  chainId: number,
-  getProvider: () => Provider,
-  walletAddress: Address,
-  vault: Address,
-  registry: VenueRegistry,
-  assets?: AssetDef[]
-): Promise<BuiltTransaction[]> {
+interface BuildActionTxOptions {
+  action: Action;
+  chainId: number;
+  getProvider: () => Provider;
+  walletAddress: Address;
+  vault: Address;
+  registry: VenueRegistry;
+  assets?: AssetDef[];
+}
+
+async function buildActionTransactions(options: BuildActionTxOptions): Promise<BuiltTransaction[]> {
+  const { action, chainId, getProvider, walletAddress, vault, registry, assets } = options;
   const normalizeBuildResult = (result: VenueBuildResult): BuiltTransaction[] =>
     Array.isArray(result) ? result : [result];
 

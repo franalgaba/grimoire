@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { basename, dirname, extname, resolve } from "node:path";
-import type { SpellSource } from "../../types/ir.js";
+import type { SpellSource, SpellSourceTriggerHandlerMeta } from "../../types/ir.js";
 import type {
   AdviseNode,
   AdvisorsSection,
@@ -106,6 +106,20 @@ export class Transformer {
 
     // Process triggers and their handlers
     if (ast.triggers.length > 0) {
+      source.triggerHandlersMeta = ast.triggers.map(
+        (trigger): SpellSourceTriggerHandlerMeta => ({
+          trigger: this.transformTriggerType(
+            trigger.trigger
+          ) as SpellSourceTriggerHandlerMeta["trigger"],
+          source: trigger.span
+            ? {
+                line: trigger.span.start.line,
+                column: trigger.span.start.column,
+              }
+            : { line: 1, column: 1 },
+        })
+      );
+
       const trigger = ast.triggers[0];
       if (trigger) {
         source.trigger = this.transformTriggerType(trigger.trigger);

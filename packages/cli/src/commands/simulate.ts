@@ -29,6 +29,7 @@ import { buildRunReportEnvelope, formatRunReportText } from "./run-report.js";
 import { executeCrossChainSimulation } from "./simulate-cross-chain.js";
 import { spellUsesQueryFunctions } from "./spell-analysis.js";
 import { withStatePersistence } from "./state-helpers.js";
+import { resolveSelectedTrigger } from "./trigger-selector.js";
 
 interface SimulateOptions {
   params?: string;
@@ -52,6 +53,7 @@ interface SimulateOptions {
   advisoryTraceVerbose?: boolean;
   piAgentDir?: string;
   stateDir?: string;
+  state?: boolean;
   noState?: boolean;
   json?: boolean;
   dataReplay?: string;
@@ -59,12 +61,26 @@ interface SimulateOptions {
   onStale?: string;
   ensName?: string;
   ensRpcUrl?: string;
-  state?: boolean;
+  trigger?: string;
+  triggerId?: string;
+  triggerIndex?: string;
+  suppressOutput?: boolean;
 }
 
 interface SimulateCommandIO {
   log: typeof console.log;
   exit: typeof process.exit;
+}
+
+export interface BuildSimulateCrossChainInputArgs {
+  io: SimulateCommandIO;
+  terminate: (code: number) => never;
+  sourceSpellPath: string;
+  sourceSpell: SpellIR;
+  sourceChainId: number;
+  params: Record<string, unknown>;
+  options: SimulateOptions;
+  noState: boolean;
 }
 
 class SimulateCommandExit extends Error {
@@ -74,6 +90,15 @@ class SimulateCommandExit extends Error {
     super(`simulate.exit(${code})`);
     this.code = code;
   }
+}
+
+export function buildSimulateCrossChainInput(
+  args: BuildSimulateCrossChainInputArgs
+): Parameters<typeof executeCrossChainSimulation>[0] {
+  return {
+    ...args,
+    selectedTrigger: resolveSelectedTrigger(args.options),
+  };
 }
 
 export async function simulateCommand(
@@ -141,16 +166,18 @@ export async function simulateCommand(
     const spell = compileResult.ir;
     const noState = resolveNoState(options);
     if (options.destinationSpell) {
-      await executeCrossChainSimulation({
-        io,
-        terminate,
-        sourceSpellPath: spellPath,
-        sourceSpell: spell,
-        sourceChainId: chain,
-        params,
-        options,
-        noState,
-      });
+      await executeCrossChainSimulation(
+        buildSimulateCrossChainInput({
+          io,
+          terminate,
+          sourceSpellPath: spellPath,
+          sourceSpell: spell,
+          sourceChainId: chain,
+          params,
+          options,
+          noState,
+        })
+      );
       spinner.stop();
       return;
     }
@@ -201,6 +228,7 @@ export async function simulateCommand(
     }
 
     spinner.text = "Running preview...";
+    const selectedTrigger = resolveSelectedTrigger(options);
     const advisorSkillsDirs = resolveAdvisorSkillsDirs(options.advisorSkillsDir) ?? [];
     const onAdvisory = await resolveAdvisoryHandler(spell.id, {
       advisoryPi: options.advisoryPi,
@@ -250,6 +278,7 @@ export async function simulateCommand(
           onAdvisory,
           eventCallback,
           queryProvider,
+          selectedTrigger,
         });
       }
     );
@@ -270,13 +299,18 @@ export async function simulateCommand(
       success: result.success,
       receipt: result.receipt,
       error: result.structuredError,
+      selectedTrigger: result.selectedTrigger,
+      events: report.events,
+      finalState: result.finalState,
     };
 
-    io.log();
-    if (options.json) {
-      io.log(stringifyJson(payload));
-    } else {
-      io.log(formatRunReportText(report));
+    if (!options.suppressOutput) {
+      io.log();
+      if (options.json) {
+        io.log(stringifyJson(payload));
+      } else {
+        io.log(formatRunReportText(report));
+      }
     }
 
     if (!result.success) {

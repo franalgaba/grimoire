@@ -1,11 +1,10 @@
 import { createProvider } from "@grimoirelabs/core";
-import { parseAbi } from "viem";
+import { parseAbi, zeroAddress } from "viem";
 import { defaultUniswapV3Factories } from "../adapters/uniswap-v3.js";
 import { fetchTokenList } from "./uniswap.js";
 
 const FACTORY_ABI = parseAbi(["function getPool(address,address,uint24) view returns (address)"]);
 const POOL_ABI = parseAbi(["function liquidity() view returns (uint128)"]);
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const DEFAULT_FEES = [500, 3000, 10000];
 const DEFAULT_POOL_FACTORIES: Record<number, string> = {
   ...defaultUniswapV3Factories,
@@ -172,7 +171,7 @@ async function fetchPoolsOnchain(options: FetchPoolsOnchainOptions): Promise<Poo
       args: [token0Addr, token1Addr, fee],
     });
 
-    if (!poolAddress || poolAddress === ZERO_ADDRESS) continue;
+    if (!poolAddress || poolAddress === zeroAddress) continue;
 
     let liquidity = "0";
     try {

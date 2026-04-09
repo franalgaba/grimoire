@@ -54,11 +54,13 @@ Select the first working invocation and reuse it for the session.
 2. No-install:
    - command prefix: `npx -y @grimoirelabs/cli`
 3. Repo-local:
-   - command prefix: `bun run packages/cli/src/index.ts`
+   - command prefix: `bun run packages/cli/src/index.ts --`
 
 If one path fails, move to the next path automatically.
 
 If `grimoire venue doctor ...` fails with `Unknown venue adapter "doctor"`, prefer repo-local invocation (`bun run packages/cli/src/index.ts`) or upgrade global CLI.
+
+When using repo-local Bun execution, always keep the trailing `--` so Bun forwards flags to Grimoire instead of consuming them.
 
 ## Fast Start (Immediate Success Path)
 
@@ -120,6 +122,7 @@ Setup security/runtime expectations:
 - `compile`
 - `compile-all`
 - `validate`
+- `triggers`
 - `simulate`
 - `cast`
 - `venues`
@@ -139,6 +142,11 @@ Use `references/cli-quick-reference.md` for concise command signatures and safet
 - Live `cast` can commit irreversible actions when policy and runtime checks pass.
 - `simulate` supports explicit `--rpc-url`, with precedence: `--rpc-url` -> `RPC_URL_<chainId>` -> `RPC_URL`.
 - Phase 1 cross-chain execution uses two-spell orchestration (`--destination-spell`) with one logical run id and resume support.
+- Use `triggers <spell>` to discover stable handler ids natively before targeted execution.
+- `simulate` and `cast` support selected-trigger execution via `--trigger-id`, `--trigger-index`, and legacy `--trigger`.
+- For multi-handler spells, prefer `--trigger-id`; `--trigger` is label-based and can be ambiguous.
+- Cross-chain `simulate` / `cast` must forward the same selected trigger into per-chain execution.
+- In `--json` mode, parse stdout only; progress and spinner output can still appear on stderr.
 
 ## Query Functions (price / balance / apy / metric)
 

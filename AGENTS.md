@@ -360,6 +360,7 @@ For swaps, **always set both `max_slippage` and `min_output`** to prevent unexpe
 - `grimoire compile <spell>` - compile a `.spell` file to IR
 - `grimoire compile-all [dir]` - compile all `.spell` files in a directory
 - `grimoire validate <spell> [--strict] [--json]` - validate a `.spell` file
+- `grimoire triggers <spell> [--json]` - inspect compiled trigger handlers and discover stable selector ids
 - `grimoire simulate <spell> [--rpc-url <url>|<chainId>=<url>] [--destination-spell <spell>]` - simulate execution (dry run), with state persistence
 - `grimoire cast <spell> [--rpc-url <url>|<chainId>=<url>] [--destination-spell <spell>]` - execute a spell onchain, with state persistence
 - `grimoire setup [--chain <id>] [--rpc-url <url>] [--adapter <name>] [--keystore <path>] [--password-env <name>] [--key-env <name>] [--import-key] [--no-save-password-env] [--no-doctor] [--non-interactive] [--json]` - guided local execute onboarding (wallet + RPC + readiness checks, with optional `.grimoire/setup.env` writing/autoload)

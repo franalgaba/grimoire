@@ -26,6 +26,16 @@ export function parseMetricSelector(selector: string | undefined): Record<string
 export function readMetricSelectorString(
   params: Record<string, string>,
   keys: string[],
+  opts: { fallback?: string; required: true; label: string }
+): string;
+export function readMetricSelectorString(
+  params: Record<string, string>,
+  keys: string[],
+  opts: { fallback?: string; required?: boolean; label: string }
+): string | undefined;
+export function readMetricSelectorString(
+  params: Record<string, string>,
+  keys: string[],
   opts: { fallback?: string; required?: boolean; label: string }
 ): string | undefined {
   for (const key of keys) {
@@ -48,6 +58,16 @@ export function readMetricSelectorString(
 export function readMetricSelectorInt(
   params: Record<string, string>,
   keys: string[],
+  opts: { fallback?: number; required: true; label: string }
+): number;
+export function readMetricSelectorInt(
+  params: Record<string, string>,
+  keys: string[],
+  opts: { fallback?: number; required?: boolean; label: string }
+): number | undefined;
+export function readMetricSelectorInt(
+  params: Record<string, string>,
+  keys: string[],
   opts: { fallback?: number; required?: boolean; label: string }
 ): number | undefined {
   const raw = readMetricSelectorString(params, keys, {
@@ -65,6 +85,16 @@ export function readMetricSelectorInt(
   return value;
 }
 
+export function readMetricSelectorBigInt(
+  params: Record<string, string>,
+  keys: string[],
+  opts: { fallback?: bigint; required: true; label: string }
+): bigint;
+export function readMetricSelectorBigInt(
+  params: Record<string, string>,
+  keys: string[],
+  opts: { fallback?: bigint; required?: boolean; label: string }
+): bigint | undefined;
 export function readMetricSelectorBigInt(
   params: Record<string, string>,
   keys: string[],

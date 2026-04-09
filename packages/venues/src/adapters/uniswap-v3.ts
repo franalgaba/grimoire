@@ -8,7 +8,7 @@ import {
   SwapRouter,
   Trade,
 } from "@uniswap/v3-sdk";
-import { type Abi, encodeFunctionData, parseAbi } from "viem";
+import { type Abi, encodeFunctionData, parseAbi, zeroAddress } from "viem";
 import { toBigInt } from "../shared/bigint.js";
 import { BPS_DENOMINATOR } from "../shared/bps.js";
 import {
@@ -109,9 +109,6 @@ export function createUniswapV3Adapter(
         ["asset_out", "out", "quote", "assetout", "to"],
         { required: true, label: "asset_out" }
       );
-      if (!assetOut) {
-        throw new Error("Uniswap V3 quote_out metric requires selector asset_out");
-      }
       const tokenOut = resolveToken(assetOut, ctx.chainId);
       const defaultAmount = 10n ** BigInt(tokenIn.decimals);
       const amountIn =
@@ -191,8 +188,9 @@ export function createUniswapV3Adapter(
       }
       const fee = action.feeTier as FeeAmount;
       const amount = toBigInt(action.amount, "Unsupported amount type for swap");
-      const ZERO = "0x0000000000000000000000000000000000000000";
-      const recipient = (ctx.vault && ctx.vault !== ZERO ? ctx.vault : ctx.walletAddress) as string;
+      const recipient = (
+        ctx.vault && ctx.vault !== zeroAddress ? ctx.vault : ctx.walletAddress
+      ) as string;
 
       // Compute pool address using the SDK
       const poolAddress = computePoolAddress({

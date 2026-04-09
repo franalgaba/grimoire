@@ -106,9 +106,6 @@ export function createUniswapV4Adapter(config: UniswapV4AdapterConfig = {}): Ven
         ["asset_out", "out", "quote", "assetout", "to"],
         { required: true, label: "asset_out" }
       );
-      if (!assetOut) {
-        throw new Error("Uniswap V4 quote_out metric requires selector asset_out");
-      }
       const inDecimals = resolveVenueTokenDecimals(assetIn, ctx.chainId, {
         treatEthAsWrapped: true,
         defaultDecimals: 18,

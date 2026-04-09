@@ -6,6 +6,7 @@ import type { BuiltTransaction } from "../wallet/tx-builder.js";
 import type { Action, ActionConstraintsResolved } from "./actions.js";
 import type { CrossChainHandoffReceiptEntry, CrossChainTrackReceiptEntry } from "./cross-chain.js";
 import type { ExecutionMetrics, LedgerEntry } from "./execution.js";
+import type { TriggerSelector } from "./ir.js";
 import type { Address, AssetDef, AssetId, BasisPoints, ChainId, Timestamp } from "./primitives.js";
 import type { OnFailure } from "./steps.js";
 
@@ -186,6 +187,7 @@ export interface PreviewResult {
   receipt?: Receipt;
   error?: StructuredError;
   ledgerEvents: LedgerEntry[];
+  selectedTrigger?: TriggerSelector;
 }
 
 /** Result of commit() */

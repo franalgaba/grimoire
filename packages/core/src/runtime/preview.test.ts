@@ -351,4 +351,111 @@ describe("preview()", () => {
     }
     expect(started.event.trigger).toMatchObject({ type: "manual", source: "manual_replay" });
   });
+
+  test("selects one trigger handler by id", async () => {
+    const source = `spell MultiTriggerSelection {
+  version: "1.0.0"
+
+  on condition 1 > 0 every 10: {
+    emit above(level=1)
+  }
+
+  on condition 1 > 0 every 10: {
+    emit below(level=2)
+  }
+}`;
+    const compileResult = compile(source);
+    assertIR(compileResult);
+
+    const selectedId = compileResult.ir.triggerHandlers?.[1]?.selector.id;
+    expect(selectedId).toBeDefined();
+
+    const result = await preview({
+      spell: compileResult.ir,
+      vault: VAULT,
+      chain: 1,
+      selectedTrigger: { id: selectedId },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.selectedTrigger?.id).toBe(selectedId);
+
+    const started = result.ledgerEvents.find((entry) => entry.event.type === "run_started");
+    if (!started || started.event.type !== "run_started") {
+      throw new Error("Missing run_started event");
+    }
+    expect(started.event.trigger).toMatchObject({
+      type: "condition",
+      id: selectedId,
+      index: 1,
+      label: "condition",
+    });
+
+    const emittedEvents = result.ledgerEvents.filter(
+      (entry) => entry.event.type === "event_emitted"
+    );
+    expect(emittedEvents).toHaveLength(1);
+    expect(emittedEvents[0]?.event.type).toBe("event_emitted");
+    if (emittedEvents[0]?.event.type === "event_emitted") {
+      expect(emittedEvents[0].event.event).toBe("below");
+    }
+  });
+
+  test("selects one trigger handler by index", async () => {
+    const source = `spell TriggerIndexSelection {
+  version: "1.0.0"
+
+  on manual: {
+    emit manual_event()
+  }
+
+  on event Alert where 1 > 0: {
+    emit alert_event()
+  }
+}`;
+    const compileResult = compile(source);
+    assertIR(compileResult);
+
+    const result = await preview({
+      spell: compileResult.ir,
+      vault: VAULT,
+      chain: 1,
+      selectedTrigger: { index: 1 },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.selectedTrigger?.index).toBe(1);
+    const emittedEvents = result.ledgerEvents.filter(
+      (entry) => entry.event.type === "event_emitted"
+    );
+    expect(emittedEvents).toHaveLength(1);
+    if (emittedEvents[0]?.event.type === "event_emitted") {
+      expect(emittedEvents[0].event.event).toBe("alert_event");
+    }
+  });
+
+  test("rejects ambiguous trigger label selection", async () => {
+    const source = `spell AmbiguousTriggerLabel {
+  version: "1.0.0"
+
+  on condition 1 > 0 every 10: {
+    emit first()
+  }
+
+  on condition 1 > 0 every 10: {
+    emit second()
+  }
+}`;
+    const compileResult = compile(source);
+    assertIR(compileResult);
+
+    await expect(
+      preview({
+        spell: compileResult.ir,
+        vault: VAULT,
+        chain: 1,
+        selectedTrigger: { label: "condition" },
+      })
+    ).rejects.toThrow(/Ambiguous trigger label "condition"/);
+  });
 });

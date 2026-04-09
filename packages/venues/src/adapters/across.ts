@@ -86,9 +86,6 @@ export function createAcrossAdapter(config: AcrossAdapterConfig = {}): VenueAdap
         ["to_chain", "destination_chain", "chain", "to"],
         { required: true, label: "to_chain" }
       );
-      if (destinationChainId === undefined) {
-        throw new Error("Across quote_out metric requires selector to_chain");
-      }
       const outputAsset =
         readMetricSelectorString(selector, ["asset_out", "output_asset"], {
           fallback: request.asset,
