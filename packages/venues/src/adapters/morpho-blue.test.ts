@@ -52,12 +52,13 @@ function createProviderStub(overrides?: {
 function createCtx(overrides?: {
   mode?: VenueAdapterContext["mode"];
   provider?: Provider;
+  chainId?: number;
   crossChain?: VenueAdapterContext["crossChain"];
 }): VenueAdapterContext {
   return {
     provider: overrides?.provider ?? createProviderStub(),
     walletAddress: "0x0000000000000000000000000000000000000001" as Address,
-    chainId: 1,
+    chainId: overrides?.chainId ?? 1,
     mode: overrides?.mode,
     crossChain: overrides?.crossChain,
   };
@@ -845,6 +846,94 @@ describe("Morpho Blue adapter", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  test("readMetric supports utilization_bps with explicit market selector", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+    const marketId = "0x9f76d6c9d804ebdf48107aa5aac7b09eb808cbcd6b3c9b3a5684d650e63a599e";
+    const originalFetch = globalThis.fetch;
+    let capturedWhere: unknown;
+
+    globalThis.fetch = mock(async (_url: string | URL | Request, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as {
+        variables?: { where?: unknown };
+      };
+      capturedWhere = payload.variables?.where;
+      return new Response(
+        JSON.stringify({
+          data: {
+            markets: {
+              items: [
+                {
+                  marketId,
+                  chain: { id: 1 },
+                  loanAsset: { symbol: "USDC" },
+                  state: { supplyApy: 0.041, utilization: 0.8734, supplyAssetsUsd: 1000000 },
+                },
+              ],
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      );
+    }) as unknown as typeof fetch;
+
+    try {
+      const value = await adapter.readMetric(
+        {
+          surface: "utilization_bps",
+          venue: "morpho_blue",
+          asset: "USDC",
+          selector: marketId,
+        },
+        createCtx()
+      );
+      expect(value).toBeCloseTo(8734, 6);
+      expect(capturedWhere).toEqual({ uniqueKey_in: [marketId] });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("readMetric supports withdrawable_liquidity_bps with explicit vault selector", async () => {
+    const adapter = createMorphoBlueAdapter({ markets: [market] });
+    if (!adapter.readMetric) throw new Error("Missing readMetric");
+
+    const vaultAddress = "0x00000000000000000000000000000000000000ab" as Address;
+    const liquidityAdapter = "0x00000000000000000000000000000000000000cd" as Address;
+    const usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address;
+    const provider = {
+      rpcUrl: "https://base-mainnet.g.alchemy.com/v2/secret",
+      async getBlockNumber() {
+        return 1n;
+      },
+      async readContract<T>({ functionName }: { functionName: string }): Promise<T> {
+        if (functionName === "totalAssets") return 1_000_000n as T;
+        if (functionName === "liquidityAdapter") return liquidityAdapter as T;
+        if (functionName === "asset") return usdc as T;
+        if (functionName === "name") return "Mock Vault" as T;
+        if (functionName === "balanceOf") return 100_000n as T;
+        if (functionName === "realAssets") return 350_000n as T;
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+    } as unknown as Provider;
+
+    const value = await adapter.readMetric(
+      {
+        surface: "withdrawable_liquidity_bps",
+        venue: "morpho_blue",
+        asset: "USDC",
+        selector: `vault=${vaultAddress}`,
+      },
+      createCtx({ provider, chainId: 8453, mode: "simulate" })
+    );
+
+    expect(value).toBe(4500);
   });
 
   test("readMetric vault APY metrics require selector even when asset is provided", async () => {

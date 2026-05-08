@@ -28,6 +28,7 @@ import {
   resolveMarket,
 } from "./markets.js";
 import { preflightBorrowReadiness } from "./preflight.js";
+import { readMorphoVaultV2Liquidity } from "./vault-liquidity.js";
 
 const MORPHO_GRAPHQL_ENDPOINT = "https://blue-api.morpho.org/graphql" as const;
 const MORPHO_GRAPHQL_PAGE_SIZE = 200;
@@ -50,8 +51,14 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
     supportsQuote: false,
     supportsSimulation: false,
     supportsPreviewCommit: true,
-    metricSurfaces: ["apy", "vault_apy", "vault_net_apy"],
-    dataEndpoints: ["info", "addresses", "vaults", "markets"],
+    metricSurfaces: [
+      "apy",
+      "utilization_bps",
+      "vault_apy",
+      "vault_net_apy",
+      "withdrawable_liquidity_bps",
+    ],
+    dataEndpoints: ["info", "addresses", "vaults", "vault-liquidity", "markets"],
     description: "Morpho Blue adapter",
   };
 
@@ -70,14 +77,25 @@ export function createMorphoBlueAdapter(config: MorphoBlueAdapterConfig): VenueA
         });
       }
 
+      if (request.surface === "withdrawable_liquidity_bps") {
+        const vaultSelector = resolveMetricVaultSelector(request.selector);
+        const liquidity = await readMorphoVaultV2Liquidity({
+          chainId: ctx.chainId,
+          vault: vaultSelector,
+          provider: ctx.provider,
+        });
+        return liquidity.withdrawableLiquidityBps;
+      }
+
       const scopedMarkets = config.markets.filter(
         (market) => market.chainId === undefined || market.chainId === ctx.chainId
       );
       const marketId = resolveMetricMarketId(request.selector, scopedMarkets);
-      return await fetchMorphoApyBps({
+      return await fetchMorphoMarketMetricBps({
         chainId: ctx.chainId,
         asset: request.asset,
         marketId,
+        metric: request.surface === "utilization_bps" ? "utilization" : "supplyApy",
       });
     },
     async buildAction(action, ctx) {
@@ -345,7 +363,7 @@ type MorphoMarketsResponse = {
       marketId?: string;
       chain?: { id?: number };
       loanAsset?: { symbol?: string };
-      state?: { supplyApy?: number; supplyAssetsUsd?: number };
+      state?: { supplyApy?: number; utilization?: number; supplyAssetsUsd?: number };
     }>;
   };
 };
@@ -363,10 +381,11 @@ type MorphoVaultsResponse = {
   };
 };
 
-async function fetchMorphoApyBps(input: {
+async function fetchMorphoMarketMetricBps(input: {
   chainId: number;
   asset?: string;
   marketId?: string;
+  metric: "supplyApy" | "utilization";
 }): Promise<number> {
   const query = `
     query ($first: Int!, $where: MarketFilters) {
@@ -375,7 +394,7 @@ async function fetchMorphoApyBps(input: {
           marketId
           chain { id }
           loanAsset { symbol }
-          state { supplyApy supplyAssetsUsd }
+          state { supplyApy utilization supplyAssetsUsd }
         }
       }
     }
@@ -390,15 +409,19 @@ async function fetchMorphoApyBps(input: {
   });
   const items = payload.markets?.items ?? [];
   const candidate = pickMorphoMarketCandidate(items, input);
-  if (!candidate?.state || candidate.state.supplyApy === undefined) {
+  const metricValue = candidate?.state?.[input.metric];
+  if (metricValue === undefined) {
+    const metricLabel = input.metric === "utilization" ? "utilization_bps" : "APY";
     if (input.marketId) {
       throw new Error(
-        `Morpho Blue APY metric unavailable for market_id '${input.marketId}' on chain ${input.chainId}`
+        `Morpho Blue ${metricLabel} metric unavailable for market_id '${input.marketId}' on chain ${input.chainId}`
       );
     }
-    throw new Error(`Morpho Blue APY metric unavailable for asset '${input.asset ?? "unknown"}'`);
+    throw new Error(
+      `Morpho Blue ${metricLabel} metric unavailable for asset '${input.asset ?? "unknown"}'`
+    );
   }
-  return normalizeApyToBps(candidate.state.supplyApy);
+  return normalizeApyToBps(metricValue);
 }
 
 function pickMorphoMarketCandidate(
@@ -406,7 +429,7 @@ function pickMorphoMarketCandidate(
     marketId?: string;
     chain?: { id?: number };
     loanAsset?: { symbol?: string };
-    state?: { supplyApy?: number; supplyAssetsUsd?: number };
+    state?: { supplyApy?: number; utilization?: number; supplyAssetsUsd?: number };
   }>,
   input: {
     chainId: number;
@@ -417,7 +440,7 @@ function pickMorphoMarketCandidate(
   marketId?: string;
   chain?: { id?: number };
   loanAsset?: { symbol?: string };
-  state?: { supplyApy?: number; supplyAssetsUsd?: number };
+  state?: { supplyApy?: number; utilization?: number; supplyAssetsUsd?: number };
 } | null {
   if (input.marketId) {
     const match = items.find((item) => item.marketId?.toLowerCase() === input.marketId);

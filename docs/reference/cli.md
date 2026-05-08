@@ -456,10 +456,18 @@ Polymarket backend note:
 
 Example:
 
+- `grimoire venue morpho-blue vault-liquidity --chain 8453 --vault <vaultAddress> --format json`
 - `grimoire venue pendle chains`
 - `grimoire venue polymarket markets list --limit 10 --format json`
 - `grimoire venue polymarket data positions <address> --limit 10 --format json`
 - `grimoire venue polymarket search-markets --category sports --league "la liga" --active-only true --open-only true --format json`
+
+Morpho Vault V2 liquidity:
+
+- `vault-liquidity` reads vault `totalAssets()`, `asset()`, `liquidityAdapter()`, `liquidityData()`, and idle ERC-20 balance. For Morpho Market V1 liquidity adapters, it caps liquidity-adapter assets by the underlying Morpho market cash available for immediate withdrawal.
+- `withdrawableLiquidityBps` is `withdrawableLiquidityAssets * 10000 / totalAssets`.
+- This endpoint is Vault V2-specific and deliberately does not use ERC-4626 `maxWithdraw` / `maxRedeem`, which Morpho Vault V2 returns as `0`.
+- RPC resolution uses `--rpc-url`, then `RPC_URL_<chainId>`, then `RPC_URL`, then the built-in provider default. Output redacts RPC secrets.
 
 ## `venue doctor`
 
