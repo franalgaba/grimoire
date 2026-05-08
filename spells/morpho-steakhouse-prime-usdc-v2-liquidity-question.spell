@@ -1,0 +1,23 @@
+spell SteakhousePrimeUsdcV2LiquidityQuestion {
+  version: "1.0.0"
+  description: "Validate whether Steakhouse Prime USDC V2 has less than 5% immediately withdrawable liquidity during the final 24h before expiry"
+  assets: [USDC]
+  venues: {
+    morpho: @morpho_blue
+  }
+  params: {
+    vault_name: "Steakhouse Prime USDC"
+    vault_address: "0xbeef0e0834849aCC03f0089F01f4F1Eeb06873C9"
+    threshold_bps: 500
+    window_seconds: 86400
+    seconds_until_expiry: 86400
+  }
+
+  on manual: {
+    withdrawable_liquidity_bps = metric("withdrawable_liquidity_bps", morpho, USDC, params.vault_address)
+    in_final_window = params.seconds_until_expiry <= params.window_seconds
+    below_threshold = withdrawable_liquidity_bps < params.threshold_bps
+    resolves_yes = in_final_window and below_threshold
+    emit liquidity_question_checked(vault=params.vault_address, vault_name=params.vault_name, threshold_bps=params.threshold_bps, window_seconds=params.window_seconds, seconds_until_expiry=params.seconds_until_expiry, withdrawable_liquidity_bps=withdrawable_liquidity_bps, below_threshold=below_threshold, in_final_window=in_final_window, resolves_yes=resolves_yes)
+  }
+}

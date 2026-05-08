@@ -22,6 +22,8 @@ Use `--format spell` to emit a `params:` snapshot block.
 
 The snapshot includes provenance fields (`snapshot_at`, `snapshot_source`) and APY data.
 
+Use `vault-liquidity` for Morpho Vault V2 vault-wide withdrawal liquidity. It reads onchain Vault V2 fields, caps Morpho Market V1 liquidity-adapter assets by available underlying market cash, and does not use ERC-4626 `maxWithdraw` / `maxRedeem`, which Vault V2 intentionally returns as `0`.
+
 APY semantics:
 
 - `apy` / `net_apy` are decimal rates (for example `0.0408` = `4.08%`).
@@ -33,6 +35,7 @@ APY semantics:
 - `grimoire venue morpho-blue addresses [--chain <id>]` — contract addresses per chain
 - `grimoire venue morpho-blue vaults [--chain <id>] [--asset <symbol>] [--min-tvl <usd>] [--min-apy <decimal>] [--min-net-apy <decimal>] [--sort <netApy|apy|tvl|totalAssetsUsd|name>] [--order <asc|desc>] [--limit <n>]` — list and filter vaults
 - `grimoire venue morpho-blue vaults-snapshot [--chain <id>] [--asset <symbol>] [--min-tvl <usd>] [--min-apy <decimal>] [--min-net-apy <decimal>] [--sort <netApy|apy|tvl|totalAssetsUsd|name>] [--order <asc|desc>] [--limit <n>]` — generate spell `params:` block for vaults (agent-only)
+- `grimoire venue morpho-blue vault-liquidity [--chain <id>] --vault <address> [--rpc-url <url>] [--format json|table|spell]` — read Morpho Vault V2 withdrawable liquidity in asset units and integer bps
 
 ## Examples
 
@@ -43,9 +46,13 @@ grimoire venue morpho-blue addresses --chain 8453
 grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format table
 grimoire venue morpho-blue vaults --chain 8453 --asset USDC --min-tvl 5000000 --format spell
 grimoire venue morpho-blue vaults-snapshot --chain 8453 --asset USDC --min-tvl 5000000
+grimoire venue morpho-blue vault-liquidity --chain 8453 --vault 0xbeef0e0834849aCC03f0089F01f4F1Eeb06873C9 --format json
+grimoire venue morpho-blue vault-liquidity --chain 8453 --vault 0xbeef0e0834849aCC03f0089F01f4F1Eeb06873C9 --format spell
 ```
 
 Use `vaults-snapshot` to emit a `params:` block for spell inputs. This is an agent-only command (output suppressed in interactive mode).
+
+`vault-liquidity --format spell` emits payload-ready JSON params for `protocol: morpho-vault-v2`, `metric: withdrawable_liquidity_bps`, `withdrawable_liquidity_assets`, `total_assets`, `idle_assets`, `liquidity_adapter`, and `liquidity_adapter_assets`.
 
 Example provenance output fields to preserve:
 
@@ -62,12 +69,16 @@ morpho_apy_default = apy(morpho, USDC)
 morpho_apy_market = apy(morpho, USDC, "weth-usdc-86")
 morpho_apy_market_id = apy(morpho, USDC, "0x...")
 morpho_apy_generic = metric("apy", morpho, USDC, "wbtc-usdc-86")
+morpho_utilization_bps = metric("utilization_bps", morpho, USDC, "wbtc-usdc-86")
 vault_apy = metric("vault_apy", morpho, USDC, "vault=0xVaultAddress")
 vault_net_apy = metric("vault_net_apy", morpho, USDC, "vault=0xVaultAddress")
+vault_withdrawable_liquidity_bps = metric("withdrawable_liquidity_bps", morpho, USDC, "vault=0xVaultAddress")
 ```
 
 Use `apy(morpho, asset[, selector])` for Morpho Blue market APY comparisons.
+Use `metric("utilization_bps", morpho, asset[, selector])` for Morpho Blue market utilization checks.
 Use `metric("vault_apy", morpho, asset, selector)` or `metric("vault_net_apy", morpho, asset, selector)` for MetaMorpho vault comparisons.
+Use `metric("withdrawable_liquidity_bps", morpho, asset, selector)` for Morpho Vault V2 live withdrawal liquidity checks.
 
 Selector behavior:
 

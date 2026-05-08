@@ -9,3 +9,11 @@ export {
   type MorphoBlueAdapterConfig,
   type MorphoBlueMarketConfig,
 } from "./markets.js";
+export {
+  type MorphoVaultV2Liquidity,
+  type ReadMorphoVaultV2LiquidityOptions,
+  readMorphoVaultV2Liquidity,
+  redactRpcUrl,
+  toMorphoVaultV2LiquiditySpellParams,
+  type VaultLiquidityProvider,
+} from "./vault-liquidity.js";

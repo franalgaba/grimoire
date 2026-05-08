@@ -1,0 +1,19 @@
+spell MorphoCbbtcUsdcUtilizationQuestion {
+  version: "1.0.0"
+  description: "Validate whether the Base Morpho cbBTC/USDC market utilization is above the configured threshold"
+  assets: [USDC]
+  venues: {
+    morpho: @morpho_blue
+  }
+  params: {
+    market_name: "cbBTC/USDC"
+    market_id: "cbbtc-usdc-86"
+    threshold_bps: 9000
+  }
+
+  on manual: {
+    utilization_bps = metric("utilization_bps", morpho, USDC, params.market_id)
+    above_threshold = utilization_bps > params.threshold_bps
+    emit utilization_question_checked(market=params.market_id, market_name=params.market_name, threshold_bps=params.threshold_bps, utilization_bps=utilization_bps, above_threshold=above_threshold)
+  }
+}

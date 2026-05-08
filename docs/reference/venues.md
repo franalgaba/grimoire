@@ -65,7 +65,7 @@ These surfaces are available through spell expressions:
 | Adapter | Surfaces | Selector examples |
 |---------|----------|-------------------|
 | `aave_v3` | `apy` | `apy(aave, USDC)` |
-| `morpho_blue` | `apy`, `vault_apy`, `vault_net_apy` | `apy(morpho, USDC, "wbtc-usdc-1")`, `metric("vault_apy", morpho, USDC, "vault=0x...")` |
+| `morpho_blue` | `apy`, `utilization_bps`, `vault_apy`, `vault_net_apy`, `withdrawable_liquidity_bps` | `apy(morpho, USDC, "wbtc-usdc-1")`, `metric("utilization_bps", morpho, USDC, "wbtc-usdc-1")`, `metric("vault_apy", morpho, USDC, "vault=0x...")` |
 | `uniswap_v3` | `quote_out` | `metric("quote_out", uni_v3, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000")` |
 | `uniswap_v4` | `quote_out` | `metric("quote_out", uni_v4, USDC, "asset_out=WETH,amount=1000000,fee_tier=3000")` |
 | `across` | `quote_out` | `metric("quote_out", across, USDC, "to_chain=8453,amount=1000000")` |
@@ -133,7 +133,7 @@ Implementation notes:
 
 - Type: `evm`
 - Actions: `lend`, `withdraw`, `borrow`, `repay`, `supply_collateral`, `withdraw_collateral`
-- Data endpoints: `info`, `addresses`, `vaults`, `markets`
+- Data endpoints: `info`, `addresses`, `vaults`, `vault-liquidity`, `markets`
 
 Implementation notes:
 
@@ -142,8 +142,10 @@ Implementation notes:
 - Validates that action asset/collateral aligns with the selected `market_id`.
 - Metric surfaces:
   - `apy`: market supply APY (`selector` = market config id or onchain market id `0x...`).
+  - `utilization_bps`: market utilization in basis points (`selector` = market config id or onchain market id `0x...`).
   - `vault_apy`: vault APY (`selector` = vault address, name, symbol, or `vault=<...>`).
   - `vault_net_apy`: vault net APY (same selector behavior as `vault_apy`).
+  - `withdrawable_liquidity_bps`: Morpho Vault V2 immediately withdrawable vault liquidity in integer bps (`selector` = vault address or `vault=<address>`).
   - `vault_apy` / `vault_net_apy` require explicit vault selector (no implicit fallback).
 - Approval path for `lend`, `repay`, and `supply_collateral`.
 - Borrow preflight checks in preview/dry-run fail fast for:
@@ -151,6 +153,7 @@ Implementation notes:
   - insufficient market liquidity
   - clear collateral headroom shortfalls (when oracle price is available)
 - Borrow preflight errors include market context and suggest `supply_collateral`.
+- `vault-liquidity` is specific to Morpho Vault V2 vault-wide withdrawal liquidity. It computes idle vault asset balance plus immediately withdrawable liquidity-adapter assets, then reports integer basis points over `totalAssets()`. For Morpho Market V1 liquidity adapters, liquidity-adapter assets are capped by available underlying market cash. It does not use ERC-4626 `maxWithdraw` / `maxRedeem` because Vault V2 intentionally returns `0` for those methods.
 
 Default embedded Base markets include:
 
@@ -372,8 +375,9 @@ Commands:
 - `info`
 - `addresses`
 - `vaults`
+- `vault-liquidity --chain <id> --vault <address> [--rpc-url <url>] [--format json|table|spell]`
 
-`vaults` supports `--format spell` snapshot output.
+`vaults` supports `--format spell` snapshot output. `vault-liquidity --format spell` emits payload-ready JSON params for `withdrawable_liquidity_bps` monitoring.
 
 ### `grimoire-across`
 

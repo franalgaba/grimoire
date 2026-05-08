@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 
+import { createProvider } from "@grimoirelabs/core";
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { Cli, z } from "incur";
-import { createMorphoBlueAdapter } from "../adapters/morpho-blue/index.js";
+import {
+  createMorphoBlueAdapter,
+  readMorphoVaultV2Liquidity,
+  toMorphoVaultV2LiquiditySpellParams,
+} from "../adapters/morpho-blue/index.js";
 
 const DEFAULT_CHAIN_ID = 1;
+const DEFAULT_VAULT_LIQUIDITY_CHAIN_ID = 8453;
 const MORPHO_GRAPHQL_ENDPOINT = "https://blue-api.morpho.org/graphql" as const;
 
 const cli = Cli.create("grimoire-morpho-blue", {
@@ -88,6 +94,52 @@ const cli = Cli.create("grimoire-morpho-blue", {
     async run(c) {
       const rows = await fetchAndFilterVaults(c.options);
       return buildVaultsSnapshot(rows, c.options);
+    },
+  })
+  .command("vault-liquidity", {
+    description:
+      "Read Morpho Vault V2 vault-wide withdrawable liquidity from idle assets and liquidityAdapter.realAssets()",
+    alias: { chain: "c", vault: "v" },
+    options: z.object({
+      chain: z.coerce.number().default(DEFAULT_VAULT_LIQUIDITY_CHAIN_ID).describe("Chain ID"),
+      vault: z.string().describe("Morpho Vault V2 address"),
+      rpcUrl: z.string().optional().describe("RPC URL for on-chain reads"),
+      format: z.enum(["json", "table", "spell"]).default("json").describe("Output format"),
+      thresholdBps: z.coerce
+        .number()
+        .default(500)
+        .describe("Minimum withdrawable liquidity threshold in bps"),
+      windowSeconds: z.coerce
+        .number()
+        .default(86_400)
+        .describe("Suggested spell monitoring window in seconds"),
+    }),
+    env: z.object({
+      RPC_URL: z.string().optional().describe("Default RPC URL"),
+      RPC_URL_8453: z.string().optional().describe("Base RPC URL"),
+    }),
+    async run(c) {
+      const format = getRequestedFormat(c.options.format);
+      const rpcUrl = resolveMorphoRpcUrl(c.options.chain, c.options.rpcUrl, c.env);
+      const provider = createProvider(c.options.chain, rpcUrl);
+      const liquidity = await readMorphoVaultV2Liquidity({
+        chainId: c.options.chain,
+        vault: c.options.vault,
+        provider,
+        thresholdBps: c.options.thresholdBps,
+      });
+
+      if (format === "spell") {
+        return c.ok(
+          toMorphoVaultV2LiquiditySpellParams(
+            liquidity,
+            c.options.thresholdBps,
+            c.options.windowSeconds
+          )
+        );
+      }
+
+      return c.ok(toPublicVaultLiquidity(liquidity));
     },
   });
 
@@ -283,4 +335,50 @@ function pushArrayLines<T>(lines: string[], key: string, values: T[], fmt: (v: T
     lines.push(`    ${fmt(value)},`);
   }
   lines.push("  ]");
+}
+
+function resolveMorphoRpcUrl(
+  chainId: number,
+  explicit: string | undefined,
+  env: { RPC_URL?: string; RPC_URL_8453?: string }
+): string | undefined {
+  if (explicit) return explicit;
+  const chainScoped =
+    env[`RPC_URL_${chainId}` as keyof typeof env] ?? process.env[`RPC_URL_${chainId}`];
+  return chainScoped ?? env.RPC_URL ?? process.env.RPC_URL;
+}
+
+function getRequestedFormat(format: "json" | "table" | "spell"): "json" | "table" | "spell" {
+  const args = process.argv;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--format" && args[i + 1] === "spell") return "spell";
+    if (args[i] === "--format=spell") return "spell";
+  }
+  return format;
+}
+
+function toPublicVaultLiquidity(
+  liquidity: Awaited<ReturnType<typeof readMorphoVaultV2Liquidity>>
+): {
+  chainId: number;
+  vault: string;
+  vaultName: string;
+  asset: { symbol: string; address: string; decimals: number };
+  totalAssets: string;
+  withdrawableLiquidityAssets: string;
+  withdrawableLiquidityBps: number;
+  thresholdReady: boolean;
+  source: { kind: "onchain"; blockNumber: number; rpcUrl: string };
+} {
+  return {
+    chainId: liquidity.chainId,
+    vault: liquidity.vault,
+    vaultName: liquidity.vaultName,
+    asset: liquidity.asset,
+    totalAssets: liquidity.totalAssets,
+    withdrawableLiquidityAssets: liquidity.withdrawableLiquidityAssets,
+    withdrawableLiquidityBps: liquidity.withdrawableLiquidityBps,
+    thresholdReady: liquidity.thresholdReady,
+    source: liquidity.source,
+  };
 }
